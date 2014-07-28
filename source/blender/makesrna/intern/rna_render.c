@@ -152,7 +152,7 @@ static void engine_render(RenderEngine *engine, struct Scene *scene)
 }
 
 static void engine_bake(RenderEngine *engine, struct Scene *scene, struct Object *object, const int pass_type,
-                        const struct BakePixel *pixel_array, const int num_pixels, const int depth, void *result)
+                        const struct BakePixel *pixel_array, const int width, const int height, const int depth, void *result)
 {
 	extern FunctionRNA rna_RenderEngine_bake_func;
 	PointerRNA ptr;
@@ -167,7 +167,8 @@ static void engine_bake(RenderEngine *engine, struct Scene *scene, struct Object
 	RNA_parameter_set_lookup(&list, "object", &object);
 	RNA_parameter_set_lookup(&list, "pass_type", &pass_type);
 	RNA_parameter_set_lookup(&list, "pixel_array", &pixel_array);
-	RNA_parameter_set_lookup(&list, "num_pixels", &num_pixels);
+	RNA_parameter_set_lookup(&list, "width", &width);
+	RNA_parameter_set_lookup(&list, "height", &height);
 	RNA_parameter_set_lookup(&list, "depth", &depth);
 	RNA_parameter_set_lookup(&list, "result", &result);
 	engine->type->ext.call(NULL, &ptr, func, &list);
@@ -420,7 +421,9 @@ static void rna_def_render_engine(BlenderRNA *brna)
 	RNA_def_property_flag(prop, PROP_REQUIRED);
 	prop = RNA_def_pointer(func, "pixel_array", "BakePixel", "", "");
 	RNA_def_property_flag(prop, PROP_REQUIRED);
-	prop = RNA_def_int(func, "num_pixels", 0, 0, INT_MAX, "Number of Pixels", "Size of the baking batch", 0, INT_MAX);
+	prop = RNA_def_int(func, "width", 0, 0, INT_MAX, "Width", "Horizontal dimension of the bake buffer", 1, INT_MAX);
+	RNA_def_property_flag(prop, PROP_REQUIRED);
+	prop = RNA_def_int(func, "height", 0, 0, INT_MAX, "Height", "Vertical dimension of the bake buffer", 1, INT_MAX);
 	RNA_def_property_flag(prop, PROP_REQUIRED);
 	prop = RNA_def_int(func, "depth", 0, 0, INT_MAX, "Pixels depth", "Number of channels", 1, INT_MAX);
 	RNA_def_property_flag(prop, PROP_REQUIRED);

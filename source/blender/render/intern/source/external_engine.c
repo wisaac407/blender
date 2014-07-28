@@ -425,7 +425,7 @@ bool RE_bake_has_engine(Render *re)
 
 bool RE_bake_engine(
         Render *re, Object *object, const BakePixel pixel_array[],
-        const int num_pixels, const int depth,
+        const size_t width, const size_t height, const int depth,
         const ScenePassType pass_type, float result[])
 {
 	RenderEngineType *type = RE_engines_find(re->r.engine);
@@ -462,7 +462,7 @@ bool RE_bake_engine(
 		type->update(engine, re->main, re->scene);
 
 	if (type->bake)
-		type->bake(engine, re->scene, object, pass_type, pixel_array, num_pixels, depth, result);
+		type->bake(engine, re->scene, object, pass_type, pixel_array, width, height, depth, result);
 
 	engine->tile_x = 0;
 	engine->tile_y = 0;
