@@ -178,7 +178,7 @@ static bool write_internal_bake_pixels(
 	void *lock;
 	bool is_float;
 	char *mask_buffer = NULL;
-	const size_t num_pixels = width * height;
+	const int num_pixels = width * height;
 
 	ibuf = BKE_image_acquire_ibuf(image, NULL, &lock);
 
@@ -311,7 +311,7 @@ static bool write_external_bake_pixels(
 	/* margins */
 	if (margin > 0) {
 		char *mask_buffer = NULL;
-		const size_t num_pixels = width * height;
+		const int num_pixels = width * height;
 
 		mask_buffer = MEM_callocN(sizeof(char) * num_pixels, "Bake Mask");
 		RE_bake_mask_fill(pixel_array, num_pixels, mask_buffer);
@@ -514,10 +514,10 @@ static void build_image_lookup(Main *bmain, Object *ob, BakeImages *bake_images)
 /*
  * returns the total number of pixels
  */
-static size_t initialize_internal_images(BakeImages *bake_images, ReportList *reports)
+static int initialize_internal_images(BakeImages *bake_images, ReportList *reports)
 {
 	int i;
-	size_t tot_size = 0;
+	int tot_size = 0;
 
 	for (i = 0; i < bake_images->size; i++) {
 		ImBuf *ibuf;
@@ -541,28 +541,6 @@ static size_t initialize_internal_images(BakeImages *bake_images, ReportList *re
 		BKE_image_release_ibuf(bk_image->image, ibuf, lock);
 	}
 	return tot_size;
-}
-
-/* returns the image dimensions for single-images baking sessions, or an optimal dimension (the closest we can get to the square root) */
-static void calculate_buffer_dimension(int *width, int *height, const size_t num_pixels, BakeImages *bake_images)
-{
-	if (bake_images->size == 1) {
-		*width = bake_images->data[0].width;
-		*height = bake_images->data[0].height;
-	}
-	else {
-		int max_dividend = floor(sqrt(num_pixels));
-		BLI_assert(max_dividend > 0);
-
-		while (true) {
-			if ((num_pixels % max_dividend) == 0) {
-				*width = max_dividend;
-				*height = num_pixels / max_dividend;
-				break;
-			}
-			max_dividend--;
-		}
-	}
 }
 
 static int bake(
@@ -598,11 +576,9 @@ static int bake(
 
 	BakeImages bake_images = {NULL};
 
-	size_t num_pixels;
+	int num_pixels;
 	int tot_materials;
 	int i;
-
-	int buffer_width, buffer_height;
 
 	RE_bake_engine_set_engine_parameters(re, bmain, scene);
 
@@ -672,8 +648,6 @@ static int bake(
 				bake_images.lookup[i] = 0;
 		}
 	}
-
-	calculate_buffer_dimension(&buffer_width, &buffer_height, num_pixels, &bake_images);
 
 	if (is_selected_to_active) {
 		CollectionPointerLink *link;
@@ -814,7 +788,7 @@ static int bake(
 
 		/* the baking itself */
 		for (i = 0; i < tot_highpoly; i++) {
-			ok = RE_bake_engine(re, highpoly[i].ob, highpoly[i].pixel_array, buffer_width, buffer_height,
+			ok = RE_bake_engine(re, highpoly[i].ob, highpoly[i].pixel_array, num_pixels,
 			                    depth, pass_type, result);
 			if (!ok) {
 				BKE_reportf(reports, RPT_ERROR, "Error baking from object \"%s\"", highpoly[i].ob->id.name + 2);
@@ -841,7 +815,7 @@ cage_cleanup:
 		ob_low->restrictflag &= ~OB_RESTRICT_RENDER;
 
 		if (RE_bake_has_engine(re)) {
-			ok = RE_bake_engine(re, ob_low, pixel_array_low, buffer_width, buffer_height, depth, pass_type, result);
+			ok = RE_bake_engine(re, ob_low, pixel_array_low, num_pixels, depth, pass_type, result);
 		}
 		else {
 			BKE_report(reports, RPT_ERROR, "Current render engine does not support baking");

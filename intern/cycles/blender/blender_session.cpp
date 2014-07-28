@@ -481,23 +481,22 @@ void BlenderSession::render()
 	sync = NULL;
 }
 
-static void populate_bake_data(BakeData *data, BL::BakePixel pixel_array, const size_t num_pixels)
+static void populate_bake_data(BakeData *data, BL::BakePixel pixel_array, const int num_pixels)
 {
 	BL::BakePixel bp = pixel_array;
 
-	size_t i;
+	int i;
 	for(i=0; i < num_pixels; i++) {
 		data->set(i, bp.primitive_id(), bp.uv(), bp.du_dx(), bp.du_dy(), bp.dv_dx(), bp.dv_dy());
 		bp = bp.next();
 	}
 }
 
-void BlenderSession::bake(BL::Object b_object, const string& pass_type, BL::BakePixel pixel_array, int width, int height, int depth, float result[])
+void BlenderSession::bake(BL::Object b_object, const string& pass_type, BL::BakePixel pixel_array, int num_pixels, int depth, float result[])
 {
 	ShaderEvalType shader_type = get_shader_type(pass_type);
 	size_t object_index = OBJECT_NONE;
 	int tri_offset = 0;
-	const size_t num_pixels = width * height;
 
 	/* ensure kernels are loaded before we do any scene updates */
 	session->load_kernels();
