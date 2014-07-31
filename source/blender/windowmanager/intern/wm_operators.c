@@ -2057,7 +2057,7 @@ static int wm_operator_winactive_normal(bContext *C)
 {
 	wmWindow *win = CTX_wm_window(C);
 
-	if (win == NULL || win->screen == NULL || win->screen->state != SCREENNORMAL)
+	if (win == NULL || win->screen == NULL || win->screen->full != SCREENNORMAL)
 		return 0;
 
 	return 1;
@@ -2866,22 +2866,12 @@ static void WM_OT_save_mainfile(wmOperatorType *ot)
 
 static void WM_OT_window_fullscreen_toggle(wmOperatorType *ot)
 {
-	ot->name = "Toggle Window Fullscreen";
+	ot->name = "Toggle Fullscreen";
 	ot->idname = "WM_OT_window_fullscreen_toggle";
 	ot->description = "Toggle the current window fullscreen";
 
 	ot->exec = wm_window_fullscreen_toggle_exec;
 	ot->poll = WM_operator_winactive;
-}
-
-static void WM_OT_area_fullscreen_toggle(wmOperatorType *ot)
-{
-	ot->name = "Toggle Area Fullscreen";
-	ot->idname = "WM_OT_area_fullscreen_toggle";
-	ot->description = "Toggle the current area fullscreen";
-
-	ot->exec = wm_area_fullscreen_toggle_exec;
-	ot->poll = ED_operator_areaactive;
 }
 
 static int wm_exit_blender_exec(bContext *C, wmOperator *op)
@@ -4432,7 +4422,6 @@ void wm_operatortype_init(void)
 	WM_operatortype_append(WM_OT_userpref_autoexec_path_add);
 	WM_operatortype_append(WM_OT_userpref_autoexec_path_remove);
 	WM_operatortype_append(WM_OT_window_fullscreen_toggle);
-	WM_operatortype_append(WM_OT_area_fullscreen_toggle);
 	WM_operatortype_append(WM_OT_quit_blender);
 	WM_operatortype_append(WM_OT_open_mainfile);
 	WM_operatortype_append(WM_OT_revert_mainfile);
@@ -4675,8 +4664,6 @@ void wm_window_keymap(wmKeyConfig *keyconf)
 	RNA_boolean_set(kmi->ptr, "copy", true);
 
 	WM_keymap_verify_item(keymap, "WM_OT_window_fullscreen_toggle", F11KEY, KM_PRESS, KM_ALT, 0);
-	WM_keymap_verify_item(keymap, "WM_OT_area_fullscreen_toggle", F10KEY, KM_PRESS, KM_ALT, 0);
-
 	WM_keymap_add_item(keymap, "WM_OT_quit_blender", QKEY, KM_PRESS, KM_CTRL, 0);
 
 	/* debug/testing */

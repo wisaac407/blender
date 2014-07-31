@@ -129,7 +129,7 @@ static int screen_active_editable(bContext *C)
 {
 	if (ED_operator_screenactive(C)) {
 		/* no full window splitting allowed */
-		if (CTX_wm_screen(C)->state != SCREENNORMAL)
+		if (CTX_wm_screen(C)->full != SCREENNORMAL)
 			return 0;
 		return 1;
 	}
@@ -1462,7 +1462,7 @@ static int area_split_invoke(bContext *C, wmOperator *op, const wmEvent *event)
 	int dir;
 	
 	/* no full window splitting allowed */
-	if (sc->state != SCREENNORMAL)
+	if (sc->full != SCREENNORMAL)
 		return OPERATOR_CANCELLED;
 	
 	if (event->type == EVT_ACTIONZONE_AREA) {
@@ -2232,7 +2232,7 @@ static void SCREEN_OT_marker_jump(wmOperatorType *ot)
 static bool screen_set_is_ok(bScreen *screen, bScreen *screen_prev)
 {
 	return ((screen->winid == 0)    &&
-	        (screen->state == SCREENNORMAL)     &&
+	        (screen->full == 0)     &&
 	        (screen != screen_prev) &&
 	        (screen->id.name[2] != '.' || !(U.uiflag & USER_HIDE_DOT)));
 }
@@ -2303,13 +2303,10 @@ static void SCREEN_OT_screen_set(wmOperatorType *ot)
 
 
 /* function to be called outside UI context, or for redo */
-static int screen_maximize_area_exec(bContext *C, wmOperator *UNUSED(op))
+static int screen_full_area_exec(bContext *C, wmOperator *UNUSED(op))
 {
 	bScreen *screen = CTX_wm_screen(C);
 	ScrArea *sa = NULL;
-
-	if (!ELEM(screen->state, SCREENNORMAL, SCREENMAXIMIZED))
-		return OPERATOR_CANCELLED;
 	
 	/* search current screen for 'fullscreen' areas */
 	/* prevents restoring info header, when mouse is over it */
@@ -2319,20 +2316,23 @@ static int screen_maximize_area_exec(bContext *C, wmOperator *UNUSED(op))
 	
 	if (sa == NULL) sa = CTX_wm_area(C);
 	
-	ED_screen_state_toggle(C, CTX_wm_window(C), sa, SCREENMAXIMIZED);
+	ED_screen_full_toggle(C, CTX_wm_window(C), sa);
 	return OPERATOR_FINISHED;
 }
 
 static void SCREEN_OT_screen_full_area(wmOperatorType *ot)
 {
-	ot->name = "Toggle Maximize Area";
-	ot->description = "Toggle display selected area as maximized";
+	ot->name = "Toggle Full Screen";
+	ot->description = "Toggle display selected area as fullscreen";
 	ot->idname = "SCREEN_OT_screen_full_area";
 	
-	ot->exec = screen_maximize_area_exec;
+	ot->exec = screen_full_area_exec;
 	ot->poll = ED_operator_areaactive;
 	ot->flag = 0;
+	
 }
+
+
 
 /* ************** join area operator ********************************************** */
 
@@ -3025,43 +3025,6 @@ static void SCREEN_OT_region_flip(wmOperatorType *ot)
 	ot->exec = region_flip_exec;
 	ot->poll = ED_operator_areaactive;
 	ot->flag = 0;
-}
-
-/* ************** header operator ***************************** */
-static int header_exec(bContext *C, wmOperator *UNUSED(op))
-{
-	ARegion *ar = CTX_wm_region(C);
-
-	/* find the header region
-	 *	- try context first, but upon failing, search all regions in area...
-	 */
-	if ((ar == NULL) || (ar->regiontype != RGN_TYPE_HEADER)) {
-		ScrArea *sa = CTX_wm_area(C);
-		ar = BKE_area_find_region_type(sa, RGN_TYPE_HEADER);
-
-		/* don't do anything if no region */
-		if (ar == NULL)
-			return OPERATOR_CANCELLED;
-	}
-
-	ar->flag ^= RGN_FLAG_HIDDEN;
-
-	ED_area_tag_redraw(CTX_wm_area(C));
-
-	WM_event_add_notifier(C, NC_SCREEN | NA_EDITED, NULL);
-
-	return OPERATOR_FINISHED;
-}
-
-static void SCREEN_OT_header(wmOperatorType *ot)
-{
-	/* identifiers */
-	ot->name = "Header";
-	ot->description = "Display display header";
-	ot->idname = "SCREEN_OT_header";
-
-	/* api callbacks */
-	ot->exec = header_exec;
 }
 
 /* ************** header flip operator ***************************** */
@@ -3982,7 +3945,6 @@ void ED_operatortypes_screen(void)
 	WM_operatortype_append(SCREEN_OT_region_scale);
 	WM_operatortype_append(SCREEN_OT_region_flip);
 	WM_operatortype_append(SCREEN_OT_header_flip);
-	WM_operatortype_append(SCREEN_OT_header);
 	WM_operatortype_append(SCREEN_OT_header_toggle_menus);
 	WM_operatortype_append(SCREEN_OT_header_toolbox);
 	WM_operatortype_append(SCREEN_OT_screen_set);
@@ -4085,7 +4047,6 @@ void ED_keymap_screen(wmKeyConfig *keyconf)
 	
 	WM_keymap_verify_item(keymap, "SCREEN_OT_area_options", RIGHTMOUSE, KM_PRESS, 0, 0);
 	
-	WM_keymap_add_item(keymap, "SCREEN_OT_header", HKEY, KM_PRESS, KM_CTRL, 0);
 	
 	/* Header Editing ------------------------------------------------ */
 	keymap = WM_keymap_find(keyconf, "Header", 0, 0);

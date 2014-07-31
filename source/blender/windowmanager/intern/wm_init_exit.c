@@ -301,7 +301,7 @@ bool WM_init_game(bContext *C)
 
 		/* full screen the area */
 		if (!sa->full) {
-			ED_screen_state_toggle(C, win, sa, SCREENMAXIMIZED);
+			ED_screen_full_toggle(C, win, sa);
 		}
 
 		/* Fullscreen */

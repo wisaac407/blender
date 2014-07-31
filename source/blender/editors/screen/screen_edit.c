@@ -1058,7 +1058,7 @@ bScreen *ED_screen_duplicate(wmWindow *win, bScreen *sc)
 {
 	bScreen *newsc;
 	
-	if (sc->state != SCREENNORMAL) return NULL;  /* XXX handle this case! */
+	if (sc->full != SCREENNORMAL) return NULL;  /* XXX handle this case! */
 	
 	/* make new empty screen: */
 	newsc = ED_screen_add(win, sc->scene, sc->id.name + 2);
@@ -1485,7 +1485,7 @@ void ED_screen_set(bContext *C, bScreen *sc)
 		return;
 	
 
-	if (sc->state == SCREENFULLSCREEN) {             /* find associated full */
+	if (sc->full) {             /* find associated full */
 		bScreen *sc1;
 		for (sc1 = bmain->screen.first; sc1; sc1 = sc1->id.next) {
 			ScrArea *sa = sc1->areabase.first;
@@ -1586,7 +1586,7 @@ void ED_screen_delete(bContext *C, bScreen *sc)
 	int delete = 1;
 	
 	/* don't allow deleting temp fullscreens for now */
-	if (ELEM(sc->state, SCREENMAXIMIZED, SCREENFULLSCREEN)) {
+	if (sc->full == SCREENFULL) {
 		return;
 	}
 	
@@ -1730,11 +1730,11 @@ ScrArea *ED_screen_full_newspace(bContext *C, ScrArea *sa, int type)
 	ScrArea *newsa = NULL;
 
 	if (!sa || sa->full == NULL) {
-		newsa = ED_screen_state_toggle(C, win, sa, SCREENMAXIMIZED);
+		newsa = ED_screen_full_toggle(C, win, sa);
 	}
 	
 	if (!newsa) {
-		if (sa->full && screen->state == SCREENMAXIMIZED) {
+		if (sa->full) {
 			/* if this has been called from the temporary info header generated in
 			 * temp fullscreen layouts, find the correct fullscreen area to change
 			 * to create a new space inside */
@@ -1760,7 +1760,7 @@ void ED_screen_full_prevspace(bContext *C, ScrArea *sa)
 	ED_area_prevspace(C, sa);
 	
 	if (sa->full)
-		ED_screen_state_toggle(C, win, sa, SCREENMAXIMIZED);
+		ED_screen_full_toggle(C, win, sa);
 }
 
 /* restore a screen / area back to default operation, after temp fullscreen modes */
@@ -1785,23 +1785,23 @@ void ED_screen_full_restore(bContext *C, ScrArea *sa)
 				ED_screen_full_prevspace(C, sa);
 			}
 			else
-				ED_screen_state_toggle(C, win, sa, SCREENMAXIMIZED);
+				ED_screen_full_toggle(C, win, sa);
 		}
 		else if (sl->spacetype == SPACE_FILE) {
 			ED_screen_full_prevspace(C, sa);
 		}
 		else {
-			ED_screen_state_toggle(C, win, sa, SCREENMAXIMIZED);
+			ED_screen_full_toggle(C, win, sa);
 		}
 	}
 	/* otherwise just tile the area again */
 	else {
-		ED_screen_state_toggle(C, win, sa, SCREENMAXIMIZED);
+		ED_screen_full_toggle(C, win, sa);
 	}
 }
 
-/* this function toggles: if area is maximized/full then the parent will be restored */
-ScrArea *ED_screen_state_toggle(bContext *C, wmWindow *win, ScrArea *sa, const short state)
+/* this function toggles: if area is full then the parent will be restored */
+ScrArea *ED_screen_full_toggle(bContext *C, wmWindow *win, ScrArea *sa)
 {
 	bScreen *sc, *oldscreen;
 	ARegion *ar;
@@ -1812,20 +1812,23 @@ ScrArea *ED_screen_state_toggle(bContext *C, wmWindow *win, ScrArea *sa, const s
 		 * are no longer in the same screen */
 		for (ar = sa->regionbase.first; ar; ar = ar->next)
 			uiFreeBlocks(C, &ar->uiblocks);
-
+		
 		/* prevent hanging header prints */
 		ED_area_headerprint(sa, NULL);
 	}
 
 	if (sa && sa->full) {
-		/* restoring back to SCREENNORMAL */
 		ScrArea *old;
+		/*short fulltype;*/ /*UNUSED*/
 
 		sc = sa->full;       /* the old screen to restore */
 		oldscreen = win->screen; /* the one disappearing */
 
-		sc->state = SCREENNORMAL;
+		/*fulltype = sc->full;*/
+		sc->full = 0;
 
+		/* removed: SCREENAUTOPLAY exception here */
+	
 		/* find old area */
 		for (old = sc->areabase.first; old; old = old->next)
 			if (old->full) break;
@@ -1833,12 +1836,6 @@ ScrArea *ED_screen_state_toggle(bContext *C, wmWindow *win, ScrArea *sa, const s
 			if (G.debug & G_DEBUG)
 				printf("%s: something wrong in areafullscreen\n", __func__);
 			return NULL;
-		}
-
-		if (state == SCREENFULLSCREEN) {
-			/* restore the old side panels/header visibility */
-			for (ar = sa->regionbase.first; ar; ar = ar->next)
-				ar->flag = ar->flagfullscreen;
 		}
 
 		ED_area_data_swap(old, sa);
@@ -1856,66 +1853,44 @@ ScrArea *ED_screen_state_toggle(bContext *C, wmWindow *win, ScrArea *sa, const s
 
 	}
 	else {
-		/* change from SCREENNORMAL to new state */
 		ScrArea *newa;
 		char newname[MAX_ID_NAME - 2];
 
 		oldscreen = win->screen;
 
-		oldscreen->state = state;
-		BLI_snprintf(newname, sizeof(newname), "%s-%s", oldscreen->id.name + 2, "nonnormal");
+		/* nothing wrong with having only 1 area, as far as I can see...
+		 * is there only 1 area? */
+#if 0
+		if (oldscreen->areabase.first == oldscreen->areabase.last)
+			return NULL;
+#endif
+
+		oldscreen->full = SCREENFULL;
+		BLI_snprintf(newname, sizeof(newname), "%s-%s", oldscreen->id.name + 2, "full");
 		sc = ED_screen_add(win, oldscreen->scene, newname);
-		sc->state = state;
+		sc->full = SCREENFULL; // XXX
 
 		/* timer */
 		sc->animtimer = oldscreen->animtimer;
 		oldscreen->animtimer = NULL;
+
+		/* returns the top small area */
+		newa = area_split(sc, (ScrArea *)sc->areabase.first, 'h', 0.99f, 1);
+		ED_area_newspace(C, newa, SPACE_INFO);
 
 		/* use random area when we have no active one, e.g. when the
 		 * mouse is outside of the window and we open a file browser */
 		if (!sa)
 			sa = oldscreen->areabase.first;
 
-		if (state == SCREENMAXIMIZED) {
-			/* returns the top small area */
-			newa = area_split(sc, (ScrArea *)sc->areabase.first, 'h', 0.99f, 1);
-			ED_area_newspace(C, newa, SPACE_INFO);
+		/* copy area */
+		newa = newa->prev;
+		ED_area_data_swap(newa, sa);
+		sa->flag |= AREA_TEMP_INFO;
 
-			/* copy area */
-			newa = newa->prev;
-			ED_area_data_swap(newa, sa);
-			sa->flag |= AREA_TEMP_INFO;
-
-			sa->full = oldscreen;
-			newa->full = oldscreen;
-			newa->next->full = oldscreen; // XXX
-		}
-		else if (state == SCREENFULLSCREEN){
-			newa = (ScrArea *)sc->areabase.first;
-
-			/* copy area */
-			ED_area_data_swap(newa, sa);
-			newa->flag = sa->flag; /* mostly for AREA_FLAG_WASFULLSCREEN */
-
-			/* temporarily hide the side panels/header */
-			for (ar = newa->regionbase.first; ar; ar = ar->next) {
-				ar->flagfullscreen = ar->flag;
-
-				if (ELEM(ar->regiontype,
-						  RGN_TYPE_UI,
-						  RGN_TYPE_PREVIEW,
-						  RGN_TYPE_HEADER,
-						  RGN_TYPE_TOOLS)) {
-					ar->flag |= RGN_FLAG_HIDDEN;
-				}
-			}
-
-			sa->full = oldscreen;
-			newa->full = oldscreen;
-		}
-		else {
-			BLI_assert(false);
-		}
+		sa->full = oldscreen;
+		newa->full = oldscreen;
+		newa->next->full = oldscreen; // XXX
 
 		ED_screen_set(C, sc);
 	}
