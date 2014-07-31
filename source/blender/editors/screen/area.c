@@ -571,7 +571,7 @@ static void area_azone_initialize(wmWindow *win, bScreen *screen, ScrArea *sa)
 	/* reinitalize entirely, regions add azones too */
 	BLI_freelistN(&sa->actionzones);
 
-	if (screen->full != SCREENNORMAL) {
+	if (screen->state != SCREENNORMAL) {
 		return;
 	}
 
@@ -1168,7 +1168,8 @@ static void region_rect_recursive(wmWindow *win, ScrArea *sa, ARegion *ar, rcti 
 		 * must be minimum '4' */
 	}
 	else {
-		region_azone_add(sa, ar, alignment);
+		if (ELEM(win->screen->state, SCREENNORMAL, SCREENMAXIMIZED))
+			region_azone_add(sa, ar, alignment);
 	}
 
 	region_rect_recursive(win, sa, ar->next, remainder, quad);

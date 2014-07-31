@@ -188,7 +188,7 @@ typedef struct wmWindow {
 	short lastcursor;   /* previous cursor when setting modal one */
 	short modalcursor;  /* the current modal cursor */
 	short addmousemove; /* internal: tag this for extra mousemove event, makes cursors/buttons active on UI switching */
-	short pad2;
+	short flag;
 
 	struct wmEvent *eventstate;   /* storage for event system */
 
@@ -206,6 +206,11 @@ typedef struct wmWindow {
 	ListBase subwindows;          /* opengl stuff for sub windows, see notes in wm_subwindow.c */
 	ListBase gesture;             /* gesture stuff */
 } wmWindow;
+
+/* wmWindow.flag */
+enum {
+	WM_FLAG_TEMPFULLSCREEN = 1,
+};
 
 /* These two Lines with # tell makesdna this struct can be excluded. */
 /* should be something like DNA_EXCLUDE 
