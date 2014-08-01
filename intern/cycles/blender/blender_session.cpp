@@ -88,7 +88,6 @@ void BlenderSession::create_session()
 {
 	SceneParams scene_params = BlenderSync::get_scene_params(b_scene, background);
 	SessionParams session_params = BlenderSync::get_session_params(b_engine, b_userpref, b_scene, background);
-	bool session_pause = BlenderSync::get_session_pause(b_scene, background);
 
 	/* reset status/progress */
 	last_status = "";
@@ -108,17 +107,15 @@ void BlenderSession::create_session()
 	session->scene = scene;
 	session->progress.set_update_callback(function_bind(&BlenderSession::tag_redraw, this));
 	session->progress.set_cancel_callback(function_bind(&BlenderSession::test_cancel, this));
-	session->set_pause(session_pause);
+	session->set_pause(BlenderSync::get_session_pause(b_scene, background));
 
 	/* create sync */
 	sync = new BlenderSync(b_engine, b_data, b_scene, scene, !background, session->progress, session_params.device.type == DEVICE_CPU);
 
 	if(b_v3d) {
-		if(session_pause == false) {
-			/* full data sync */
-			sync->sync_data(b_v3d, b_engine.camera_override(), &python_thread_state);
-			sync->sync_view(b_v3d, b_rv3d, width, height);
-		}
+		/* full data sync */
+		sync->sync_data(b_v3d, b_engine.camera_override(), &python_thread_state);
+		sync->sync_view(b_v3d, b_rv3d, width, height);
 	}
 	else {
 		/* for final render we will do full data sync per render layer, only
@@ -630,7 +627,6 @@ void BlenderSession::synchronize()
 	/* on session/scene parameter changes, we recreate session entirely */
 	SceneParams scene_params = BlenderSync::get_scene_params(b_scene, background);
 	SessionParams session_params = BlenderSync::get_session_params(b_engine, b_userpref, b_scene, background);
-	bool session_pause = BlenderSync::get_session_pause(b_scene, background);
 
 	if(session->params.modified(session_params) ||
 	   scene->params.modified(scene_params))
@@ -643,17 +639,11 @@ void BlenderSession::synchronize()
 
 	/* increase samples, but never decrease */
 	session->set_samples(session_params.samples);
-	session->set_pause(session_pause);
+	session->set_pause(BlenderSync::get_session_pause(b_scene, background));
 
 	/* copy recalc flags, outside of mutex so we can decide to do the real
 	 * synchronization at a later time to not block on running updates */
 	sync->sync_recalc();
-
-	/* don't do synchronization if on pause */
-	if(session_pause) {
-		tag_update();
-		return;
-	}
 
 	/* try to acquire mutex. if we don't want to or can't, come back later */
 	if(!session->ready_to_reset() || !session->scene->mutex.try_lock()) {
@@ -730,12 +720,10 @@ bool BlenderSession::draw(int w, int h)
 		if(reset) {
 			SessionParams session_params = BlenderSync::get_session_params(b_engine, b_userpref, b_scene, background);
 			BufferParams buffer_params = BlenderSync::get_buffer_params(b_render, b_scene, b_v3d, b_rv3d, scene->camera, width, height);
-			bool session_pause = BlenderSync::get_session_pause(b_scene, background);
 
-			if(session_pause == false) {
-				session->reset(buffer_params, session_params.samples);
-				start_resize_time = 0.0;
-			}
+			session->reset(buffer_params, session_params.samples);
+
+			start_resize_time = 0.0;
 		}
 	}
 	else {

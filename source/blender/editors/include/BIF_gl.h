@@ -58,24 +58,8 @@
  * */
 void cpack(unsigned int x);
 
-
-#if defined(__STDC_VERSION__) && (__STDC_VERSION__ >= 201112L)
-#  define glMultMatrixf(x)  \
-	glMultMatrixf(_Generic(x, \
-	        float *:      (float *)(x), \
-	        float (*)[4]: (float *)(x), \
-	        const float *:      (float *)(x), \
-	        const float (*)[4]: (float *)(x)) \
-)
-#  define glLoadMatrixf(x)  \
-	glLoadMatrixf(_Generic(x, \
-	        float *:      (float *)(x), \
-	        float (*)[4]: (float *)(x)) \
-)
-#else
-#  define glMultMatrixf(x)  glMultMatrixf((float *)(x))
-#  define glLoadMatrixf(x)  glLoadMatrixf((float *)(x))
-#endif
+#define glMultMatrixf(x)  glMultMatrixf( (float *)(x))
+#define glLoadMatrixf(x)  glLoadMatrixf( (float *)(x))
 
 #define GLA_PIXEL_OFS 0.375f
 

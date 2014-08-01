@@ -68,7 +68,6 @@
 #include "DNA_genfile.h"
 #include "DNA_group_types.h"
 #include "DNA_gpencil_types.h"
-#include "DNA_hair_types.h"
 #include "DNA_ipo_types.h"
 #include "DNA_key_types.h"
 #include "DNA_lattice_types.h"
@@ -135,7 +134,6 @@
 #include "BKE_particle.h"
 #include "BKE_pointcache.h"
 #include "BKE_report.h"
-#include "BKE_rigidbody.h"
 #include "BKE_sca.h" // for init_actuator
 #include "BKE_scene.h"
 #include "BKE_screen.h"
@@ -4585,17 +4583,6 @@ static void direct_link_pose(FileData *fd, bPose *pose)
 	}
 }
 
-static void direct_link_hair_system(FileData *fd, HairSystem *hsys)
-{
-	HairCurve *hair;
-	int i;
-	
-	hsys->curves = newdataadr(fd, hsys->curves);
-	for (hair = hsys->curves, i = 0; i < hsys->totcurves; ++hair, ++i) {
-		hair->points = newdataadr(fd, hair->points);
-	}
-}
-
 static void direct_link_modifiers(FileData *fd, ListBase *lb)
 {
 	ModifierData *md;
@@ -4855,15 +4842,6 @@ static void direct_link_modifiers(FileData *fd, ListBase *lb)
 				BLI_endian_switch_float_array(lmd->vertexco, lmd->total_verts * 3);
 			}
 			lmd->cache_system = NULL;
-		}
-		else if (md->type == eModifierType_Hair) {
-			HairModifierData *hmd = (HairModifierData *)md;
-
-			hmd->hairsys = newdataadr(fd, hmd->hairsys);
-			if (hmd->hairsys)
-				direct_link_hair_system(fd, hmd->hairsys);
-
-			hmd->solver = NULL;
 		}
 	}
 }
@@ -5259,8 +5237,6 @@ static void lib_link_scene(FileData *fd, Main *main)
 					rbw->constraints = newlibadr(fd, sce->id.lib, rbw->constraints);
 				if (rbw->effector_weights)
 					rbw->effector_weights->group = newlibadr(fd, sce->id.lib, rbw->effector_weights->group);
-				/* create empty mempool */
-				BKE_rigidbody_world_init_mempool(rbw);
 			}
 			
 			if (sce->nodetree) {
