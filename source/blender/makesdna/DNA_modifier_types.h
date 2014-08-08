@@ -82,6 +82,7 @@ typedef enum ModifierType {
 	eModifierType_MeshCache         = 46,
 	eModifierType_LaplacianDeform   = 47,
 	eModifierType_Wireframe         = 48,
+	eModifierType_Hair              = 49,
 	NUM_MODIFIER_TYPES
 } ModifierType;
 
@@ -1365,6 +1366,29 @@ enum {
 	MOD_WIREFRAME_CREASE        = (1 << 5),
 };
 
+typedef struct HairDebugData {
+	struct HAIR_SolverDebugContact *contacts;
+	struct HAIR_SolverDebugPoint *points;
+	int totcontacts;
+	int totpoints;
+} HairDebugData;
+
+typedef struct HairModifierData {
+	ModifierData modifier;
+	
+	struct HairSystem *hairsys;
+	
+	struct HAIR_Solver *solver;     /* runtime instance */
+	
+	int flag;
+	int pad;
+	
+	struct HairDebugData *debug_data;
+} HairModifierData;
+
+enum {
+	MOD_HAIR_SOLVER_DATA_VALID  = (1 << 0),
+};
 
 
 #endif  /* __DNA_MODIFIER_TYPES_H__ */
