@@ -102,6 +102,7 @@ EnumPropertyItem modifier_type_items[] = {
 	{eModifierType_DynamicPaint, "DYNAMIC_PAINT", ICON_MOD_DYNAMICPAINT, "Dynamic Paint", ""},
 	{eModifierType_Explode, "EXPLODE", ICON_MOD_EXPLODE, "Explode", ""},
 	{eModifierType_Fluidsim, "FLUID_SIMULATION", ICON_MOD_FLUIDSIM, "Fluid Simulation", ""},
+	{eModifierType_Hair, "HAIR", ICON_HAIR, "Hair", ""},
 	{eModifierType_Ocean, "OCEAN", ICON_MOD_OCEAN, "Ocean", ""},
 	{eModifierType_ParticleInstance, "PARTICLE_INSTANCE", ICON_MOD_PARTICLES, "Particle Instance", ""},
 	{eModifierType_ParticleSystem, "PARTICLE_SYSTEM", ICON_MOD_PARTICLES, "Particle System", ""},
@@ -134,6 +135,7 @@ EnumPropertyItem modifier_triangulate_ngon_method_items[] = {
 
 #include "BKE_context.h"
 #include "BKE_depsgraph.h"
+#include "BKE_hair.h"
 #include "BKE_library.h"
 #include "BKE_modifier.h"
 #include "BKE_object.h"
@@ -244,6 +246,8 @@ static StructRNA *rna_Modifier_refine(struct PointerRNA *ptr)
 			return &RNA_LaplacianDeformModifier;
 		case eModifierType_Wireframe:
 			return &RNA_WireframeModifier;
+		case eModifierType_Hair:
+			return &RNA_HairModifier;
 		/* Default */
 		case eModifierType_None:
 		case eModifierType_ShapeKey:
@@ -602,6 +606,18 @@ static int rna_LaplacianDeformModifier_is_bind_get(PointerRNA *ptr)
 {
 	LaplacianDeformModifierData *lmd = (LaplacianDeformModifierData *)ptr->data;
 	return ((lmd->flag & MOD_LAPLACIANDEFORM_BIND) && (lmd->cache_system != NULL));
+}
+
+static void rna_HairModifier_show_debug_update(Main *bmain, Scene *scene, PointerRNA *ptr)
+{
+	HairModifierData *hmd = (HairModifierData *)ptr->data;
+	
+	if (!(hmd->debug_flag & MOD_HAIR_DEBUG_SHOW)) {
+		BKE_hair_debug_data_free(hmd->debug_data);
+		hmd->debug_data = NULL;
+	}
+	
+	rna_Modifier_update(bmain, scene, ptr);
 }
 
 #else
@@ -3659,6 +3675,57 @@ static void rna_def_modifier_wireframe(BlenderRNA *brna)
 	RNA_def_property_update(prop, 0, "rna_Modifier_update");
 }
 
+static void rna_def_modifier_hair(BlenderRNA *brna)
+{
+	StructRNA *srna;
+	PropertyRNA *prop;
+
+	srna = RNA_def_struct(brna, "HairModifier", "Modifier");
+	RNA_def_struct_ui_text(srna, "Hair Modifier", "Hair simulation modifier");
+	RNA_def_struct_sdna(srna, "HairModifierData");
+	RNA_def_struct_ui_icon(srna, ICON_HAIR);
+
+	prop = RNA_def_property(srna, "hair_system", PROP_POINTER, PROP_NONE);
+	RNA_def_property_pointer_sdna(prop, NULL, "hairsys");
+	RNA_def_property_struct_type(prop, "HairSystem");
+	RNA_def_property_ui_text(prop, "Hair System", "");
+
+	prop = RNA_def_property(srna, "show_debug", PROP_BOOLEAN, PROP_NONE);
+	RNA_def_property_boolean_sdna(prop, NULL, "debug_flag", MOD_HAIR_DEBUG_SHOW);
+	RNA_def_property_ui_text(prop, "Show Debug", "Show debugging data");
+	RNA_def_property_update(prop, 0, "rna_HairModifier_show_debug_update");
+
+	prop = RNA_def_property(srna, "show_debug_contacts", PROP_BOOLEAN, PROP_NONE);
+	RNA_def_property_boolean_sdna(prop, NULL, "debug_flag", MOD_HAIR_DEBUG_CONTACTS);
+	RNA_def_property_ui_text(prop, "Show Contacts", "Show contacts debugging data");
+	RNA_def_property_update(prop, 0, "rna_Modifier_update");
+
+	prop = RNA_def_property(srna, "show_debug_cylinders", PROP_BOOLEAN, PROP_NONE);
+	RNA_def_property_boolean_sdna(prop, NULL, "debug_flag", MOD_HAIR_DEBUG_CYLINDERS);
+	RNA_def_property_ui_text(prop, "Show Cylinders", "Show cylinder debugging data");
+	RNA_def_property_update(prop, 0, "rna_Modifier_update");
+
+	prop = RNA_def_property(srna, "show_debug_roots", PROP_BOOLEAN, PROP_NONE);
+	RNA_def_property_boolean_sdna(prop, NULL, "debug_flag", MOD_HAIR_DEBUG_ROOTS);
+	RNA_def_property_ui_text(prop, "Show Roots", "");
+	RNA_def_property_update(prop, 0, "rna_Modifier_update");
+
+	prop = RNA_def_property(srna, "show_debug_size", PROP_BOOLEAN, PROP_NONE);
+	RNA_def_property_boolean_sdna(prop, NULL, "debug_flag", MOD_HAIR_DEBUG_SIZE);
+	RNA_def_property_ui_text(prop, "Show Size", "");
+	RNA_def_property_update(prop, 0, "rna_Modifier_update");
+
+	prop = RNA_def_property(srna, "show_debug_frames", PROP_BOOLEAN, PROP_NONE);
+	RNA_def_property_boolean_sdna(prop, NULL, "debug_flag", MOD_HAIR_DEBUG_FRAMES);
+	RNA_def_property_ui_text(prop, "Show Frames", "");
+	RNA_def_property_update(prop, 0, "rna_Modifier_update");
+
+	prop = RNA_def_property(srna, "show_debug_smoothing", PROP_BOOLEAN, PROP_NONE);
+	RNA_def_property_boolean_sdna(prop, NULL, "debug_flag", MOD_HAIR_DEBUG_SMOOTHING);
+	RNA_def_property_ui_text(prop, "Show Smoothing", "");
+	RNA_def_property_update(prop, 0, "rna_Modifier_update");
+}
+
 void RNA_def_modifier(BlenderRNA *brna)
 {
 	StructRNA *srna;
@@ -3771,6 +3838,7 @@ void RNA_def_modifier(BlenderRNA *brna)
 	rna_def_modifier_meshcache(brna);
 	rna_def_modifier_laplaciandeform(brna);
 	rna_def_modifier_wireframe(brna);
+	rna_def_modifier_hair(brna);
 }
 
 #endif

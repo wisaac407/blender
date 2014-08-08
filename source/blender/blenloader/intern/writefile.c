@@ -107,6 +107,7 @@
 #include "DNA_group_types.h"
 #include "DNA_gpencil_types.h"
 #include "DNA_fileglobal_types.h"
+#include "DNA_hair_types.h"
 #include "DNA_key_types.h"
 #include "DNA_lattice_types.h"
 #include "DNA_lamp_types.h"
@@ -1356,6 +1357,17 @@ static void write_defgroups(WriteData *wd, ListBase *defbase)
 		writestruct(wd, DATA, "bDeformGroup", 1, defgroup);
 }
 
+static void write_hair_system(WriteData *wd, HairSystem *hsys)
+{
+	HairCurve *hair;
+	int i;
+	
+	writestruct(wd, DATA, "HairSystem", 1, hsys);
+	writestruct(wd, DATA, "HairCurve", hsys->totcurves, hsys->curves);
+	for (hair = hsys->curves, i = 0; i < hsys->totcurves; ++hair, ++i)
+		writestruct(wd, DATA, "HairPoint", hair->totpoints, hair->points);
+}
+
 static void write_modifiers(WriteData *wd, ListBase *modbase)
 {
 	ModifierData *md;
@@ -1477,6 +1489,12 @@ static void write_modifiers(WriteData *wd, ListBase *modbase)
 			LaplacianDeformModifierData *lmd = (LaplacianDeformModifierData*) md;
 
 			writedata(wd, DATA, sizeof(float)*lmd->total_verts * 3, lmd->vertexco);
+		}
+		else if (md->type==eModifierType_Hair) {
+			HairModifierData *hmd = (HairModifierData*) md;
+			
+			if (hmd->hairsys)
+				write_hair_system(wd, hmd->hairsys);
 		}
 	}
 }
@@ -2332,9 +2350,10 @@ static void write_scenes(WriteData *wd, ListBase *scebase)
 		
 		/* writing RigidBodyWorld data to the blend file */
 		if (sce->rigidbody_world) {
-			writestruct(wd, DATA, "RigidBodyWorld", 1, sce->rigidbody_world);
-			writestruct(wd, DATA, "EffectorWeights", 1, sce->rigidbody_world->effector_weights);
-			write_pointcaches(wd, &(sce->rigidbody_world->ptcaches));
+			RigidBodyWorld *rbw = sce->rigidbody_world;
+			writestruct(wd, DATA, "RigidBodyWorld", 1, rbw);
+			writestruct(wd, DATA, "EffectorWeights", 1, rbw->effector_weights);
+			write_pointcaches(wd, &rbw->ptcaches);
 		}
 		
 		sce= sce->id.next;

@@ -1222,6 +1222,55 @@ class DATA_PT_modifiers(ModifierButtonsPanel, Panel):
 
         col.prop(md, "material_offset", text="Material Offset")
 
+    def HAIR(self, layout, ob, md):
+        hsys = md.hair_system
+        params = hsys.params
+        col = layout.column()
+        
+        col.separator()
+        
+        row = col.row()
+        col2 = row.column()
+        col2.prop(params, "substeps_forces")
+        col2 = row.column()
+        col2.prop(params, "substeps_damping")
+        
+        row = col.row()
+        col2 = row.column()
+        col2.prop(params, "stretch_stiffness")
+        col2.prop(params, "bend_stiffness")
+        col2.prop(params, "bend_smoothing")
+        col2 = row.column()
+        col2.prop(params, "stretch_damping")
+        col2.prop(params, "bend_damping")
+        
+        col.separator()
+        
+        row = col.row()
+        col2 = row.column()
+        col2.prop(params, "restitution")
+        col2.prop(params, "friction")
+        col2.prop(params, "margin")
+        col2 = row.column()
+        col2.prop(params, "drag")
+        
+        col.separator()
+        
+        col.operator("hair.reset to rest location")
+        col.operator("hair.copy_from_particles")
+        
+        col.separator()
+        
+        col.prop(md, "show_debug")
+        col2 = col.column()
+        col2.active = md.show_debug
+        col2.prop(md, "show_debug_contacts")
+        col2.prop(md, "show_debug_size")
+        col2.prop(md, "show_debug_cylinders")
+        col2.prop(md, "show_debug_roots")
+        col2.prop(md, "show_debug_frames")
+        col2.prop(md, "show_debug_smoothing")
+
 
 if __name__ == "__main__":  # only for live edit.
     bpy.utils.register_module(__name__)
