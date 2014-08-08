@@ -3295,7 +3295,6 @@ static RNAProcessItem PROCESS_ITEMS[] = {
 	{"rna_main.c", "rna_main_api.c", RNA_def_main},
 	{"rna_material.c", "rna_material_api.c", RNA_def_material},
 	{"rna_mesh.c", "rna_mesh_api.c", RNA_def_mesh},
-	{"rna_mesh_sample.c", NULL, RNA_def_mesh_sample},
 	{"rna_meta.c", "rna_meta_api.c", RNA_def_meta},
 	{"rna_modifier.c", NULL, RNA_def_modifier},
 	{"rna_nla.c", NULL, RNA_def_nla},
@@ -3328,7 +3327,6 @@ static RNAProcessItem PROCESS_ITEMS[] = {
 	{"rna_movieclip.c", NULL, RNA_def_movieclip},
 	{"rna_tracking.c", NULL, RNA_def_tracking},
 	{"rna_mask.c", NULL, RNA_def_mask},
-    {"rna_hair.c", NULL, RNA_def_hair},
 	{NULL, NULL}
 };
 
