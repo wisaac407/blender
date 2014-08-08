@@ -41,7 +41,6 @@
 #include "DNA_camera_types.h"
 #include "DNA_constraint_types.h"
 #include "DNA_group_types.h"
-#include "DNA_hair_types.h"
 #include "DNA_key_types.h"
 #include "DNA_lattice_types.h"
 #include "DNA_material_types.h"
@@ -87,7 +86,6 @@
 #include "BKE_effect.h"
 #include "BKE_fcurve.h"
 #include "BKE_group.h"
-#include "BKE_hair.h"
 #include "BKE_key.h"
 #include "BKE_lamp.h"
 #include "BKE_lattice.h"
@@ -111,8 +109,6 @@
 #include "BKE_material.h"
 #include "BKE_camera.h"
 #include "BKE_image.h"
-
-#include "HAIR_capi.h"
 
 #ifdef WITH_MOD_FLUID
 #include "LBM_fluidsim.h"
@@ -2340,7 +2336,7 @@ void BKE_object_where_is_calc_time_ex(Scene *scene, Object *ob, float ctime,
 	/* try to fall back to the scene rigid body world if none given */
 	rbw = rbw ? rbw : scene->rigidbody_world;
 	/* read values pushed into RBO from sim/cache... */
-	BKE_rigidbody_object_apply_transforms(rbw, ob, ctime);
+	BKE_rigidbody_sync_transforms(rbw, ob, ctime);
 	
 	/* solve constraints */
 	if (ob->constraints.first && !(ob->transflag & OB_NO_CONSTRAINTS)) {
@@ -3085,77 +3081,6 @@ void BKE_object_sculpt_modifiers_changed(Object *ob)
 				BKE_pbvh_node_mark_update(nodes[n]);
 
 			MEM_freeN(nodes);
-		}
-	}
-}
-
-void BKE_object_sim_pre_step(Scene *scene, Object *ob, float ctime)
-{
-	ModifierData *md;
-	
-	for (md = ob->modifiers.first; md; md = md->next) {
-		if (md->type == eModifierType_Hair) {
-			HairModifierData *hmd = (HairModifierData*) md;
-			HairSystem *hsys = hmd->hairsys;
-			DerivedMesh *dm = ob->derivedFinal;
-			
-			if (!hmd->solver) {
-				hmd->solver = HAIR_solver_new();
-				hmd->flag &= ~MOD_HAIR_SOLVER_DATA_VALID;
-			}
-			
-			HAIR_solver_set_params(hmd->solver, &hsys->params);
-			
-			if (!hmd->flag & MOD_HAIR_SOLVER_DATA_VALID) {
-				HAIR_solver_build_data(hmd->solver, scene, ob, dm, hsys, ctime);
-				hmd->flag |= MOD_HAIR_SOLVER_DATA_VALID;
-			}
-			
-			HAIR_solver_update_externals(hmd->solver, scene, ob, dm, hsys, ctime);
-		}
-	}
-}
-
-void BKE_object_sim_tick(Scene *UNUSED(scene), Object *ob, float ctime, float timestep)
-{
-	ModifierData *md;
-	
-	for (md = ob->modifiers.first; md; md = md->next) {
-		if (md->type == eModifierType_Hair) {
-			HairModifierData *hmd = (HairModifierData*) md;
-			
-			if (!(hmd->debug_flag & MOD_HAIR_DEBUG_SHOW)) {
-				HAIR_solver_step(hmd->solver, ctime, timestep);
-			}
-			else {
-				float imat[4][4];
-				
-				invert_m4_m4(imat, ob->obmat);
-				
-				if (hmd->debug_data) {
-					if (hmd->debug_data->points)
-						MEM_freeN(hmd->debug_data->points);
-					if (hmd->debug_data->contacts)
-						MEM_freeN(hmd->debug_data->contacts);
-				}
-				else {
-					hmd->debug_data = MEM_callocN(sizeof(HairDebugData), "hair debug data");
-				}
-				
-				HAIR_solver_step_debug(hmd->solver, ctime, timestep, imat, &hmd->debug_data->points, &hmd->debug_data->totpoints, &hmd->debug_data->contacts, &hmd->debug_data->totcontacts);
-			}
-		}
-	}
-}
-
-void BKE_object_sim_post_step(Scene *scene, Object *ob, float UNUSED(ctime))
-{
-	ModifierData *md;
-	
-	for (md = ob->modifiers.first; md; md = md->next) {
-		if (md->type == eModifierType_Hair) {
-			HairModifierData *hmd = (HairModifierData*) md;
-			HAIR_solver_apply(hmd->solver, scene, ob, hmd->hairsys);
 		}
 	}
 }
