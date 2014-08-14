@@ -544,6 +544,14 @@ class CyclesCameraSettings(bpy.types.PropertyGroup):
                 subtype='ANGLE',
                 default=0,
                 )
+        cls.anamorphic_factor = FloatProperty(
+                name="Anamorphic Lens",
+                description="Lens for anamorphic distortion",
+                min=0.1,
+                subtype='DISTANCE',
+                precision=4,
+                default=1,
+                )
         cls.panorama_type = EnumProperty(
                 name="Panorama Type",
                 description="Distortion to use for the calculation",

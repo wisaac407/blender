@@ -21,6 +21,12 @@ CCL_NAMESPACE_BEGIN
 ccl_device float2 camera_sample_aperture(KernelGlobals *kg, float u, float v)
 {
 	float blades = kernel_data.cam.blades;
+	float anamorphic = kernel_data.cam.anamorphic;
+
+	/* apply anamorphic effect */
+	if(anamorphic != 1.0f) {
+		u = ((((u * 2.0f) - 1.0f) * (1.0f / anamorphic)) + 1.0f) * 0.5f;
+	}
 
 	if(blades == 0.0f) {
 		/* sample disk */
