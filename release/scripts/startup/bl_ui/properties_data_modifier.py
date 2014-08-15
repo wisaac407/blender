@@ -351,6 +351,9 @@ class DATA_PT_modifiers(ModifierButtonsPanel, Panel):
     def FLUID_SIMULATION(self, layout, ob, md):
         layout.label(text="Settings are inside the Physics tab")
 
+    def HAIR(self, layout, ob, md):
+        layout.label(text="Settings are inside the Physics tab")
+
     def HOOK(self, layout, ob, md):
         split = layout.split()
 
