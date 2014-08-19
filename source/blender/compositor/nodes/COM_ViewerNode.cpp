@@ -22,6 +22,8 @@
 
 #include "COM_ViewerNode.h"
 #include "BKE_global.h"
+#include "BKE_image.h"
+#include "BLI_listbase.h"
 
 #include "COM_ViewerOperation.h"
 #include "COM_ExecutionSystem.h"
@@ -29,6 +31,31 @@
 ViewerNode::ViewerNode(bNode *editorNode) : Node(editorNode)
 {
 	/* pass */
+}
+
+static size_t ViewerNodeViewsCount(const RenderData *rd)
+{
+	SceneRenderView *srv;
+	size_t totviews	= 0;
+
+	for (srv = (SceneRenderView *)rd->views.first; srv; srv = srv->next)
+		if ((srv->viewflag & SCE_VIEW_DISABLE) == 0)
+			totviews++;
+	return totviews;
+}
+
+static bool ViewerNodeIsStereo(const RenderData *rd)
+{
+	SceneRenderView *srv[2];
+
+	if ((rd->scemode & R_MULTIVIEW) == 0)
+		return false;
+
+	srv[0] = (SceneRenderView *)BLI_findstring(&rd->views, STEREO_LEFT_NAME, offsetof(SceneRenderView, name));
+	srv[1] = (SceneRenderView *)BLI_findstring(&rd->views, STEREO_RIGHT_NAME, offsetof(SceneRenderView, name));
+
+	return (srv[0] && ((srv[0]->viewflag & SCE_VIEW_DISABLE) == 0) &&
+	        srv[1] && ((srv[1]->viewflag & SCE_VIEW_DISABLE) == 0));
 }
 
 void ViewerNode::convertToOperations(NodeConverter &converter, const CompositorContext &context) const
@@ -51,6 +78,7 @@ void ViewerNode::convertToOperations(NodeConverter &converter, const CompositorC
 	viewerOperation->setCenterY(editorNode->custom4);
 	/* alpha socket gives either 1 or a custom alpha value if "use alpha" is enabled */
 	viewerOperation->setUseAlphaInput(ignore_alpha || alphaSocket->isLinked());
+	viewerOperation->setViewId(context.getViewId());
 
 	viewerOperation->setViewSettings(context.getViewSettings());
 	viewerOperation->setDisplaySettings(context.getDisplaySettings());
@@ -75,4 +103,24 @@ void ViewerNode::convertToOperations(NodeConverter &converter, const CompositorC
 
 	if (do_output)
 		converter.registerViewer(viewerOperation);
+
+	if (image) {
+		BLI_lock_thread(LOCK_DRAW_IMAGE);
+		if (ViewerNodeIsStereo(context.getRenderData())) {
+			image->flag |= IMA_IS_STEREO;
+		}
+		else {
+			image->flag &= ~IMA_IS_STEREO;
+			imageUser->flag &= ~IMA_SHOW_STEREO;
+		}
+
+		size_t num_views = ViewerNodeViewsCount(context.getRenderData());
+		size_t num_caches = 1;
+
+		if (num_views != num_caches) {
+			BKE_image_free_cached_frames(image);
+		}
+
+		BLI_unlock_thread(LOCK_DRAW_IMAGE);
+	}
 }
