@@ -305,10 +305,10 @@ static void ui_imageuser_slot_menu(bContext *UNUSED(C), uiLayout *layout, void *
 
 static const char *ui_imageuser_layer_fake_name(RenderResult *rr)
 {
-	if (RE_RenderViewGetRectf(rr, 0)){
+	if (rr->rectf) {
 		return IFACE_("Composite");
 	}
-	else if (RE_RenderViewGetRect32(rr, 0)) {
+	else if (rr->rect32) {
 		return IFACE_("Sequence");
 	}
 	else {
@@ -359,7 +359,7 @@ final:
 
 static const char *ui_imageuser_pass_fake_name(RenderLayer *rl)
 {
-	if (rl == NULL) {
+	if (rl == NULL || rl->rectf) {
 		return IFACE_("Combined");
 	}
 	else {
@@ -379,7 +379,6 @@ static void ui_imageuser_pass_menu(bContext *UNUSED(C), uiLayout *layout, void *
 	RenderPass *rpass;
 	const char *fake_name;
 	int nr;
-	int passflag = 0;
 
 	uiBlockSetCurLayout(block, layout);
 	uiLayoutColumn(layout, false);
@@ -393,22 +392,15 @@ static void ui_imageuser_pass_menu(bContext *UNUSED(C), uiLayout *layout, void *
 	fake_name = ui_imageuser_pass_fake_name(rl);
 
 	if (fake_name) {
-		BLI_strncpy(rpass_fake.internal_name, fake_name, sizeof(rpass_fake.internal_name));
+		BLI_strncpy(rpass_fake.name, fake_name, sizeof(rpass_fake.name));
 		nr += 1;
 	}
 
 	/* rendered results don't have a Combined pass */
 	for (rpass = rl ? rl->passes.last : NULL; rpass; rpass = rpass->prev, nr--) {
-
-		/* just show one pass of each kind */
-		if (passflag & rpass->passtype)
-			continue;
-
-		passflag |= rpass->passtype;
-
 final:
-		uiDefButS(block, BUTM, B_NOP, IFACE_(rpass->internal_name), 0, 0,
-		          UI_UNIT_X * 5, UI_UNIT_X, &iuser->passtype, (float) rpass->passtype, 0.0, 0, -1, "");
+		uiDefButS(block, BUTM, B_NOP, IFACE_(rpass->name), 0, 0,
+		          UI_UNIT_X * 5, UI_UNIT_X, &iuser->pass, (float) nr, 0.0, 0, -1, "");
 	}
 
 	if (fake_name) {
@@ -416,65 +408,6 @@ final:
 		rpass = &rpass_fake;
 		goto final;
 	}
-
-	BLI_assert(nr == -1);
-}
-
-static void ui_imageuser_view_menu_viewer(bContext *UNUSED(C), uiLayout *layout, void *ptrpair_p)
-{
-	void **ptrpair = ptrpair_p;
-	uiBlock *block = uiLayoutGetBlock(layout);
-	ImageUser *iuser = ptrpair[1];
-	RenderData *rd = ptrpair[3];
-	SceneRenderView *srv;
-	int nr;
-
-	uiBlockSetCurLayout(block, layout);
-	uiLayoutColumn(layout, false);
-
-	uiDefBut(block, LABEL, 0, IFACE_("View"),
-	         0, 0, UI_UNIT_X * 5, UI_UNIT_Y, NULL, 0.0, 0.0, 0, 0, "");
-
-	uiItemS(layout);
-
-	nr = 0;
-	for (srv = rd ? rd->views.first : NULL; srv; srv = srv->next) {
-		if ((srv->viewflag & SCE_VIEW_DISABLE))
-			continue;
-
-		uiDefButS(block, BUTM, B_NOP, IFACE_(srv->name), 0, 0,
-		          UI_UNIT_X * 5, UI_UNIT_X, &iuser->view, (float) nr++, 0.0, 0, -1, "");
-	}
-
-	if (iuser->view >= nr)
-		iuser->view = 0;
-}
-
-static void ui_imageuser_view_menu_rr(bContext *UNUSED(C), uiLayout *layout, void *ptrpair_p)
-{
-	void **ptrpair = ptrpair_p;
-	uiBlock *block = uiLayoutGetBlock(layout);
-	RenderResult *rr = ptrpair[0];
-	ImageUser *iuser = ptrpair[1];
-	RenderView *rview;
-	int nr;
-
-	uiBlockSetCurLayout(block, layout);
-	uiLayoutColumn(layout, false);
-
-	uiDefBut(block, LABEL, 0, IFACE_("View"),
-	         0, 0, UI_UNIT_X * 5, UI_UNIT_Y, NULL, 0.0, 0.0, 0, 0, "");
-
-	uiItemS(layout);
-
-	nr = (rr ? BLI_countlist(&rr->views) : 0) - 1;
-	for (rview = rr ? rr->views.last : NULL; rview; rview = rview->prev, nr--) {
-		uiDefButS(block, BUTM, B_NOP, IFACE_(rview->name), 0, 0,
-		          UI_UNIT_X * 5, UI_UNIT_X, &iuser->view, (float) nr, 0.0, 0, -1, "");
-	}
-
-	if (iuser->view >= nr)
-		iuser->view = 0;
 
 	BLI_assert(nr == -1);
 }
@@ -487,14 +420,13 @@ static void image_multi_cb(bContext *C, void *rr_v, void *iuser_v)
 	BKE_image_multilayer_index(rr_v, iuser); 
 	WM_event_add_notifier(C, NC_IMAGE | ND_DRAW, NULL);
 }
-
 static void image_multi_inclay_cb(bContext *C, void *rr_v, void *iuser_v) 
 {
 	RenderResult *rr = rr_v;
 	ImageUser *iuser = iuser_v;
 	int tot = BLI_countlist(&rr->layers);
 
-	if (RE_HasFakeLayer(rr))
+	if (rr->rectf || rr->rect32)
 		tot++;  /* fake compo/sequencer layer */
 
 	if (iuser->layer < tot - 1) {
@@ -522,7 +454,7 @@ static void image_multi_incpass_cb(bContext *C, void *rr_v, void *iuser_v)
 	if (rl) {
 		int tot = BLI_countlist(&rl->passes);
 
-		if (RE_HasFakeLayer(rr))
+		if (rr->rectf || rr->rect32)
 			tot++;  /* fake compo/sequencer layer */
 
 		if (iuser->pass < tot - 1) {
@@ -560,17 +492,15 @@ static void image_user_change(bContext *C, void *iuser_v, void *unused)
 }
 #endif
 
-/* we only pass RenderData if image is stereo and from a Viewer Node */
-static void uiblock_layer_pass_buttons(uiLayout *layout, RenderResult *rr, RenderData *rd, ImageUser *iuser, int w, short *render_slot)
+static void uiblock_layer_pass_buttons(uiLayout *layout, RenderResult *rr, ImageUser *iuser, int w, short *render_slot)
 {
-	static void *rnd_pt[4];  /* XXX, workaround */
+	static void *rnd_pt[3];  /* XXX, workaround */
 	uiBlock *block = uiLayoutGetBlock(layout);
 	uiBut *but;
 	RenderLayer *rl = NULL;
-	int wmenu1, wmenu2, wmenu3, wmenu4;
+	int wmenu1, wmenu2, wmenu3;
 	const char *fake_name;
-	const char *display_name = "";
-	const bool show_stereo = (iuser->flag & IMA_SHOW_STEREO);
+	const char *display_name;
 
 	uiLayoutRow(layout, true);
 
@@ -578,12 +508,10 @@ static void uiblock_layer_pass_buttons(uiLayout *layout, RenderResult *rr, Rende
 	wmenu1 = (2 * w) / 5;
 	wmenu2 = (3 * w) / 5;
 	wmenu3 = (3 * w) / 6;
-	wmenu4 = (3 * w) / 6;
 	
 	rnd_pt[0] = rr;
 	rnd_pt[1] = iuser;
 	rnd_pt[2] = NULL;
-	rnd_pt[3] = NULL;
 
 	/* menu buts */
 	if (render_slot) {
@@ -596,57 +524,25 @@ static void uiblock_layer_pass_buttons(uiLayout *layout, RenderResult *rr, Rende
 
 	if (rr) {
 		RenderPass *rpass;
-		RenderView *rview;
 
 		/* layer */
 		fake_name = ui_imageuser_layer_fake_name(rr);
 		rl = BLI_findlink(&rr->layers, iuser->layer  - (fake_name ? 1 : 0));
 		rnd_pt[2] = rl;
 
-		if (RE_layers_have_name(rr)) {
-			display_name = rl ? rl->name : (fake_name ? fake_name : "");
-			but = uiDefMenuBut(block, ui_imageuser_layer_menu, rnd_pt, display_name, 0, 0, wmenu2, UI_UNIT_Y, TIP_("Select Layer"));
-			uiButSetFunc(but, image_multi_cb, rr, iuser);
-			uiButSetMenuFromPulldown(but);
-		}
+		display_name = rl ? rl->name : (fake_name ? fake_name : "");
+		but = uiDefMenuBut(block, ui_imageuser_layer_menu, rnd_pt, display_name, 0, 0, wmenu2, UI_UNIT_Y, TIP_("Select Layer"));
+		uiButSetFunc(but, image_multi_cb, rr, iuser);
+		uiButSetMenuFromPulldown(but);
+
 
 		/* pass */
 		fake_name = ui_imageuser_pass_fake_name(rl);
 		rpass = (rl ? BLI_findlink(&rl->passes, iuser->pass  - (fake_name ? 1 : 0)) : NULL);
 
-		display_name = rpass ? rpass->internal_name : (fake_name ? fake_name : "");
+		display_name = rpass ? rpass->name : (fake_name ? fake_name : "");
 		but = uiDefMenuBut(block, ui_imageuser_pass_menu, rnd_pt, display_name, 0, 0, wmenu3, UI_UNIT_Y, TIP_("Select Pass"));
 		uiButSetFunc(but, image_multi_cb, rr, iuser);
-		uiButSetMenuFromPulldown(but);
-
-		/* view */
-		if (BLI_countlist(&rr->views) > 1 && !show_stereo) {
-			rview = BLI_findlink(&rr->views, iuser->view);
-			display_name = rview ? rview->name : "";
-
-			but = uiDefMenuBut(block, ui_imageuser_view_menu_rr, rnd_pt, display_name, 0, 0, wmenu4, UI_UNIT_Y, TIP_("Select View"));
-			uiButSetFunc(but, image_multi_cb, rr, iuser);
-			uiButSetMenuFromPulldown(but);
-		}
-	}
-
-	/* we only pass rd if image is stereo and showing viewer for the compositor */
-	else if (rd && !show_stereo) {
-		SceneRenderView *srv;
-		int nr = 0;
-		rnd_pt[3] = rd;
-
-		for (srv = rd->views.first; srv; srv = srv->next) {
-			if ((srv->viewflag & SCE_VIEW_DISABLE))
-				continue;
-
-			if (nr++ == iuser->view) {
-				display_name = srv->name;
-				break;
-			}
-		}
-
-		but = uiDefMenuBut(block, ui_imageuser_view_menu_viewer, rnd_pt, display_name, 0, 0, wmenu1, UI_UNIT_Y, TIP_("Select View"));
 		uiButSetMenuFromPulldown(but);
 	}
 }
@@ -673,7 +569,7 @@ static void uiblock_layer_pass_arrow_buttons(uiLayout *layout, RenderResult *rr,
 	but = uiDefIconBut(block, BUT, 0, ICON_TRIA_RIGHT,  0, 0, 0.90f * UI_UNIT_X, UI_UNIT_Y, NULL, 0, 0, 0, 0, TIP_("Next Layer"));
 	uiButSetFunc(but, image_multi_inclay_cb, rr, iuser);
 
-	uiblock_layer_pass_buttons(row, rr, NULL, iuser, 230 * dpi_fac, render_slot);
+	uiblock_layer_pass_buttons(row, rr, iuser, 230 * dpi_fac, render_slot);
 
 	/* decrease, increase arrows */
 	but = uiDefIconBut(block, BUT, 0, ICON_TRIA_LEFT,   0, 0, 0.85f * UI_UNIT_X, UI_UNIT_Y, NULL, 0, 0, 0, 0, TIP_("Previous Pass"));
@@ -970,7 +866,7 @@ void uiTemplateImageSettings(uiLayout *layout, PointerRNA *imfptr, int color_man
 		uiItemR(col, imfptr, "compression", 0, NULL, ICON_NONE);
 	}
 
-	if (ELEM(imf->imtype, R_IMF_IMTYPE_OPENEXR, R_IMF_IMTYPE_MULTILAYER, R_IMF_IMTYPE_MULTIVIEW)) {
+	if (ELEM(imf->imtype, R_IMF_IMTYPE_OPENEXR, R_IMF_IMTYPE_MULTILAYER)) {
 		uiItemR(col, imfptr, "exr_codec", 0, NULL, ICON_NONE);
 	}
 	
@@ -1026,53 +922,6 @@ void uiTemplateImageSettings(uiLayout *layout, PointerRNA *imfptr, int color_man
 	}
 }
 
-void uiTemplateImageViews(uiLayout *layout, PointerRNA *imfptr)
-{
-	ImageFormatData *imf = imfptr->data;
-	PropertyRNA *prop;
-	PointerRNA stereo_output_ptr;
-	StereoDisplay *stereo_output = &imf->stereo_output;
-
-	uiLayout *col, *box;
-
-	/* OpenEXR multiview is only to save multiview exr */
-	if (imf->imtype == R_IMF_IMTYPE_MULTIVIEW)
-		return;
-
-	col = uiLayoutColumn(layout, false);
-
-	uiItemL(col, IFACE_("Views Output:"), ICON_NONE);
-	uiItemR(uiLayoutRow(col, false), imfptr, "views_output", UI_ITEM_R_EXPAND, NULL, ICON_NONE);
-
-	prop = RNA_struct_find_property(imfptr, "stereo_output");
-	stereo_output_ptr = RNA_property_pointer_get(imfptr, prop);
-
-	box = uiLayoutBox(col);
-	uiLayoutSetActive(box, imf->views_output == R_IMF_VIEWS_STEREO_3D);
-	col = uiLayoutColumn(box, false);
-
-	uiItemR(col, &stereo_output_ptr, "stereo_mode", 0, NULL, ICON_NONE);
-
-	switch (stereo_output->display_mode) {
-		case S3D_DISPLAY_ANAGLYPH:
-		{
-			uiItemR(col, &stereo_output_ptr, "anaglyph_type", 0, NULL, ICON_NONE);
-			break;
-		}
-		case S3D_DISPLAY_INTERLACE:
-		{
-			uiItemR(col, &stereo_output_ptr, "interlace_type", 0, NULL, ICON_NONE);
-			uiItemR(col, &stereo_output_ptr, "use_interlace_swap", 0, NULL, ICON_NONE);
-			break;
-		}
-		case S3D_DISPLAY_SIDEBYSIDE:
-		{
-			uiItemR(col, &stereo_output_ptr, "use_sidebyside_crosseyed", 0, NULL, ICON_NONE);
-			break;
-		}
-	}
-}
-
 void uiTemplateImageLayers(uiLayout *layout, bContext *C, Image *ima, ImageUser *iuser)
 {
 	Scene *scene = CTX_data_scene(C);
@@ -1081,14 +930,10 @@ void uiTemplateImageLayers(uiLayout *layout, bContext *C, Image *ima, ImageUser 
 	if (ima && iuser) {
 		const float dpi_fac = UI_DPI_FAC;
 		RenderResult *rr;
-		bool is_viewer_stereo = ima->source == IMA_SRC_VIEWER &&
-		                        ima->type == IMA_TYPE_COMPOSITE &&
-		                        (ima->flag & IMA_IS_STEREO);
 
 		/* use BKE_image_acquire_renderresult  so we get the correct slot in the menu */
 		rr = BKE_image_acquire_renderresult(scene, ima);
-		uiblock_layer_pass_buttons(layout, rr, is_viewer_stereo ? &scene->r : NULL, iuser, 160 * dpi_fac,
-		                           (ima->type == IMA_TYPE_R_RESULT) ? &ima->render_slot : NULL);
+		uiblock_layer_pass_buttons(layout, rr, iuser, 160 * dpi_fac, (ima->type == IMA_TYPE_R_RESULT) ? &ima->render_slot : NULL);
 		BKE_image_release_renderresult(scene, ima);
 	}
 }

@@ -153,16 +153,14 @@ Scene *BKE_scene_copy(Scene *sce, int type)
 	Base *base, *obase;
 	
 	if (type == SCE_COPY_EMPTY) {
-		ListBase rl, rv;
+		ListBase lb;
 		/* XXX. main should become an arg */
 		scen = BKE_scene_add(G.main, sce->id.name + 2);
 		
-		rl = scen->r.layers;
-		rv = scen->r.views;
+		lb = scen->r.layers;
 		scen->r = sce->r;
-		scen->r.layers = rl;
+		scen->r.layers = lb;
 		scen->r.actlay = 0;
-		scen->r.views = rv;
 		scen->unit = sce->unit;
 		scen->physics_settings = sce->physics_settings;
 		scen->gm = sce->gm;
@@ -195,7 +193,6 @@ Scene *BKE_scene_copy(Scene *sce, int type)
 		BLI_duplicatelist(&(scen->markers), &(sce->markers));
 		BLI_duplicatelist(&(scen->transform_spaces), &(sce->transform_spaces));
 		BLI_duplicatelist(&(scen->r.layers), &(sce->r.layers));
-		BLI_duplicatelist(&(scen->r.views), &(sce->r.views));
 		BKE_keyingsets_copy(&(scen->keyingsets), &(sce->keyingsets));
 
 		if (sce->nodetree) {
@@ -376,7 +373,6 @@ void BKE_scene_free(Scene *sce)
 	BLI_freelistN(&sce->markers);
 	BLI_freelistN(&sce->transform_spaces);
 	BLI_freelistN(&sce->r.layers);
-	BLI_freelistN(&sce->r.views);
 	
 	if (sce->toolsettings) {
 		if (sce->toolsettings->vpaint) {
@@ -424,7 +420,6 @@ Scene *BKE_scene_add(Main *bmain, const char *name)
 	ParticleEditSettings *pset;
 	int a;
 	const char *colorspace_name;
-	SceneRenderView *srv;
 
 	sce = BKE_libblock_alloc(bmain, ID_SCE, name);
 	sce->lay = sce->layact = 1;
@@ -613,16 +608,7 @@ Scene *BKE_scene_add(Main *bmain, const char *name)
 
 	/* note; in header_info.c the scene copy happens..., if you add more to renderdata it has to be checked there */
 	BKE_scene_add_render_layer(sce, NULL);
-
-	/* multiview - stereo */
-	BKE_scene_add_render_view(sce, STEREO_LEFT_NAME);
-	srv = (SceneRenderView *)sce->r.views.first;
-	BLI_strncpy(srv->suffix, "_L", sizeof(srv->suffix));
-
-	BKE_scene_add_render_view(sce, STEREO_RIGHT_NAME);
-	srv = (SceneRenderView *)sce->r.views.last;
-	BLI_strncpy(srv->suffix, "_R", sizeof(srv->suffix));
-
+	
 	/* game data */
 	sce->gm.stereoflag = STEREO_NOSTEREO;
 	sce->gm.stereomode = STEREO_ANAGLYPH;
@@ -1852,43 +1838,6 @@ bool BKE_scene_remove_render_layer(Main *bmain, Scene *scene, SceneRenderLayer *
 	}
 
 	return 1;
-}
-
-/* return default view */
-SceneRenderView *BKE_scene_add_render_view(Scene *sce, const char *name)
-{
-	SceneRenderView *srv;
-
-	if (!name)
-		name = DATA_("RenderView");
-
-	srv = MEM_callocN(sizeof(SceneRenderView), "new render view");
-	BLI_strncpy(srv->name, name, sizeof(srv->name));
-	BLI_uniquename(&sce->r.views, srv, DATA_("RenderView"), '.', offsetof(SceneRenderView, name), sizeof(srv->name));
-	BLI_addtail(&sce->r.views, srv);
-
-	return srv;
-}
-
-bool BKE_scene_remove_render_view(Scene *scene, SceneRenderView *srv)
-{
-	const int act = BLI_findindex(&scene->r.views, srv);
-
-	if (act == -1) {
-		return false;
-	}
-	else if (scene->r.views.first == scene->r.views.last)
-	{
-		/* ensure 1 view is kept */
-		return false;
-	}
-
-	BLI_remlink(&scene->r.views, srv);
-	MEM_freeN(srv);
-
-	scene->r.actview = 0;
-
-	return true;
 }
 
 /* render simplification */

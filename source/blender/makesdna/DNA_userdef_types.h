@@ -415,15 +415,6 @@ typedef struct WalkNavigation {
 	short pad[3];
 } WalkNavigation;
 
-typedef struct StereoDisplay {
-	float epilepsy_interval; /* DEPRECATED - preferred interval in seconds for Dr. Epilepsy stereo method */
-	short flag;
-	char display_mode; /* stereo mode for the user display */
-	char anaglyph_type; /* anaglyph scheme for the user display */
-	char interlace_type;  /* interlace type for the user display */
-	char pad[7];
-} StereoDisplay;
-
 typedef struct UserDef {
 	/* UserDef has separate do-version handling, and can be read from other files */
 	int versionfile, subversionfile;
@@ -553,7 +544,6 @@ typedef struct UserDef {
 	short pie_menu_threshold;     /* pie menu distance from center before a direction is set */
 
 	struct WalkNavigation walk_navigation;
-	struct StereoDisplay stereo_display;
 } UserDef;
 
 extern UserDef U; /* from blenkernel blender.c */
@@ -862,37 +852,6 @@ typedef enum eImageDrawMethod {
 	IMAGE_DRAW_METHOD_2DTEXTURE = 2,
 	IMAGE_DRAW_METHOD_DRAWPIXELS = 3,
 } eImageDrawMethod;
-
-/* StereoDisplay.display_mode */
-typedef enum eStereoDisplayMode {
-	S3D_DISPLAY_ANAGLYPH    = 0,
-	S3D_DISPLAY_BLURAY      = 1,
-	S3D_DISPLAY_EPILEPSY    = 2,
-	S3D_DISPLAY_INTERLACE   = 3,
-	S3D_DISPLAY_PAGEFLIP    = 4,
-	S3D_DISPLAY_SIDEBYSIDE  = 5,
-	S3D_DISPLAY_TOPBOTTOM   = 6,
-} eStereoDisplayMode;
-
-/* StereoDisplay.flag */
-typedef enum eStereoFlag {
-	S3D_INTERLACE_SWAP        = (1 << 0),
-	S3D_SIDEBYSIDE_CROSSEYED  = (1 << 1),
-} eStereoFlag;
-
-/* StereoDisplay.anaglyph_type */
-typedef enum eStereoAnaglyphType {
-	S3D_ANAGLYPH_REDCYAN      = 0,
-	S3D_ANAGLYPH_GREENMAGENTA = 1,
-	S3D_ANAGLYPH_YELLOWBLUE   = 2,
-} eAnaglyphType;
-
-/* StereoDisplay.interlace_type */
-typedef enum eStereoInterlaceType {
-	S3D_INTERLACE_ROW          = 0,
-	S3D_INTERLACE_COLUMN       = 1,
-	S3D_INTERLACE_CHECKERBOARD = 2,
-} eInterlaceType;
 
 #ifdef __cplusplus
 }

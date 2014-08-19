@@ -545,8 +545,7 @@ static bool ed_preview_draw_rect(ScrArea *sa, int split, int first, rcti *rect, 
 
 	/* test if something rendered ok */
 	re = RE_GetRender(name);
-	/* XXX MV to investigate when this is called */
-	RE_AcquireResultImage(re, &rres, 0);
+	RE_AcquireResultImage(re, &rres);
 
 	if (rres.rectf) {
 		
@@ -560,8 +559,7 @@ static bool ed_preview_draw_rect(ScrArea *sa, int split, int first, rcti *rect, 
 				float fx = rect->xmin + offx;
 				float fy = rect->ymin;
 				
-				/* XXX MV to investigate when this is called */
-				RE_AcquiredResultGet32(re, &rres, (unsigned int *)rect_byte, 0);
+				RE_AcquiredResultGet32(re, &rres, (unsigned int *)rect_byte);
 				glaDrawPixelsSafe(fx, fy, rres.rectx, rres.recty, rres.rectx, GL_RGBA, GL_UNSIGNED_BYTE, rect_byte);
 				
 				MEM_freeN(rect_byte);

@@ -46,13 +46,11 @@ extern "C" {
 #include "DNA_listBase.h"
 #include "DNA_ID.h"
 #include "DNA_freestyle_types.h"
-#include "DNA_userdef_types.h"
 
 struct Object;
 struct Brush;
 struct World;
 struct Scene;
-struct StereoDisplay;
 struct Image;
 struct Group;
 struct Text;
@@ -248,29 +246,6 @@ typedef enum ScenePassType {
 
 /* note, srl->passflag is treestore element 'nr' in outliner, short still... */
 
-/* View - MultiView */
-typedef struct SceneRenderView {
-	struct SceneRenderView *next, *prev;
-
-	char name[64];	/* MAX_NAME */
-	char suffix[64];	/* MAX_NAME */
-
-	int viewflag;
-	int pad[2];
-	char pad2[4];
-
-} SceneRenderView;
-
-/* srv->viewflag */
-#define SCE_VIEW_DISABLE		(1<<0)
-
-/* scene.render.views_setup */
-enum {
-	SCE_VIEWS_SETUP_BASIC = 0,
-	SCE_VIEWS_SETUP_ADVANCED = 1
-};
-
-
 /* *************************************************************** */
 
 /* Generic image format settings,
@@ -308,11 +283,7 @@ typedef struct ImageFormatData {
 	char  jp2_flag;
 	char jp2_codec;
 
-	char pad[5];
-
-	/* Multiview */
-	char views_output;
-	StereoDisplay stereo_output;
+	char pad[6];
 
 	/* color management */
 	ColorManagedViewSettings view_settings;
@@ -348,8 +319,7 @@ typedef struct ImageFormatData {
 #define R_IMF_IMTYPE_H264           31
 #define R_IMF_IMTYPE_XVID           32
 #define R_IMF_IMTYPE_THEORA         33
-#define R_IMF_IMTYPE_MULTIVIEW      34
-#define R_IMF_IMTYPE_PSD            35
+#define R_IMF_IMTYPE_PSD            34
 
 #define R_IMF_IMTYPE_INVALID        255
 
@@ -389,12 +359,6 @@ typedef struct ImageFormatData {
 
 /* ImageFormatData.cineon_flag */
 #define R_IMF_CINEON_FLAG_LOG (1<<0)  /* was R_CINEON_LOG */
-
-/* ImageFormatData.views_output */
-enum {
-	R_IMF_VIEWS_INDIVIDUAL = 0,
-	R_IMF_VIEWS_STEREO_3D  = 1,
-};
 
 typedef struct BakeData {
 	struct ImageFormatData im_format;
@@ -643,12 +607,6 @@ typedef struct RenderData {
 
 	int preview_start_resolution;
 	int pad;
-
-	/* MultiView */
-	ListBase views;
-	short actview;
-	short views_setup;
-	short pad8[2];
 } RenderData;
 
 /* *************************************************************** */
@@ -834,16 +792,6 @@ enum {
 
 #define UV_SCULPT_TOOL_RELAX_LAPLACIAN	1
 #define UV_SCULPT_TOOL_RELAX_HC			2
-
-/* Stereo Flags */
-#define STEREO_RIGHT_NAME "right"
-#define STEREO_LEFT_NAME "left"
-
-typedef enum StereoViews {
-	STEREO_LEFT_ID = 0,
-	STEREO_RIGHT_ID = 1,
-	STEREO_3D_ID = 2,
-} StereoViews;
 
 /* Markers */
 
@@ -1449,7 +1397,6 @@ typedef struct Scene {
 #define R_TEXNODE_PREVIEW	0x40000
 #define R_VIEWPORT_PREVIEW	0x80000
 #define R_EXR_CACHE_FILE	0x100000
-#define R_MULTIVIEW			0x200000
 
 /* r->stamp */
 #define R_STAMP_TIME 	0x0001

@@ -53,9 +53,9 @@ struct ColorManagedViewSettings;
 /* New */
 
 struct RenderResult *render_result_new(struct Render *re,
-	struct rcti *partrct, int crop, int savebuffers, const char *layername, int view);
+	struct rcti *partrct, int crop, int savebuffers, const char *layername);
 struct RenderResult *render_result_new_full_sample(struct Render *re,
-	struct ListBase *lb, struct rcti *partrct, int crop, int savebuffers, int view);
+	struct ListBase *lb, struct rcti *partrct, int crop, int savebuffers);
 
 struct RenderResult *render_result_new_from_exr(void *exrhandle, const char *colorspace, bool predivide, int rectx, int recty);
 
@@ -78,7 +78,7 @@ void render_result_single_layer_end(struct Render *re);
 void render_result_exr_file_begin(struct Render *re);
 void render_result_exr_file_end(struct Render *re);
 
-void render_result_exr_file_merge(struct RenderResult *rr, struct RenderResult *rrpart, int view);
+void render_result_exr_file_merge(struct RenderResult *rr, struct RenderResult *rrpart);
 
 void render_result_exr_file_path(struct Scene *scene, const char *layname, int sample, char *filepath);
 int render_result_exr_file_read_sample(struct Render *re, int sample);
@@ -91,7 +91,7 @@ bool render_result_exr_file_cache_read(struct Render *re);
 
 /* Combined Pixel Rect */
 
-struct ImBuf *render_result_rect_to_ibuf(struct RenderResult *rr, struct RenderData *rd, const int view_id);
+struct ImBuf *render_result_rect_to_ibuf(struct RenderResult *rr, struct RenderData *rd);
 void render_result_rect_from_ibuf(struct RenderResult *rr, struct RenderData *rd,
 	struct ImBuf *ibuf);
 
@@ -99,12 +99,7 @@ void render_result_rect_fill_zero(struct RenderResult *rr);
 void render_result_rect_get_pixels(struct RenderResult *rr,
 	unsigned int *rect, int rectx, int recty,
 	const struct ColorManagedViewSettings *view_settings,
-	const struct ColorManagedDisplaySettings *display_settings,
-	const int view_id);
-
-int render_result_get_view_id(struct Render *re, const char *view);
-void render_result_views_shallowcopy(struct RenderResult *dst, struct RenderResult *src);
-void render_result_views_shallowdelete(struct RenderResult *rr);
+	const struct ColorManagedDisplaySettings *display_settings);
 
 #endif /* __RENDER_RESULT_H__ */
 
