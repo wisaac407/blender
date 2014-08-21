@@ -469,6 +469,9 @@ class CyclesCamera_PT_dof(CyclesButtonsPanel, Panel):
         sub.prop(ccam, "aperture_blades", text="Blades")
         sub.prop(ccam, "aperture_rotation", text="Rotation")
 
+        col.separator()
+        col.prop(ccam, "anamorphic_bokeh")
+
 
 class Cycles_PT_context_material(CyclesButtonsPanel, Panel):
     bl_label = ""
