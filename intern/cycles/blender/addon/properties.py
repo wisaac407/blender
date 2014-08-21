@@ -544,13 +544,6 @@ class CyclesCameraSettings(bpy.types.PropertyGroup):
                 subtype='ANGLE',
                 default=0,
                 )
-        cls.anamorphic_bokeh = FloatProperty(
-                name="Anamorphic Bokeh",
-                description="Distortion to simulate anamorphic bokeh distortion",
-                min=0.01, soft_min=1.0, soft_max=2.0,
-                default=1.0,
-                precision=4,
-                )
         cls.panorama_type = EnumProperty(
                 name="Panorama Type",
                 description="Distortion to use for the calculation",

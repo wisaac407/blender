@@ -54,9 +54,6 @@ public:
 	float fisheye_fov;
 	float fisheye_lens;
 
-	/* anamorphic lens */
-	float anamorphic_bokeh;
-
 	/* sensor */
 	float sensorwidth;
 	float sensorheight;
