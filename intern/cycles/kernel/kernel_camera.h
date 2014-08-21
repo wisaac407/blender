@@ -21,16 +21,24 @@ CCL_NAMESPACE_BEGIN
 ccl_device float2 camera_sample_aperture(KernelGlobals *kg, float u, float v)
 {
 	float blades = kernel_data.cam.blades;
+	float anamorphic_bokeh = kernel_data.cam.anamorphic_bokeh;
+	float2 bokeh;
 
 	if(blades == 0.0f) {
 		/* sample disk */
-		return concentric_sample_disk(u, v);
+		bokeh = concentric_sample_disk(u, v);
 	}
 	else {
 		/* sample polygon */
 		float rotation = kernel_data.cam.bladesrotation;
-		return regular_polygon_sample(blades, rotation, u, v);
+		bokeh = regular_polygon_sample(blades, rotation, u, v);
 	}
+
+	if(anamorphic_bokeh != 1.0f) {
+		bokeh.x *= 1.0f / anamorphic_bokeh;
+	}
+
+	return bokeh;
 }
 
 ccl_device void camera_sample_perspective(KernelGlobals *kg, float raster_x, float raster_y, float lens_u, float lens_v, Ray *ray)
@@ -183,7 +191,8 @@ ccl_device void camera_sample_panorama(KernelGlobals *kg, float raster_x, float 
 
 		/* calculate orthonormal coordinates perpendicular to D */
 		float3 U, V;
-		make_orthonormals(D, &U, &V);
+		U = normalize( make_float3(1.0f, 0.0f, 0.0f) -  D[0] * D );
+		V = normalize( cross(D, U) );
 
 		/* update ray for effect of lens */
 		ray->P = U * lensuv.x + V * lensuv.y;
