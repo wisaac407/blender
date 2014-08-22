@@ -82,6 +82,7 @@ typedef enum ModifierType {
 	eModifierType_MeshCache         = 46,
 	eModifierType_LaplacianDeform   = 47,
 	eModifierType_Wireframe         = 48,
+	eModifierType_SetSplitNormal    = 49,
 	NUM_MODIFIER_TYPES
 } ModifierType;
 
@@ -1366,6 +1367,29 @@ enum {
 	MOD_WIREFRAME_CREASE        = (1 << 5),
 };
 
+/* Set Split Normals modifier */
+typedef struct SetSplitNormalModifierData {
+	ModifierData modifier;
+	char defgrp_name[64];  /* MAX_VGROUP_NAME */
+	struct Object *target;  /* Source of normals, or center of ellipsoid. */
+	short flags;
+	short mode;
+	short pad[2];
+} SetSplitNormalModifierData;
+
+/* SetSplitNormalModifierData.mode */
+enum {
+	MOD_SETSPLITNORMAL_MODE_ELLIPSOID    = 0,
+	MOD_SETSPLITNORMAL_MODE_GEOM_FACENOR = 1,
+	MOD_SETSPLITNORMAL_MODE_GEOM_LOOPNOR = 2,
+};
+
+/* SetSplitNormalModifierData.flags */
+enum {
+	MOD_SETSPLITNORMAL_INVERT_VGROUP = (1 << 0),
+	MOD_SETSPLITNORMAL_CENTER_BBOX   = (1 << 1),
+	MOD_SETSPLITNORMAL_USE_CURCLNORS = (1 << 2),
+};
 
 
 #endif  /* __DNA_MODIFIER_TYPES_H__ */

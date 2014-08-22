@@ -1225,6 +1225,32 @@ class DATA_PT_modifiers(ModifierButtonsPanel, Panel):
 
         col.prop(md, "material_offset", text="Material Offset")
 
+    def SET_SPLIT_NORMAL(self, layout, ob, md):
+        has_vgroup = bool(md.vertex_group)
+        needs_object_bbox_center = (md.mode == 'ELLIPSOID') and not md.target
+        needs_use_current_clnors = (md.mode == 'SPLIT_NORMALS')
+
+        row = layout.row()
+        row.prop(md, "mode", expand=True)
+
+        split = layout.split()
+
+        col = split.column()
+        col.prop(md, "target", text="")
+        sub = col.row()
+        sub.active = needs_object_bbox_center
+        sub.prop(md, "use_bbox_center")
+
+        col = split.column()
+        row = col.row(align=True)
+        row.prop_search(md, "vertex_group", ob, "vertex_groups", text="")
+        sub = row.row(align=True)
+        sub.active = has_vgroup
+        sub.prop(md, "use_invert_vertex_group", text="", icon='ARROW_LEFTRIGHT')
+        sub = col.row()
+        sub.active = needs_use_current_clnors
+        sub.prop(md, "use_current_custom_split_normals")
+
 
 if __name__ == "__main__":  # only for live edit.
     bpy.utils.register_module(__name__)
