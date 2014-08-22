@@ -23,6 +23,7 @@ set(INC
 	../../blenfont
 	../../blenkernel
 	../../blenlib
+	../../hair
 	../../makesdna
 	../../makesrna
 	../../windowmanager
@@ -36,6 +37,7 @@ set(INC_SYS
 
 set(SRC
 	dynamicpaint_ops.c
+	hair_ops.c
 	particle_boids.c
 	particle_edit.c
 	particle_object.c

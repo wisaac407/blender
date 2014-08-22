@@ -82,6 +82,8 @@
 #include "BKE_scene.h"
 #include "BKE_deform.h"
 
+#include "HAIR_capi.h"
+
 #include "RE_render_ext.h"
 
 unsigned int PSYS_FRAND_SEED_OFFSET[PSYS_FRAND_COUNT];
@@ -390,7 +392,7 @@ void BKE_particlesettings_free(ParticleSettings *part)
 	}
 }
 
-void free_hair(Object *UNUSED(ob), ParticleSystem *psys, int dynamics)
+void free_hair(Object *UNUSED(ob), ParticleSystem *psys, int UNUSED(dynamics))
 {
 	PARTICLE_P;
 
@@ -403,6 +405,7 @@ void free_hair(Object *UNUSED(ob), ParticleSystem *psys, int dynamics)
 
 	psys->flag &= ~PSYS_HAIR_DONE;
 
+#if 0
 	if (psys->clmd) {
 		if (dynamics) {
 			BKE_ptcache_free_list(&psys->ptcaches);
@@ -418,7 +421,17 @@ void free_hair(Object *UNUSED(ob), ParticleSystem *psys, int dynamics)
 			cloth_free_modifier(psys->clmd);
 		}
 	}
-
+#endif
+	if (psys->solver) {
+		HAIR_solver_free(psys->solver);
+		psys->solver = NULL;
+	}
+	
+	if (psys->params) {
+		MEM_freeN(psys->params);
+		psys->params = NULL;
+	}
+	
 	if (psys->hair_in_dm)
 		psys->hair_in_dm->release(psys->hair_in_dm);
 	psys->hair_in_dm = NULL;
@@ -427,6 +440,7 @@ void free_hair(Object *UNUSED(ob), ParticleSystem *psys, int dynamics)
 		psys->hair_out_dm->release(psys->hair_out_dm);
 	psys->hair_out_dm = NULL;
 }
+
 void free_keyed_keys(ParticleSystem *psys)
 {
 	PARTICLE_P;
@@ -1777,6 +1791,11 @@ static int psys_map_index_on_dm(DerivedMesh *dm, int from, int index, int index_
 	}
 
 	return 1;
+}
+
+int psys_get_index_on_dm(struct ParticleSystem *psys, struct DerivedMesh *dm, ParticleData *pa, int *mapindex, float mapfw[4])
+{
+	return psys_map_index_on_dm(dm, psys->part->from, pa->num, pa->num_dmcache, pa->fuv, pa->foffset, mapindex, mapfw);
 }
 
 /* interprets particle data to get a point on a mesh in object space */

@@ -1258,13 +1258,69 @@ static void scene_rebuild_rbw_recursive(Scene *scene, float ctime)
 		BKE_rigidbody_rebuild_world(scene, ctime);
 }
 
-static void scene_do_rb_simulation_recursive(Scene *scene, float ctime)
+static void scene_simulation_objects_pre_step(Scene *scene, float ctime)
+{
+	Base *base;
+	for (base = scene->base.first; base; base = base->next) {
+		Object *ob = base->object;
+		BKE_object_sim_pre_step(scene, ob, ctime);
+	}
+}
+
+static void scene_simulation_objects_tick(Scene *scene, float ctime, float timestep)
+{
+	Base *base;
+	for (base = scene->base.first; base; base = base->next) {
+		Object *ob = base->object;
+		BKE_object_sim_tick(scene, ob, ctime, timestep);
+	}
+}
+
+static void scene_simulation_objects_post_step(Scene *scene, float ctime)
+{
+	Base *base;
+	for (base = scene->base.first; base; base = base->next) {
+		Object *ob = base->object;
+		BKE_object_sim_post_step(scene, ob, ctime);
+	}
+}
+
+typedef struct SceneSimStepData {
+	Scene *scene;
+	float t0, t1, t;
+} SceneSimStepData;
+
+static void scene_simulation_tick(void *vdata, float timestep)
+{
+	SceneSimStepData *data = vdata;
+	
+	scene_simulation_objects_tick(data->scene, data->t, timestep);
+	data->t += timestep;
+}
+
+static void scene_do_rb_simulation_recursive(Scene *scene, float cfra)
 {
 	if (scene->set)
-		scene_do_rb_simulation_recursive(scene->set, ctime);
+		scene_do_rb_simulation_recursive(scene->set, cfra);
 
-	if (BKE_scene_check_rigidbody_active(scene))
-		BKE_rigidbody_do_simulation(scene, ctime);
+	{
+		SceneSimStepData data;
+		float frametime = FRA2TIME(1);
+		
+		data.scene = scene;
+		data.t0 = cfra * frametime;
+		// XXX assuming 1 frame step ...
+		data.t1 = data.t0 + frametime;
+		data.t = data.t0;
+		
+		if (BKE_scene_check_rigidbody_active(scene)) {
+			scene_simulation_objects_pre_step(scene, data.t0);
+			
+			BKE_rigidbody_do_simulation(scene, cfra, scene_simulation_tick, &data);
+			
+			scene_simulation_objects_post_step(scene, data.t1);
+		}
+	}
 }
 
 /* Used to visualize CPU threads activity during threaded object update,
@@ -1949,7 +2005,7 @@ bool BKE_scene_check_color_management_enabled(const Scene *scene)
 
 bool BKE_scene_check_rigidbody_active(const Scene *scene)
 {
-	return scene && scene->rigidbody_world && scene->rigidbody_world->group && !(scene->rigidbody_world->flag & RBW_FLAG_MUTED);
+	return scene && scene->rigidbody_world && !(scene->rigidbody_world->flag & RBW_FLAG_MUTED);
 }
 
 int BKE_render_num_threads(const RenderData *rd)
