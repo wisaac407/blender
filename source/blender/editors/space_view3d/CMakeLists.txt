@@ -25,6 +25,7 @@ set(INC
 	../../blenlib
 	../../bmesh
 	../../gpu
+	../../hair
 	../../imbuf
 	../../makesdna
 	../../makesrna
@@ -41,6 +42,7 @@ set(INC_SYS
 set(SRC
 	drawanimviz.c
 	drawarmature.c
+	drawhair.c
 	drawmesh.c
 	drawobject.c
 	drawvolume.c
