@@ -41,6 +41,7 @@
 #include "DNA_camera_types.h"
 #include "DNA_constraint_types.h"
 #include "DNA_group_types.h"
+#include "DNA_hair_types.h"
 #include "DNA_key_types.h"
 #include "DNA_lattice_types.h"
 #include "DNA_material_types.h"
@@ -86,6 +87,7 @@
 #include "BKE_effect.h"
 #include "BKE_fcurve.h"
 #include "BKE_group.h"
+#include "BKE_hair.h"
 #include "BKE_key.h"
 #include "BKE_lamp.h"
 #include "BKE_lattice.h"
@@ -109,6 +111,8 @@
 #include "BKE_material.h"
 #include "BKE_camera.h"
 #include "BKE_image.h"
+
+#include "HAIR_capi.h"
 
 #ifdef WITH_MOD_FLUID
 #include "LBM_fluidsim.h"
@@ -1267,12 +1271,17 @@ static ParticleSystem *copy_particlesystem(ParticleSystem *psys)
 		}
 	}
 
+#if 0
 	if (psys->clmd) {
 		psysn->clmd = (ClothModifierData *)modifier_new(eModifierType_Cloth);
 		modifier_copyData((ModifierData *)psys->clmd, (ModifierData *)psysn->clmd);
 		psys->hair_in_dm = psys->hair_out_dm = NULL;
 	}
+#endif
 
+	psysn->solver = NULL;
+	*psysn->params = *psys->params;
+	
 	BLI_duplicatelist(&psysn->targets, &psys->targets);
 
 	psysn->pathcache = NULL;
@@ -1291,9 +1300,11 @@ static ParticleSystem *copy_particlesystem(ParticleSystem *psys)
 
 	/* XXX - from reading existing code this seems correct but intended usage of
 	 * pointcache should /w cloth should be added in 'ParticleSystem' - campbell */
+#if 0
 	if (psysn->clmd) {
 		psysn->clmd->point_cache = psysn->pointcache;
 	}
+#endif
 
 	id_us_plus((ID *)psysn->part);
 
@@ -2336,7 +2347,7 @@ void BKE_object_where_is_calc_time_ex(Scene *scene, Object *ob, float ctime,
 	/* try to fall back to the scene rigid body world if none given */
 	rbw = rbw ? rbw : scene->rigidbody_world;
 	/* read values pushed into RBO from sim/cache... */
-	BKE_rigidbody_sync_transforms(rbw, ob, ctime);
+	BKE_rigidbody_object_apply_transforms(rbw, ob, ctime);
 	
 	/* solve constraints */
 	if (ob->constraints.first && !(ob->transflag & OB_NO_CONSTRAINTS)) {
@@ -3095,6 +3106,107 @@ void BKE_object_sculpt_modifiers_changed(Object *ob)
 				BKE_pbvh_node_mark_update(nodes[n]);
 
 			MEM_freeN(nodes);
+		}
+	}
+}
+
+void BKE_object_sim_pre_step(Scene *scene, Object *ob, float ctime)
+{
+	ModifierData *md;
+	
+	for (md = ob->modifiers.first; md; md = md->next) {
+		if (md->type == eModifierType_Hair) {
+			HairModifierData *hmd = (HairModifierData*) md;
+			HairSystem *hsys = hmd->hairsys;
+			DerivedMesh *dm = ob->derivedFinal;
+			
+			if (!hmd->solver) {
+				hmd->solver = HAIR_solver_new();
+				hmd->flag &= ~MOD_HAIR_SOLVER_DATA_VALID;
+			}
+			
+			HAIR_solver_set_params(hmd->solver, &hsys->params);
+			
+			if (!hmd->flag & MOD_HAIR_SOLVER_DATA_VALID) {
+				HAIR_solver_build_modifier_data(hmd->solver, scene, ob, dm, hsys, ctime);
+				BKE_hair_debug_data_clear(hmd->debug_data);
+				hmd->flag |= MOD_HAIR_SOLVER_DATA_VALID;
+			}
+			
+			HAIR_solver_update_modifier_externals(hmd->solver, scene, ob, dm, hsys, ctime);
+		}
+		else if (md->type == eModifierType_ParticleSystem) {
+			ParticleSystem *psys = ((ParticleSystemModifierData *) md)->psys;
+			
+			if (psys && psys->part && psys->part->type == PART_HAIR && psys->flag & PSYS_HAIR_DYNAMICS && psys->particles) {
+				/* This, strictly speaking, is not so correct */
+				DerivedMesh *dm = ob->derivedFinal;
+				
+				if (!psys->solver) {
+					psys->solver = HAIR_solver_new();
+					
+					/* it should never happen actually */
+					if (!psys->params) {
+						psys->params = MEM_mallocN(sizeof(HairParams), "particle_system_hair_params");
+						BKE_hairparams_init(psys->params);
+					}
+					
+					HAIR_solver_set_params(psys->solver, psys->params);
+					
+					HAIR_solver_build_particle_data(psys->solver, scene, ob, dm, psys, ctime);
+				}
+				else {
+					HAIR_solver_set_params(psys->solver, psys->params);
+				}
+								
+				HAIR_solver_update_particle_externals(psys->solver, scene, ob, dm, psys, ctime);
+			}
+		}		
+	}
+}
+
+void BKE_object_sim_tick(Scene *UNUSED(scene), Object *ob, float ctime, float timestep)
+{
+	ModifierData *md;
+	
+	for (md = ob->modifiers.first; md; md = md->next) {
+		if (md->type == eModifierType_Hair) {
+			HairModifierData *hmd = (HairModifierData*) md;
+			
+			if (!(hmd->debug_flag & MOD_HAIR_DEBUG_SHOW)) {
+				if (hmd->debug_data) {
+					BKE_hair_debug_data_free(hmd->debug_data);
+					hmd->debug_data = NULL;
+				}
+				
+				HAIR_solver_step(hmd->solver, ctime, timestep);
+			}
+			else {
+				float imat[4][4];
+				invert_m4_m4(imat, ob->obmat);
+				
+				if (!hmd->debug_data)
+					hmd->debug_data = BKE_hair_debug_data_new();
+				
+				HAIR_solver_step_debug(hmd->solver, ctime, timestep, imat, hmd->debug_data);
+			}
+		}
+		else if (md->type == eModifierType_ParticleSystem) {
+			ParticleSystem *psys = ((ParticleSystemModifierData *) md)->psys;
+			
+			HAIR_solver_step(psys->solver, ctime, timestep);
+		}
+	}
+}
+
+void BKE_object_sim_post_step(Scene *scene, Object *ob, float UNUSED(ctime))
+{
+	ModifierData *md;
+	
+	for (md = ob->modifiers.first; md; md = md->next) {
+		if (md->type == eModifierType_Hair) {
+			HairModifierData *hmd = (HairModifierData*) md;
+			HAIR_solver_apply(hmd->solver, scene, ob, hmd->hairsys);
 		}
 	}
 }
