@@ -1195,10 +1195,15 @@ class CyclesParticle_PT_textures(CyclesButtonsPanel, Panel):
             layout.template_ID(slot, "texture", new="texture.new")
 
 
-# generic curve rendering panel base class,
-# used for both particles and hair systems
-class CyclesCurveRenderingPanel(CyclesButtonsPanel):
+class CyclesRender_PT_CurveRendering(CyclesButtonsPanel, Panel):
     bl_label = "Cycles Hair Rendering"
+    bl_context = "particle"
+
+    @classmethod
+    def poll(cls, context):
+        scene = context.scene
+        psys = context.particle_system
+        return CyclesButtonsPanel.poll(context) and psys and psys.settings.type == 'HAIR'
 
     def draw_header(self, context):
         ccscene = context.scene.cycles_curves
@@ -1226,24 +1231,6 @@ class CyclesCurveRenderingPanel(CyclesButtonsPanel):
         row = layout.row()
         row.prop(ccscene, "minimum_width", text="Min Pixels")
         row.prop(ccscene, "maximum_width", text="Max Ext.")
-
-
-class CyclesRender_PT_ParticleCurves(CyclesCurveRenderingPanel, Panel):
-    bl_context = "particle"
-
-    @classmethod
-    def poll(cls, context):
-        scene = context.scene
-        psys = context.particle_system
-        return CyclesButtonsPanel.poll(context) and psys and psys.settings.type == 'HAIR'
-
-
-class CyclesRender_PT_HairCurves(CyclesCurveRenderingPanel, Panel):
-    bl_context = "physics"
-
-    @classmethod
-    def poll(cls, context):
-        return CyclesButtonsPanel.poll(context) and context.hair
 
 
 class CyclesRender_PT_bake(CyclesButtonsPanel, Panel):

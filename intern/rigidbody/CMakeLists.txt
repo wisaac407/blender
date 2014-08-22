@@ -31,7 +31,6 @@ set(INC_SYS
 
 set(SRC
 	rb_bullet_api.cpp
-	rb_internal_types.h
 	
 	RBI_api.h
 )

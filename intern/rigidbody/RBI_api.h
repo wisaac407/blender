@@ -37,8 +37,6 @@
 extern "C" {
 #endif
 
-#include <string.h>
-
 /* API Notes:
  * Currently, this API is optimised for Bullet RigidBodies, and doesn't
  * take into account other Physics Engines. Some tweaking may be necessary
@@ -58,11 +56,6 @@ typedef struct rbDynamicsWorld rbDynamicsWorld;
 
 /* Rigid Body */
 typedef struct rbRigidBody rbRigidBody;
-extern const size_t rbRigidBodySize;
-
-/* Ghost Object */
-typedef struct rbGhostObject rbGhostObject;
-extern const size_t rbGhostObjectSize;
 
 /* Collision Shape */
 typedef struct rbCollisionShape rbCollisionShape;
@@ -72,9 +65,6 @@ typedef struct rbMeshData rbMeshData;
 
 /* Constraint */
 typedef struct rbConstraint rbConstraint;
-
-/* Callback type for handling simulation ticks */
-typedef void (*rbSimulationTickCallback)(void *userdata, float timestep);
 
 /* ********************************** */
 /* Dynamics World Methods */
@@ -102,8 +92,7 @@ void RB_dworld_set_split_impulse(rbDynamicsWorld *world, int split_impulse);
 /* Simulation ----------------------- */
 
 /* Step the simulation by the desired amount (in seconds) with extra controls on substep sizes and maximum substeps */
-void RB_dworld_step_simulation(rbDynamicsWorld *world, float timeStep, int maxSubSteps, float timeSubStep,
-                               rbSimulationTickCallback cb, void *userdata, bool is_pre_tick);
+void RB_dworld_step_simulation(rbDynamicsWorld *world, float timeStep, int maxSubSteps, float timeSubStep);
 
 /* Export -------------------------- */
 
@@ -121,10 +110,6 @@ void RB_dworld_add_body(rbDynamicsWorld *world, rbRigidBody *body, int col_group
 /* Remove RigidBody from dynamics world */
 void RB_dworld_remove_body(rbDynamicsWorld *world, rbRigidBody *body);
 
-/* Ghost Object for detecting collisions */
-void RB_dworld_add_ghost(rbDynamicsWorld *world, rbGhostObject *object, int col_groups);
-void RB_dworld_remove_ghost(rbDynamicsWorld *world, rbGhostObject *object);
-
 /* Collision detection */
 
 void RB_world_convex_sweep_test(
@@ -135,14 +120,10 @@ void RB_world_convex_sweep_test(
 /* ............ */
 
 /* Create new RigidBody instance */
-void RB_body_init(rbRigidBody *object, rbCollisionShape *shape, const float loc[3], const float rot[4]);
+rbRigidBody *RB_body_new(rbCollisionShape *shape, const float loc[3], const float rot[4]);
 
 /* Delete the given RigidBody instance */
-void RB_body_free(rbRigidBody *object);
-
-/* Ghost Object for detecting collisions */
-void RB_ghost_init(rbGhostObject *object, rbCollisionShape *shape, const float loc[3], const float rot[4]);
-void RB_ghost_free(rbGhostObject *object);
+void RB_body_delete(rbRigidBody *body);
 
 /* Settings ------------------------- */
 
@@ -155,11 +136,6 @@ void RB_body_set_type(rbRigidBody *body, int type, float mass);
 void RB_body_set_collision_shape(rbRigidBody *body, rbCollisionShape *shape);
 
 /* ............ */
-
-/* Generic flagging */
-extern int RB_body_get_flags(rbRigidBody *body);
-extern void RB_body_set_flag(rbRigidBody *body, int flag);
-extern void RB_body_clear_flag(rbRigidBody *body, int flag);
 
 /* Mass */
 float RB_body_get_mass(rbRigidBody *body);
@@ -233,14 +209,6 @@ void RB_body_get_orientation(rbRigidBody *body, float v_out[4]);
 /* ............ */
 
 void RB_body_apply_central_force(rbRigidBody *body, const float v_in[3]);
-
-/* ............ */
-
-int RB_ghost_get_flags(rbGhostObject *ghost);
-void RB_ghost_set_flag(rbGhostObject *ghost, int flag);
-void RB_ghost_clear_flag(rbGhostObject *ghost, int flag);
-
-void RB_ghost_set_loc_rot(rbGhostObject *ghost, const float loc[3], const float rot[4]);
 
 /* ********************************** */
 /* Collision Shape Methods */
