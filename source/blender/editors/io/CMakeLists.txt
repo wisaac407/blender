@@ -28,16 +28,21 @@ set(INC
 	../../makesrna
 	../../windowmanager
 	../../collada
+	../../../../intern/guardedalloc
 )
 
 set(INC_SYS
-
+	../../../../extern/opennurbs
 )
 
 set(SRC
+	io_rhino_export.cpp
+	io_rhino_import.cpp
 	io_collada.c
 	io_ops.c
 
+	io_rhino_export.h
+	io_rhino_import.h
 	io_collada.h
 	io_ops.h
 )

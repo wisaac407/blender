@@ -136,6 +136,40 @@ typedef struct BPoint {
 	float radius, pad;		/* user-set radius per point for beveling etc */
 } BPoint;
 
+typedef struct NurbTrim {
+	struct NurbTrim *next, *prev;
+	ListBase nurb_list; /* A list of Nurb objects that define the trim when concatenated (implicit lines connect discontinuous endpoints) */
+	short type; /* CU_TRIM_AND (AND), CU_TRIM_SUB (SUB), CU_TRIM_ADD (ADD) */
+	short flag; /* SELECTED */
+	short pad[2];
+	void *parent_nurb; /* DNA doesn't like forward declarations? */
+} NurbTrim;
+
+/* A breakpoint is a unique knot with multiplicitly stored explicitly rather
+ * than implicitly. This structure should only ever serve as part of a NurbEditKnot.
+ * It is transient and should never be written to files.
+ */
+typedef struct NurbBreakpt {
+	float pad0; /* So the v translation operator can have a ptr to a float[2] */
+	float loc;
+	float pad1; /* So the u translation operator can have a ptr to a float[2] */
+	short multiplicity; /* Number of times loc is to be repeated in knotsu/knotsv */
+	short flag; /* per-break flags: SELECT */
+} NurbBreakpt;
+
+/* In situations where knots are to be edited, the knot arrays (Nurb->knots{u,v})
+ * are converted into a NurbEditKnot object which conceptually represents them
+ * as an array of breakpoints. After editing, the knots are transferred
+ * back into Nurb->knots{u,v} and the NurbEditKnot is freed.
+ * NurbEditKnot and NurbBreakpt objects should never be written to files. They are
+ * strictly runtime transient structures.
+ */
+typedef struct NurbEditKnot {
+	int capu, capv; /* length of breaks{u,v}, multiplicity{u,v}, and flag{u,v} arrays */
+	int num_breaksu, num_breaksv; /* the set of breakpoints is the set of unique knots */
+	NurbBreakpt *breaksu, *breaksv;
+} NurbEditKnot;
+
 /**
  * \note Nurb name is misleading, since it can be used for polygons too,
  * also, it should be NURBS (Nurb isn't the singular of Nurbs).
@@ -145,8 +179,11 @@ typedef struct Nurb {
 	short type;
 	short mat_nr;		/* index into material list */
 	short hide, flag;
+	
 	int pntsu, pntsv;		/* number of points in the U or V directions */
-	short pad[2];
+
+	short flag2; /* CU_SELECTED2, CU_...2 */
+	short resol_trim; /* deprecated: tessellation res of trim curve (per pt) */
 	short resolu, resolv;	/* tessellation resolution in the U or V directions */
 	short orderu, orderv;
 	short flagu, flagv;
@@ -157,8 +194,16 @@ typedef struct Nurb {
 
 	short tilt_interp;	/* KEY_LINEAR, KEY_CARDINAL, KEY_BSPLINE */
 	short radius_interp;
-	
 	int charidx;
+	
+	ListBase trims;
+	
+	int UV_verts_count; /* UV mesh is cached  */
+	int UV_tri_count;
+	float *UV_verts; /* 2*UV_verts_count floats */
+	int *UV_idxs; /* 3*UV_tri_count ints */
+
+	NurbEditKnot *editknot;
 } Nurb;
 
 typedef struct CharInfo {
@@ -182,8 +227,8 @@ typedef struct EditNurb {
 
 	/* shape key being edited */
 	int shapenr;
-
-	char pad[4];
+	char flag; /* EDITNURB_HAS_DRAWN_UV */
+	char pad[3];
 } EditNurb;
 
 typedef struct Curve {
@@ -268,6 +313,8 @@ typedef struct Curve {
 
 } Curve;
 
+#define EDITNURB_HAS_DRAWN_UV 1
+
 /* **************** CURVE ********************* */
 
 /* texflag */
@@ -295,6 +342,9 @@ typedef struct Curve {
 #define CU_FILL_CAPS	16384 /* fill bevel caps */
 #define CU_MAP_TAPER	32768 /* map taper object to beveled area */
 
+/* flag2 */
+#define CU_SELECTED2    1
+
 /* twist mode */
 #define CU_TWIST_Z_UP			0
 // #define CU_TWIST_Y_UP			1 // not used yet
@@ -319,6 +369,7 @@ enum {
 /* flag (nurb) */
 #define CU_SMOOTH		1
 #define CU_2D			8 /* moved from type since 2.4x */
+#define CU_TRIMMED      16
 
 /* type (nurb) */
 #define CU_POLY			0
@@ -327,6 +378,11 @@ enum {
 #define CU_CARDINAL		3
 #define CU_NURBS		4
 #define CU_TYPE			(CU_POLY|CU_BEZIER|CU_BSPLINE|CU_CARDINAL|CU_NURBS)
+
+/* trim curve type */
+#define CU_TRIM_SUB 1 /* boolean SUB */
+#define CU_TRIM_AND 2 /* boolean AND */
+#define CU_TRIM_ADD   3 /* boolean ADD */
 
 		/* only for adding */
 #define CU_PRIMITIVE	0xF00
@@ -348,6 +404,7 @@ enum {
 #define CU_NURB_CYCLIC		1
 #define CU_NURB_ENDPOINT	2
 #define CU_NURB_BEZIER		4
+#define CU_NURB_CUSTOMKNOT	8
 
 #define CU_ACT_NONE		-1
 

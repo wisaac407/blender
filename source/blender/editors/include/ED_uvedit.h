@@ -49,6 +49,7 @@ struct wmKeyConfig;
 /* uvedit_ops.c */
 void ED_operatortypes_uvedit(void);
 void ED_keymap_uvedit(struct wmKeyConfig *keyconf);
+void ED_operatormacros_uvedit(void);
 
 void ED_uvedit_assign_image(struct Main *bmain, struct Scene *scene, struct Object *obedit, struct Image *ima, struct Image *previma);
 bool ED_uvedit_minmax(struct Scene *scene, struct Image *ima, struct Object *obedit, float min[2], float max[2]);
@@ -104,7 +105,7 @@ void ED_unwrap_lscm(struct Scene *scene, struct Object *obedit, const short sel)
 
 /* uvedit_draw.c */
 void draw_image_cursor(struct ARegion *ar, const float cursor[2]);
-void draw_uvedit_main(struct SpaceImage *sima, struct ARegion *ar, struct Scene *scene, struct Object *obedit, struct Object *obact);
+void draw_uvedit_main(const struct bContext *C, struct SpaceImage *sima, struct ARegion *ar, struct Scene *scene, struct Object *obedit, struct Object *obact);
 
 /* uvedit_buttons.c */
 void ED_uvedit_buttons_register(struct ARegionType *art);

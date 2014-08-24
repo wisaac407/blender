@@ -362,6 +362,16 @@ int ED_operator_editmesh_region_view3d(bContext *C)
 	return 0;
 }
 
+int ED_operator_editmesh_or_editcurve_region_view3d(bContext *C)
+{
+	if (!CTX_wm_region_view3d(C)) return 0;
+	if (ED_operator_editmesh(C)) return 1;
+	if (ED_operator_editcurve(C)) return 1;
+	
+	CTX_wm_operator_poll_msg_set(C, "expected a view3d region & editmesh/editcurve");
+	return 0;
+}
+
 int ED_operator_editarmature(bContext *C)
 {
 	Object *obedit = CTX_data_edit_object(C);
@@ -432,11 +442,34 @@ int ED_operator_uvedit(bContext *C)
 	return ED_space_image_show_uvedit(sima, obedit);
 }
 
+int ED_operator_nurbsuv(bContext *C)
+{
+	SpaceImage *sima = CTX_wm_space_image(C);
+	Object *obedit = CTX_data_edit_object(C);
+	return ED_space_image_show_nurbsuv(sima, obedit);
+}
+
+int ED_operator_uvedit_or_nurbsuv(bContext *C)
+{
+	SpaceImage *sima = CTX_wm_space_image(C);
+	Object *obedit = CTX_data_edit_object(C);
+	return ED_space_image_show_uvedit(sima, obedit) || ED_space_image_show_nurbsuv(sima, obedit);
+}
+
 int ED_operator_uvedit_space_image(bContext *C)
 {
 	SpaceImage *sima = CTX_wm_space_image(C);
 	Object *obedit = CTX_data_edit_object(C);
 	return sima && ED_space_image_show_uvedit(sima, obedit);
+}
+
+int ED_operator_uvedit_or_nurbsuv_space_image(bContext *C)
+{
+	SpaceImage *sima = CTX_wm_space_image(C);
+	Object *obedit = CTX_data_edit_object(C);
+	bool uvedit = ED_space_image_show_uvedit(sima, obedit);
+	bool nurbsuv = ED_space_image_show_nurbsuv(sima, obedit);
+	return sima && (uvedit || nurbsuv);
 }
 
 int ED_operator_uvmap(bContext *C)

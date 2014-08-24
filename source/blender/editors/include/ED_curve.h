@@ -55,7 +55,7 @@ void ED_curve_transform(struct Curve *cu, float mat[4][4]);
 void ED_curve_deselect_all(struct EditNurb *editnurb);
 void ED_curve_select_all(struct EditNurb *editnurb);
 void ED_curve_select_swap(struct EditNurb *editnurb, bool hide_handles);
-
+void ED_curve_propagate_selected_pts_to_flag2(struct Curve *cu);
 
 void    undo_push_curve(struct bContext *C, const char *name);
 ListBase *object_editcurve_get(struct Object *ob);
@@ -64,7 +64,7 @@ void    load_editNurb(struct Object *obedit);
 void    make_editNurb(struct Object *obedit);
 void    free_editNurb(struct Object *obedit);
 
-bool    mouse_nurb(struct bContext *C, const int mval[2], bool extend, bool deselect, bool toggle);
+bool    mouse_nurb(struct bContext *C, const int mval[2], bool extend, bool deselect, bool toggle, bool alt);
 
 struct Nurb *add_nurbs_primitive(struct bContext *C, struct Object *obedit, float mat[4][4], int type, int newob);
 

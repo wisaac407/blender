@@ -229,7 +229,7 @@ void ED_keymap_curve(wmKeyConfig *keyconf)
 
 	/* only set in editmode curve, by space_view3d listener */
 	keymap = WM_keymap_find(keyconf, "Curve", 0, 0);
-	keymap->poll = ED_operator_editsurfcurve;
+	keymap->poll = ED_operator_editsurfcurve_region_view3d;
 
 	WM_keymap_add_menu(keymap, "INFO_MT_edit_curve_add", AKEY, KM_PRESS, KM_SHIFT, 0);
 	
