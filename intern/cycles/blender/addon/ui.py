@@ -154,7 +154,7 @@ class CyclesRender_PT_sampling(CyclesButtonsPanel, Panel):
             sub.prop(cscene, "subsurface_samples", text="Subsurface")
             sub.prop(cscene, "volume_samples", text="Volume")
 
-        if cscene.feature_set == 'EXPERIMENTAL' and use_cpu(context):
+        if use_cpu(context):
             layout.row().prop(cscene, "sampling_pattern", text="Pattern")
 
         for rl in scene.render.layers:
@@ -929,7 +929,9 @@ class CyclesWorld_PT_settings(CyclesButtonsPanel, Panel):
 
         col = split.column()
         col.label(text="Volume:")
-        col.prop(cworld, "volume_sampling", text="")
+        sub = col.column()
+        sub.active = use_cpu(context)
+        sub.prop(cworld, "volume_sampling", text="")
         col.prop(cworld, "homogeneous_volume", text="Homogeneous")
 
 
@@ -1031,7 +1033,9 @@ class CyclesMaterial_PT_settings(CyclesButtonsPanel, Panel):
 
         col = split.column()
         col.label(text="Volume:")
-        col.prop(cmat, "volume_sampling", text="")
+        sub = col.column()
+        sub.active = use_cpu(context)
+        sub.prop(cmat, "volume_sampling", text="")
         col.prop(cmat, "homogeneous_volume", text="Homogeneous")
 
 
