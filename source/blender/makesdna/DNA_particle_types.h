@@ -37,7 +37,6 @@
 #include "DNA_boid_types.h"
 
 struct AnimData;
-struct HAIR_Solver;
 
 typedef struct HairKey {
 	float co[3];	/* location of hair vertex */
@@ -269,9 +268,7 @@ typedef struct ParticleSystem {
 	struct ParticleCacheKey **childcache;	/* child cache (runtime) */
 	ListBase pathcachebufs, childcachebufs;	/* buffers for the above */
 
-	struct HAIR_Solver *solver;
-	struct HairParams *params;
-//struct ClothModifierData *clmd;					/* cloth simulation for hair */
+	struct ClothModifierData *clmd;					/* cloth simulation for hair */
 	struct DerivedMesh *hair_in_dm, *hair_out_dm;	/* input/output for cloth simulation */
 
 	struct Object *target_ob;

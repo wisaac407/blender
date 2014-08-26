@@ -68,7 +68,6 @@
 #include "DNA_genfile.h"
 #include "DNA_group_types.h"
 #include "DNA_gpencil_types.h"
-#include "DNA_hair_types.h"
 #include "DNA_ipo_types.h"
 #include "DNA_key_types.h"
 #include "DNA_lattice_types.h"
@@ -135,7 +134,6 @@
 #include "BKE_particle.h"
 #include "BKE_pointcache.h"
 #include "BKE_report.h"
-#include "BKE_rigidbody.h"
 #include "BKE_sca.h" // for init_actuator
 #include "BKE_scene.h"
 #include "BKE_screen.h"
@@ -3811,8 +3809,7 @@ static void lib_link_particlesystems(FileData *fd, Object *ob, ID *id, ListBase 
 			
 			psys->parent = newlibadr(fd, id->lib, psys->parent);
 			psys->target_ob = newlibadr(fd, id->lib, psys->target_ob);
-
-#if 0			
+			
 			if (psys->clmd) {
 				/* XXX - from reading existing code this seems correct but intended usage of
 				 * pointcache should /w cloth should be added in 'ParticleSystem' - campbell */
@@ -3821,8 +3818,6 @@ static void lib_link_particlesystems(FileData *fd, Object *ob, ID *id, ListBase 
 				psys->clmd->coll_parms->group = newlibadr(fd, id->lib, psys->clmd->coll_parms->group);
 				psys->clmd->modifier.error = NULL;
 			}
-#endif
-			psys->solver = NULL;
 		}
 		else {
 			/* particle modifier must be removed before particle system */
@@ -3887,7 +3882,6 @@ static void direct_link_particlesystems(FileData *fd, ListBase *particles)
 		
 		direct_link_pointcache_list(fd, &psys->ptcaches, &psys->pointcache, 0);
 		
-#if 0
 		if (psys->clmd) {
 			psys->clmd = newdataadr(fd, psys->clmd);
 			psys->clmd->clothObject = NULL;
@@ -3901,16 +3895,10 @@ static void direct_link_particlesystems(FileData *fd, ListBase *particles)
 					psys->clmd->sim_parms->presets = 0;
 			}
 			
+			psys->hair_in_dm = psys->hair_out_dm = NULL;
 			
 			psys->clmd->point_cache = psys->pointcache;
 		}
-#endif
-		if (psys->params) {
-			psys->params = newdataadr(fd, psys->params);
-		}
-		
-		psys->solver = NULL;
-		psys->hair_in_dm = psys->hair_out_dm = NULL;
 		
 		psys->tree = NULL;
 		psys->bvhtree = NULL;
@@ -4594,19 +4582,6 @@ static void direct_link_pose(FileData *fd, bPose *pose)
 	}
 }
 
-static void direct_link_hair_system(FileData *fd, HairSystem *hsys)
-{
-	HairCurve *hair;
-	int i;
-	
-	hsys->curves = newdataadr(fd, hsys->curves);
-	for (hair = hsys->curves, i = 0; i < hsys->totcurves; ++hair, ++i) {
-		hair->points = newdataadr(fd, hair->points);
-	}
-	
-	hsys->render_iter = NULL;
-}
-
 static void direct_link_modifiers(FileData *fd, ListBase *lb)
 {
 	ModifierData *md;
@@ -4866,17 +4841,6 @@ static void direct_link_modifiers(FileData *fd, ListBase *lb)
 				BLI_endian_switch_float_array(lmd->vertexco, lmd->total_verts * 3);
 			}
 			lmd->cache_system = NULL;
-		}
-		else if (md->type == eModifierType_Hair) {
-			HairModifierData *hmd = (HairModifierData *)md;
-
-			hmd->hairsys = newdataadr(fd, hmd->hairsys);
-			if (hmd->hairsys)
-				direct_link_hair_system(fd, hmd->hairsys);
-
-			hmd->solver = NULL;
-
-			hmd->debug_data = NULL;
 		}
 	}
 }
@@ -5272,8 +5236,6 @@ static void lib_link_scene(FileData *fd, Main *main)
 					rbw->constraints = newlibadr(fd, sce->id.lib, rbw->constraints);
 				if (rbw->effector_weights)
 					rbw->effector_weights->group = newlibadr(fd, sce->id.lib, rbw->effector_weights->group);
-				/* create empty mempool */
-				BKE_rigidbody_world_init_mempool(rbw);
 			}
 			
 			if (sce->nodetree) {
