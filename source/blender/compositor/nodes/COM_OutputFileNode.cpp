@@ -23,10 +23,7 @@
 
 #include "COM_OutputFileNode.h"
 #include "COM_OutputFileOperation.h"
-#include "COM_OutputFileMultiViewOperation.h"
 #include "COM_ExecutionSystem.h"
-
-#include "BKE_scene.h"
 
 #include "BLI_path_util.h"
 
@@ -47,19 +44,12 @@ void OutputFileNode::convertToOperations(NodeConverter &converter, const Composi
 		return;
 	}
 	
-	if (ELEM(storage->format.imtype, R_IMF_IMTYPE_MULTILAYER, R_IMF_IMTYPE_MULTIVIEW)) {
+	if (storage->format.imtype == R_IMF_IMTYPE_MULTILAYER) {
 		/* single output operation for the multilayer file */
-		OutputOpenExrMultiLayerOperation *outputOperation;
-
-		if (storage->format.imtype == R_IMF_IMTYPE_MULTIVIEW) {
-			outputOperation = new OutputOpenExrMultiViewOperation(
-			        context.getRenderData(), context.getbNodeTree(), storage->base_path, storage->format.exr_codec, context.getViewId());
-		} else {
-			outputOperation = new OutputOpenExrMultiLayerOperation(
-		          context.getRenderData(), context.getbNodeTree(), storage->base_path, storage->format.exr_codec, context.getViewId());
-		}
+		OutputOpenExrMultiLayerOperation *outputOperation = new OutputOpenExrMultiLayerOperation(
+		        context.getRenderData(), context.getbNodeTree(), storage->base_path, storage->format.exr_codec);
 		converter.addOperation(outputOperation);
-
+		
 		int num_inputs = getNumberOfInputSockets();
 		bool previewAdded = false;
 		for (int i = 0; i < num_inputs; ++i) {
@@ -86,33 +76,17 @@ void OutputFileNode::convertToOperations(NodeConverter &converter, const Composi
 				NodeImageMultiFileSocket *sockdata = (NodeImageMultiFileSocket *)input->getbNodeSocket()->storage;
 				ImageFormatData *format = (sockdata->use_node_format ? &storage->format : &sockdata->format);
 				char path[FILE_MAX];
-
+				
 				/* combine file path for the input */
 				BLI_join_dirfile(path, FILE_MAX, storage->base_path, sockdata->path);
-
-				NodeOperation *outputOperation = NULL;
-
-				if (format->imtype == R_IMF_IMTYPE_MULTIVIEW) {
-					outputOperation = new OutputOpenExrMultiViewOperation(
-					        context.getRenderData(), context.getbNodeTree(), path, format->exr_codec, context.getViewId());
-
-					((OutputOpenExrMultiViewOperation *)outputOperation)->add_layer(sockdata->layer, input->getDataType(), true);
-					converter.mapInputSocket(input, outputOperation->getInputSocket(0));
-				}
-				else if (format->views_output == R_IMF_VIEWS_INDIVIDUAL) {
-					outputOperation = new OutputSingleLayerOperation(
-					        context.getRenderData(), context.getbNodeTree(), input->getDataType(), format, path,
-					        context.getViewSettings(), context.getDisplaySettings(), context.getViewId());
-				}
-				else { /* R_IMF_VIEWS_STEREO_3D */
-					outputOperation = new OutputStereoOperation(
-					        context.getRenderData(), context.getbNodeTree(), input->getDataType(), format, path,
-					        sockdata->layer, context.getViewSettings(), context.getDisplaySettings(), context.getViewId());
-				}
-
+				
+				OutputSingleLayerOperation *outputOperation = new OutputSingleLayerOperation(
+				        context.getRenderData(), context.getbNodeTree(), input->getDataType(), format, path,
+				        context.getViewSettings(), context.getDisplaySettings());
 				converter.addOperation(outputOperation);
+				
 				converter.mapInputSocket(input, outputOperation->getInputSocket(0));
-
+				
 				if (!previewAdded) {
 					converter.addNodeInputPreview(input);
 					previewAdded = true;

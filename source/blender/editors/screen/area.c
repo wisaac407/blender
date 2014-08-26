@@ -452,6 +452,7 @@ void ED_region_do_draw(bContext *C, ARegion *ar)
 	glDisable(GL_BLEND);
 #endif
 
+	ar->do_draw = 0;
 	memset(&ar->drawrct, 0, sizeof(ar->drawrct));
 	
 	uiFreeInactiveBlocks(C, &ar->uiblocks);

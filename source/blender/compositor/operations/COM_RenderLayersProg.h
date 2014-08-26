@@ -51,12 +51,7 @@ private:
 	 * layerId of the layer where this operation needs to get its data from
 	 */
 	short m_layerId;
-
-	/**
-	 * viewId of the view where this operation needs to get its data from
-	 */
-	int m_viewId;
-
+	
 	/**
 	 * cached instance to the float buffer inside the layer
 	 */
@@ -102,8 +97,6 @@ public:
 	void setRenderData(const RenderData *rd) { this->m_rd = rd; }
 	void setLayerId(short layerId) { this->m_layerId = layerId; }
 	short getLayerId() { return this->m_layerId; }
-	void setViewId(short viewId) { this->m_viewId = viewId; }
-	short getViewId() { return this->m_viewId; }
 	void initExecution();
 	void deinitExecution();
 	void executePixelSampled(float output[4], float x, float y, PixelSampler sampler);

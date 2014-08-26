@@ -44,6 +44,7 @@ struct MovieCache;
 struct RenderResult;
 struct GPUTexture;
 
+
 /* ImageUser is in Texture, in Nodes, Background Image, Image Window, .... */
 /* should be used in conjunction with an ID * to Image. */
 typedef struct ImageUser {
@@ -53,25 +54,21 @@ typedef struct ImageUser {
 	int frames;					/* total amount of frames to use */
 	int offset, sfra;			/* offset within movie, start frame in global time */
 	char fie_ima, cycl;		/* fields/image in movie, cyclic flag */
-	char ok;
+	char ok, pad;
 
-	char eye;				/* multiview current eye - for internal use */
-
-	short multi_index, view, layer, pass;	 /* listbase indices, for menu browsing or retrieve buffer */
+	short multi_index, layer, pass;	 /* listbase indices, for menu browsing or retrieve buffer */
 
 	short flag;
-	short passtype;
+	
+	int pad2;
 
 } ImageUser;
 
-/* ImageUser.flag */
-enum {
-	IMA_ANIM_ALWAYS         = (1 << 0),
-	IMA_ANIM_REFRESHED      = (1 << 1),
-/*	IMA_DO_PREMUL           = (1 << 2), */
-	IMA_NEED_FRAME_RECALC   = (1 << 3),
-	IMA_SHOW_STEREO         = (1 << 4),
-};
+/* iuser->flag */
+#define	IMA_ANIM_ALWAYS		1
+#define IMA_ANIM_REFRESHED	2
+/* #define IMA_DO_PREMUL	4 */
+#define IMA_NEED_FRAME_RECALC	8
 
 typedef struct Image {
 	ID id;
@@ -120,9 +117,7 @@ typedef struct Image {
 	ColorManagedColorspaceSettings colorspace_settings;
 	char alpha_mode;
 
-	char eye; /* for viewer node stereoscopy */
-
-	char pad[6];
+	char pad[7];
 } Image;
 
 
@@ -142,7 +137,6 @@ enum {
 	IMA_USER_FRAME_IN_RANGE = (1 << 10), /* for image user, but these flags are mixed */
 	IMA_VIEW_AS_RENDER      = (1 << 11),
 	IMA_IGNORE_ALPHA        = (1 << 12),
-	IMA_IS_STEREO           = (1 << 13),
 };
 
 #if (DNA_DEPRECATED_GCC_POISON == 1)

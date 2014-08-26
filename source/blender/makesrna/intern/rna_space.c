@@ -34,7 +34,6 @@
 #include "BKE_key.h"
 #include "BKE_movieclip.h"
 #include "BKE_node.h"
-#include "BKE_image.h"
 
 #include "DNA_action_types.h"
 #include "DNA_key_types.h"
@@ -671,31 +670,6 @@ static void rna_SpaceImageEditor_mode_update(Main *bmain, Scene *scene, PointerR
 	ED_space_image_paint_update(bmain->wm.first, scene->toolsettings);
 }
 
-
-static void rna_SpaceImageEditor_show_stereo_set(PointerRNA *ptr, int value)
-{
-	SpaceImage *sima = (SpaceImage *)(ptr->data);
-
-	if (value)
-		sima->iuser.flag |= IMA_SHOW_STEREO;
-	else
-		sima->iuser.flag &= ~IMA_SHOW_STEREO;
-}
-
-static int rna_SpaceImageEditor_show_stereo_get(PointerRNA *ptr)
-{
-	SpaceImage *sima = (SpaceImage *)(ptr->data);
-	return (sima->iuser.flag & IMA_SHOW_STEREO);
-}
-
-static void rna_SpaceImageEditor_show_stereo_update(Main *UNUSED(bmain), Scene *UNUSED(unused), PointerRNA *ptr)
-{
-	SpaceImage *sima = (SpaceImage *)(ptr->data);
-	if (sima->image && sima->image->rr) {
-		BKE_image_multilayer_index(sima->image->rr, &sima->iuser);
-	}
-}
-
 static int rna_SpaceImageEditor_show_render_get(PointerRNA *ptr)
 {
 	SpaceImage *sima = (SpaceImage *)(ptr->data);
@@ -820,18 +794,6 @@ static void rna_SpaceImageEditor_cursor_location_set(PointerRNA *ptr, const floa
 		
 		sima->cursor[0] = values[0] / w;
 		sima->cursor[1] = values[1] / h;
-	}
-}
-
-static void rna_SpaceImageEditor_image_update(Main *UNUSED(bmain), Scene *UNUSED(scene), PointerRNA *ptr)
-{
-	SpaceImage *sima = (SpaceImage *)ptr->data;
-
-	/* make sure all the iuser settings are valid for the sima image */
-	if (sima->image) {
-		if (BKE_image_multilayer_index(sima->image->rr, &sima->iuser) == NULL) {
-			BKE_image_init_imageuser(sima->image, &sima->iuser);
-		}
 	}
 }
 
@@ -1876,13 +1838,7 @@ static void rna_def_space_view3d(BlenderRNA *brna)
 		{ICON_MATCAP_24, "24", ICON_MATCAP_24, "", ""},
 		{0, NULL, 0, NULL, NULL}
 	};
-
-	static EnumPropertyItem stereo_camera_items[] = {
-		{STEREO_LEFT_ID, "LEFT", ICON_RESTRICT_RENDER_OFF, "Left", ""},
-		{STEREO_RIGHT_ID, "RIGHT", ICON_RESTRICT_RENDER_OFF, "Right", ""},
-		{STEREO_3D_ID, "3D", ICON_CAMERA_STEREO, "3D", ""},
-		{0, NULL, 0, NULL, NULL}
-	};
+	
 
 	srna = RNA_def_struct(brna, "SpaceView3D", "Space");
 	RNA_def_struct_sdna(srna, "View3D");
@@ -2219,30 +2175,6 @@ static void rna_def_space_view3d(BlenderRNA *brna)
 	RNA_def_property_ui_text(prop, "Matcap", "Image to use for Material Capture, active objects only");
 	RNA_def_property_update(prop, NC_SPACE | ND_SPACE_VIEW3D, "rna_SpaceView3D_matcap_update");
 
-	/* Stereo Settings */
-	prop = RNA_def_property(srna, "stereoscopy_camera", PROP_ENUM, PROP_NONE);
-	RNA_def_property_enum_sdna(prop, NULL, "stereo_camera");
-	RNA_def_property_enum_items(prop, stereo_camera_items);
-	RNA_def_property_ui_text(prop, "Camera", "");
-	RNA_def_property_update(prop, NC_SPACE | ND_SPACE_VIEW3D, NULL);
-
-	prop = RNA_def_property(srna, "show_stereoscopy_cameras", PROP_BOOLEAN, PROP_NONE);
-	RNA_def_property_boolean_sdna(prop, NULL, "stereo_flag", V3D_S3D_DISPCAMERAS);
-	RNA_def_property_ui_text(prop, "Cameras", "Show the left and right cameras");
-	RNA_def_property_update(prop, NC_SPACE | ND_SPACE_VIEW3D, NULL);
-
-	prop = RNA_def_property(srna, "show_stereoscopy_planes", PROP_BOOLEAN, PROP_NONE);
-	RNA_def_property_boolean_sdna(prop, NULL, "stereo_flag", V3D_S3D_DISPPLANES);
-	RNA_def_property_ui_text(prop, "Planes", "Show the near and far planes");
-	RNA_def_property_update(prop, NC_SPACE | ND_SPACE_VIEW3D, NULL);
-
-	prop = RNA_def_property(srna, "show_stereoscopy_volume", PROP_BOOLEAN, PROP_NONE);
-	RNA_def_property_boolean_sdna(prop, NULL, "stereo_flag", V3D_S3D_DISPVOLUME);
-	RNA_def_property_ui_text(prop, "Volume", "Show stereo frustum volume");
-	RNA_def_property_update(prop, NC_SPACE | ND_SPACE_VIEW3D, NULL);
-
-	/* *** Animated *** */
-	RNA_define_animate_sdna(true);
 	/* region */
 
 	srna = RNA_def_struct(brna, "RegionView3D", NULL);
@@ -2409,7 +2341,7 @@ static void rna_def_space_image(BlenderRNA *brna)
 	RNA_def_property_pointer_funcs(prop, NULL, "rna_SpaceImageEditor_image_set", NULL, NULL);
 	RNA_def_property_ui_text(prop, "Image", "Image displayed and edited in this space");
 	RNA_def_property_flag(prop, PROP_EDITABLE);
-	RNA_def_property_update(prop, NC_GEOM | ND_DATA, "rna_SpaceImageEditor_image_update"); /* is handled in image editor too */
+	RNA_def_property_update(prop, NC_GEOM | ND_DATA, NULL); /* is handled in image editor too */
 
 	prop = RNA_def_property(srna, "image_user", PROP_POINTER, PROP_NONE);
 	RNA_def_property_flag(prop, PROP_NEVER_NULL);
@@ -2459,12 +2391,6 @@ static void rna_def_space_image(BlenderRNA *brna)
 	RNA_def_property_enum_funcs(prop, NULL, NULL, "rna_SpaceImageEditor_draw_channels_itemf");
 	RNA_def_property_ui_text(prop, "Draw Channels", "Channels of the image to draw");
 	RNA_def_property_update(prop, NC_SPACE | ND_SPACE_IMAGE, NULL);
-
-	prop = RNA_def_property(srna, "show_stereo_3d", PROP_BOOLEAN, PROP_NONE);
-	RNA_def_property_boolean_funcs(prop, "rna_SpaceImageEditor_show_stereo_get", "rna_SpaceImageEditor_show_stereo_set");
-	RNA_def_property_ui_text(prop, "Show Stereo", "Display the image in Stereo 3D");
-	RNA_def_property_ui_icon(prop, ICON_CAMERA_STEREO, 0);
-	RNA_def_property_update(prop, NC_SPACE | ND_SPACE_IMAGE, "rna_SpaceImageEditor_show_stereo_update");
 
 	/* uv */
 	prop = RNA_def_property(srna, "uv_editor", PROP_POINTER, PROP_NONE);
