@@ -22,6 +22,9 @@
 
 #include "COM_ViewerNode.h"
 #include "BKE_global.h"
+#include "BKE_image.h"
+#include "BLI_listbase.h"
+#include "BKE_scene.h"
 
 #include "COM_ViewerOperation.h"
 #include "COM_ExecutionSystem.h"
@@ -51,6 +54,7 @@ void ViewerNode::convertToOperations(NodeConverter &converter, const CompositorC
 	viewerOperation->setCenterY(editorNode->custom4);
 	/* alpha socket gives either 1 or a custom alpha value if "use alpha" is enabled */
 	viewerOperation->setUseAlphaInput(ignore_alpha || alphaSocket->isLinked());
+	viewerOperation->setViewId(context.getViewId());
 
 	viewerOperation->setViewSettings(context.getViewSettings());
 	viewerOperation->setDisplaySettings(context.getDisplaySettings());
@@ -75,4 +79,24 @@ void ViewerNode::convertToOperations(NodeConverter &converter, const CompositorC
 
 	if (do_output)
 		converter.registerViewer(viewerOperation);
+
+	if (image && (context.getViewId() == 0)) {
+		BLI_lock_thread(LOCK_DRAW_IMAGE);
+		if (BKE_render_is_stereo3d(context.getRenderData())) {
+			image->flag |= IMA_IS_STEREO;
+		}
+		else {
+			image->flag &= ~IMA_IS_STEREO;
+			imageUser->flag &= ~IMA_SHOW_STEREO;
+		}
+
+		size_t num_views = BKE_render_num_views(context.getRenderData());
+		size_t num_caches = BKE_image_cache_count(image);
+
+		if (num_views != num_caches) {
+			BKE_image_free_cached_frames(image);
+		}
+
+		BLI_unlock_thread(LOCK_DRAW_IMAGE);
+	}
 }

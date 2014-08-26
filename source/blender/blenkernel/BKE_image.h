@@ -52,6 +52,8 @@ struct Main;
 void   BKE_images_init(void);
 void   BKE_images_exit(void);
 
+void    BKE_image_free_cached_frames(struct Image *image);
+int     BKE_image_cache_count(struct Image *image);
 void    BKE_image_free_buffers(struct Image *image);
 /* call from library */
 void    BKE_image_free(struct Image *image);
@@ -60,12 +62,13 @@ void    BKE_imbuf_stamp_info(struct Scene *scene, struct Object *camera, struct 
 void    BKE_stamp_buf(struct Scene *scene, struct Object *camera, unsigned char *rect, float *rectf, int width, int height, int channels);
 bool    BKE_imbuf_alpha_test(struct ImBuf *ibuf);
 int     BKE_imbuf_write_stamp(struct Scene *scene, struct Object *camera, struct ImBuf *ibuf, const char *name, struct ImageFormatData *imf);
+void    BKE_imbuf_prepare_write(struct ImBuf *ibuf, struct ImageFormatData *imf);
 int     BKE_imbuf_write(struct ImBuf *ibuf, const char *name, struct ImageFormatData *imf);
 int     BKE_imbuf_write_as(struct ImBuf *ibuf, const char *name, struct ImageFormatData *imf, const bool is_copy);
 void    BKE_makepicstring(char *string, const char *base, const char *relbase, int frame,
-                          const struct ImageFormatData *im_format, const bool use_ext, const bool use_frames);
+                          const struct ImageFormatData *im_format, const bool use_ext, const bool use_frames, const char *view);
 void    BKE_makepicstring_from_type(char *string, const char *base, const char *relbase, int frame,
-                                    const char imtype, const bool use_ext, const bool use_frames);
+                                    const char imtype, const bool use_ext, const bool use_frames, const char *view);
 int     BKE_add_image_extension(char *string, const struct ImageFormatData *im_format);
 int     BKE_add_image_extension_from_type(char *string, const char imtype);
 char    BKE_ftype_to_imtype(const int ftype);
@@ -171,6 +174,7 @@ struct Image *BKE_image_add_generated(
 struct Image *BKE_image_add_from_imbuf(struct ImBuf *ibuf);
 
 /* for reload, refresh, pack */
+void BKE_image_init_imageuser(struct Image *ima, struct ImageUser *iuser);
 void BKE_image_signal(struct Image *ima, struct ImageUser *iuser, int signal);
 
 void BKE_image_walk_all_users(const struct Main *mainp, void *customdata,
@@ -193,6 +197,7 @@ void BKE_image_update_frame(const struct Main *bmain, int cfra);
 struct RenderPass *BKE_image_multilayer_index(struct RenderResult *rr, struct ImageUser *iuser);
 
 /* for multilayer images as well as for render-viewer */
+bool BKE_image_is_stereo(struct Scene *scene, struct Image *ima);
 struct RenderResult *BKE_image_acquire_renderresult(struct Scene *scene, struct Image *ima);
 void BKE_image_release_renderresult(struct Scene *scene, struct Image *ima);
 

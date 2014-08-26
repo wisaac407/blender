@@ -123,6 +123,9 @@ void BKE_scene_update_for_newframe_ex(struct EvaluationContext *eval_ctx, struct
 struct SceneRenderLayer *BKE_scene_add_render_layer(struct Scene *sce, const char *name);
 bool BKE_scene_remove_render_layer(struct Main *main, struct Scene *scene, struct SceneRenderLayer *srl);
 
+struct SceneRenderView *BKE_scene_add_render_view(struct Scene *sce, const char *name);
+bool BKE_scene_remove_render_view(struct Scene *scene, struct SceneRenderView *srv);
+
 /* render profile */
 int get_render_subsurf_level(struct RenderData *r, int level);
 int get_render_child_particle_number(struct RenderData *r, int num);
@@ -137,6 +140,10 @@ bool BKE_scene_check_rigidbody_active(const struct Scene *scene);
 
 int BKE_scene_num_threads(const struct Scene *scene);
 int BKE_render_num_threads(const struct RenderData *r);
+
+/* multiview */
+bool BKE_render_is_stereo3d(const struct RenderData *rd);
+size_t BKE_render_num_views(const struct RenderData *rd);
 
 #ifdef __cplusplus
 }

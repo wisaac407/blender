@@ -110,6 +110,7 @@
 #include "wm_files.h"
 #include "wm_subwindow.h"
 #include "wm_window.h"
+#include "wm_stereo.h"
 
 static GHash *global_ops_hash = NULL;
 
@@ -4324,8 +4325,10 @@ static int redraw_timer_exec(bContext *C, wmOperator *op)
 
 	for (a = 0; a < iter; a++) {
 		if (type == 0) {
-			if (ar)
+			if (ar) {
 				ED_region_do_draw(C, ar);
+				ar->do_draw = false;
+			}
 		}
 		else if (type == 1) {
 			wmWindow *win = CTX_wm_window(C);
@@ -4350,6 +4353,7 @@ static int redraw_timer_exec(bContext *C, wmOperator *op)
 					if (ar_iter->swinid) {
 						CTX_wm_region_set(C, ar_iter);
 						ED_region_do_draw(C, ar_iter);
+						ar->do_draw = false;
 					}
 				}
 			}
@@ -4477,6 +4481,29 @@ static void operatortype_ghash_free_cb(wmOperatorType *ot)
 }
 
 /* ******************************************************* */
+/* toggle 3D for current window, turning it fullscreen if needed */
+static void WM_OT_stereo_toggle(wmOperatorType *ot)
+{
+	ot->name = "Toggle 3D Stereo";
+	ot->idname = "WM_OT_stereo_toggle";
+	ot->description = "Toggle 3D stereo support for current window (or change the display mode)";
+
+	ot->exec = wm_stereo_toggle_exec;
+	ot->invoke = wm_stereo_toggle_invoke;
+	ot->poll = WM_operator_winactive;
+
+	RNA_def_enum(ot->srna, "display_mode", stereo_display_items, S3D_DISPLAY_ANAGLYPH, "Display Mode", "");
+	RNA_def_enum(ot->srna, "anaglyph_type", stereo_anaglyph_type_items, S3D_ANAGLYPH_REDCYAN, "Anaglyph Type", "");
+	RNA_def_enum(ot->srna, "interlace_type", stereo_interlace_type_items, S3D_INTERLACE_ROW, "Interlace Type", "");
+	RNA_def_float(ot->srna, "epilepsy_interval", 0.1f, 0.01f, 10.0f, "Interval",
+	              "Preferred interval in seconds between switching left/right views", 0.05f, 1.0f);
+	RNA_def_boolean(ot->srna, "use_interlace_swap", false, "Swap Left/Right",
+	                "Swap left and right stereo channels");
+	RNA_def_boolean(ot->srna, "use_sidebyside_crosseyed", false, "Cross-Eyed",
+	                "Right eye should see left image and vice-versa");
+}
+
+/* ******************************************************* */
 /* called on initialize WM_exit() */
 void wm_operatortype_free(void)
 {
@@ -4517,6 +4544,7 @@ void wm_operatortype_init(void)
 	WM_operatortype_append(WM_OT_call_menu);
 	WM_operatortype_append(WM_OT_call_menu_pie);
 	WM_operatortype_append(WM_OT_radial_control);
+	WM_operatortype_append(WM_OT_stereo_toggle);
 #if defined(WIN32)
 	WM_operatortype_append(WM_OT_console_toggle);
 #endif
@@ -4817,6 +4845,8 @@ void wm_window_keymap(wmKeyConfig *keyconf)
 	data_path = NULL;
 	(void)data_path;
 
+
+	WM_keymap_add_item(keymap, "WM_OT_stereo_toggle", DKEY, KM_PRESS, 0, 0);
 
 	gesture_circle_modal_keymap(keyconf);
 	gesture_border_modal_keymap(keyconf);

@@ -226,6 +226,21 @@ static void compo_progressjob(void *cjv, float progress)
 	*(cj->progress) = progress;
 }
 
+/* XXX MV move this to a centralized place */
+static size_t get_rendered_views_count(RenderData *rd)
+{
+	SceneRenderView *srv;
+	size_t tot_views = 0;
+
+	if ((rd->scemode & R_MULTIVIEW) == 0)
+		return 1;
+
+	for (srv = rd->views.first; srv; srv = srv->next)
+		if ((srv->viewflag & SCE_VIEW_DISABLE) == 0)
+			tot_views ++;
+
+	return tot_views;
+}
 
 /* only this runs inside thread */
 static void compo_startjob(void *cjv, short *stop, short *do_update, float *progress)
@@ -233,6 +248,7 @@ static void compo_startjob(void *cjv, short *stop, short *do_update, float *prog
 	CompoJob *cj = cjv;
 	bNodeTree *ntree = cj->localtree;
 	Scene *scene = cj->scene;
+	size_t nr, numviews;
 
 	if (scene->use_nodes == false)
 		return;
@@ -252,7 +268,11 @@ static void compo_startjob(void *cjv, short *stop, short *do_update, float *prog
 
 	// XXX BIF_store_spare();
 	/* 1 is do_previews */
-	ntreeCompositExecTree(cj->scene, ntree, &cj->scene->r, false, true, &scene->view_settings, &scene->display_settings);
+
+	numviews = get_rendered_views_count(&cj->scene->r);
+	for (nr = 0; nr < numviews; nr++) {
+		ntreeCompositExecTree(cj->scene, ntree, &cj->scene->r, false, true, &scene->view_settings, &scene->display_settings, nr);
+	}
 
 	ntree->test_break = NULL;
 	ntree->stats_draw = NULL;
@@ -1657,6 +1677,55 @@ void NODE_OT_delete(wmOperatorType *ot)
 	ot->exec = node_delete_exec;
 	ot->poll = ED_operator_node_editable;
 	
+	/* flags */
+	ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
+}
+
+/* ****************** Switch View ******************* */
+
+static int node_switch_view_poll(bContext *C)
+{
+	SpaceNode *snode = CTX_wm_space_node(C);
+
+	if (snode && snode->edittree)
+		return true;
+
+	return false;
+}
+
+static int node_switch_view_exec(bContext *C, wmOperator *UNUSED(op))
+{
+	SpaceNode *snode = CTX_wm_space_node(C);
+	bNode *node, *next;
+
+	for (node = snode->edittree->nodes.first; node; node = next) {
+		next = node->next;
+		if (node->flag & SELECT) {
+
+			/* call the update function from the Switch View node */
+			node->update = NODE_UPDATE_RNA;
+		}
+	}
+
+	ntreeUpdateTree(CTX_data_main(C), snode->edittree);
+
+	snode_notify(C, snode);
+	snode_dag_update(C, snode);
+
+	return OPERATOR_FINISHED;
+}
+
+void NODE_OT_switch_view_update(wmOperatorType *ot)
+{
+	/* identifiers */
+	ot->name = "Update Views";
+	ot->description = "Update views of selected node";
+	ot->idname = "NODE_OT_switch_view_update";
+
+	/* api callbacks */
+	ot->exec = node_switch_view_exec;
+	ot->poll = node_switch_view_poll;
+
 	/* flags */
 	ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 }
