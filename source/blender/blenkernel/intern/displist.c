@@ -1196,7 +1196,6 @@ void BKE_displist_make_surf(Scene *scene, Object *ob, ListBase *dispbase,
 	DispList *dl;
 	float *data;
 	int len;
-	/*uint64_t timer_start = mach_absolute_time();*/
 
 	if (!for_render && cu->editnurb) {
 		BKE_nurbList_duplicate(&nubase, BKE_curve_editNurbs_get(cu));
@@ -1242,9 +1241,31 @@ void BKE_displist_make_surf(Scene *scene, Object *ob, ListBase *dispbase,
 				BKE_nurb_makeCurve(nu, data, NULL, NULL, NULL, resolu, 3 * sizeof(float));
 			}
 			else {
+				len = (nu->pntsu * resolu) * (nu->pntsv * resolv);
+
 				dl = MEM_callocN(sizeof(DispList), "makeDispListsurf");
+				dl->verts = MEM_mallocN(len * sizeof(float[3]), "dlverts");
 				BLI_addtail(dispbase, dl);
-				BKE_nurb_make_displist(nu, dl);
+
+				dl->col = nu->mat_nr;
+				dl->charidx = nu->charidx;
+
+				/* dl->rt will be used as flag for render face and */
+				/* CU_2D conflicts with R_NOPUNOFLIP */
+				dl->rt = nu->flag & ~CU_2D;
+
+				data = dl->verts;
+				dl->type = DL_SURF;
+
+				dl->parts = (nu->pntsu * resolu);  /* in reverse, because makeNurbfaces works that way */
+				dl->nr = (nu->pntsv * resolv);
+				if (nu->flagv & CU_NURB_CYCLIC) dl->flag |= DL_CYCL_U;  /* reverse too! */
+				if (nu->flagu & CU_NURB_CYCLIC) dl->flag |= DL_CYCL_V;
+
+				BKE_nurb_makeFaces(nu, data, 0, resolu, resolv);
+
+				/* gl array drawing: using indices */
+				displist_surf_indices(dl);
 			}
 		}
 	}
@@ -1254,9 +1275,6 @@ void BKE_displist_make_surf(Scene *scene, Object *ob, ListBase *dispbase,
 		                          for_render, use_render_resolution);
 	}
 
-	/*uint64_t timer_stop = mach_absolute_time();
-	int t = timer_stop-timer_start;*/
-	nu = nubase.first;
 	BKE_nurbList_free(&nubase);
 }
 

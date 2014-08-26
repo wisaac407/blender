@@ -26,7 +26,6 @@
  */
 #ifndef __BKE_CURVE_H__
 #define __BKE_CURVE_H__
-#include "DNA_listBase.h"
 
 /** \file BKE_curve.h
  *  \ingroup bke
@@ -46,25 +45,12 @@ struct Scene;
 struct Path;
 struct TextBox;
 struct rctf;
-struct DispList;
-struct BPoint;
-struct NurbTrim;
-struct NurbEditKnot;
-struct GridMesh;
 
 typedef struct CurveCache {
 	ListBase disp;
 	ListBase bev;
 	struct Path *path;
 } CurveCache;
-
-#define NURBS_MAX_ORDER 10
-
-typedef struct BSplineCache {
-	float u;
-	int iu;
-	float Nu[NURBS_MAX_ORDER][NURBS_MAX_ORDER];
-} BSplineCacheU;
 
 #define KNOTSU(nu)      ( (nu)->orderu + (nu)->pntsu + (((nu)->flagu & CU_NURB_CYCLIC) ? ((nu)->orderu - 1) : 0) )
 #define KNOTSV(nu)      ( (nu)->orderv + (nu)->pntsv + (((nu)->flagv & CU_NURB_CYCLIC) ? ((nu)->orderv - 1) : 0) )
@@ -135,32 +121,6 @@ void BKE_curve_forward_diff_bezier(float q0, float q1, float q2, float q3, float
 void BKE_curve_rect_from_textbox(const struct Curve *cu, const struct TextBox *tb, struct rctf *r_rect);
 
 /* ** Nurbs ** */
-#ifdef __cplusplus
-#define DEFAULT_FALSE =false
-#define DEFAULT_NULL =NULL
-#else
-#define DEFAULT_FALSE
-#define DEFAULT_NULL
-#endif
-void BKE_bspline_knot_calc(int flags, int pnts, int order, float knots[]);
-int BKE_bspline_nz_basis_range(float u, float *knots, int num_pts, int order);
-void BKE_bspline_basis_eval(float u, int i, float *U, int num_knots, int order, int nd, float out[][NURBS_MAX_ORDER]);
-void BKE_bspline_curve_eval(float u, float *U, int num_pts, int order, struct BPoint *P, int stride, int nd, struct BPoint *out, bool premultiply_weight DEFAULT_FALSE);
-void BKE_nurbs_curve_eval(float u, float *U, int num_pts, int order, struct BPoint *P, int stride, int nd, struct BPoint *out);
-void BKE_bspline_surf_eval(float u, float v,
-						   int pntsu, int orderu, float *U,
-						   int pntsv, int orderv, float *V,
-						   struct BPoint *P, int nd, struct BPoint *out,
-						   bool premultiply_weights DEFAULT_FALSE, BSplineCacheU *ucache DEFAULT_NULL);
-void BKE_nurbs_surf_eval(float u, float v,
-						 int pntsu, int orderu, float *U,
-						 int pntsv, int orderv, float *V,
-						 struct BPoint *P, int nd, struct BPoint *out, BSplineCacheU *ucache DEFAULT_NULL);
-
-struct NurbEditKnot* BKE_nurbs_editKnot_get(struct Nurb *nu); /* Creates editknot if necessary */
-void BKE_nurbs_editKnot_propagate_ek2nurb(struct Nurb *nu);
-void BKE_nurbs_editKnot_propagate_nurb2ek(struct Nurb *nu);
-void BKE_nurbs_editKnot_destroy(struct Nurb *nu);
 
 bool BKE_nurbList_index_get_co(struct ListBase *editnurb, const int index, float r_co[3]);
 
@@ -175,28 +135,15 @@ void BKE_nurbList_handles_recalculate(struct ListBase *editnurb, const bool calc
 void BKE_nurbList_handles_autocalc(ListBase *editnurb, int flag);
 void BKE_nurbList_flag_set(ListBase *editnurb, short flag);
 
-void BKE_nurbTrim_free(struct NurbTrim *nt);
-struct NurbTrim *BKE_nurbTrim_duplicate(struct NurbTrim *nt);
-int BKE_nurbTrim_tess(struct NurbTrim *nt, float (**uv)[2]); // Returns: # verts in uv
-void BKE_nurbTrim_update_data(struct NurbTrim *nt);
-
 void BKE_nurb_free(struct Nurb *nu);
 struct Nurb *BKE_nurb_duplicate(struct Nurb *nu);
 struct Nurb *BKE_nurb_copy(struct Nurb *src, int pntsu, int pntsv);
 
-void BKE_nurb_ensure2D(struct Nurb *nu);
+void BKE_nurb_test2D(struct Nurb *nu);
 void BKE_nurb_minmax(struct Nurb *nu, bool use_radius, float min[3], float max[3]);
-void BKE_nurbs_domain(struct Nurb *nu, float *umin, float *umax, float *vmin, float *vmax);
-void BKE_nurbs_uvbounds(struct Nurb *nu, float *umin, float *umax, float *vmin, float *vmax);
-void BKE_nurbs_printknots(struct Nurb *nu);
 
 void BKE_nurb_makeFaces(struct Nurb *nu, float *coord_array, int rowstride, int resolu, int resolv);
 void BKE_nurb_makeCurve(struct Nurb *nu, float *coord_array, float *tilt_array, float *radius_array, float *weight_array, int resolu, int stride);
-struct GridMesh *BKE_nurb_compute_trimmed_GridMesh(struct Nurb* nu);
-void BKE_nurb_compute_trimmed_UV_mesh(struct Nurb* nu);
-void BKE_nurbs_cached_UV_mesh_clear(struct Nurb* nu, bool free_mem);
-void BKE_nurb_make_displist(struct Nurb *nurb, struct DispList *dl);
-void BKE_surf_to_mesh(struct Object *surf);
 
 void BKE_nurb_knot_calc_u(struct Nurb *nu);
 void BKE_nurb_knot_calc_v(struct Nurb *nu);

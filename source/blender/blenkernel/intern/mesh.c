@@ -1157,6 +1157,26 @@ static void make_edges_mdata_extend(MEdge **r_alledge, int *r_totedge,
 	BLI_edgehash_free(eh, NULL);
 }
 
+
+/* Initialize mverts, medges and, faces for converting nurbs to mesh and derived mesh */
+/* return non-zero on error */
+int BKE_mesh_nurbs_to_mdata(Object *ob, MVert **allvert, int *totvert,
+                            MEdge **alledge, int *totedge, MLoop **allloop, MPoly **allpoly,
+                            int *totloop, int *totpoly)
+{
+	ListBase disp = {NULL, NULL};
+
+	if (ob->curve_cache) {
+		disp = ob->curve_cache->disp;
+	}
+
+	return BKE_mesh_nurbs_displist_to_mdata(ob, &disp,
+	                                        allvert, totvert,
+	                                        alledge, totedge,
+	                                        allloop, allpoly, NULL,
+	                                        totloop, totpoly);
+}
+
 /* BMESH: this doesn't calculate all edges from polygons,
  * only free standing edges are calculated */
 
@@ -1177,11 +1197,10 @@ int BKE_mesh_nurbs_displist_to_mdata(Object *ob, ListBase *dispbase,
 	MLoopUV *mloopuv = NULL;
 	MEdge *medge;
 	const float *data;
-	int i, a, b, ofs, vertcount, startvert, totvert = 0, totedge = 0, totloop = 0, totvlak = 0;
-	int p1, p2, p3, p4, *index, smooth;
+	int a, b, ofs, vertcount, startvert, totvert = 0, totedge = 0, totloop = 0, totvlak = 0;
+	int p1, p2, p3, p4, *index;
 	const bool conv_polys = ((CU_DO_2DFILL(cu) == false) ||  /* 2d polys are filled with DL_INDEX3 displists */
 	                         (ob->type == OB_SURF));  /* surf polys are never filled */
-	float *nors;
 
 	/* count */
 	dl = dispbase->first;
@@ -1232,7 +1251,7 @@ int BKE_mesh_nurbs_displist_to_mdata(Object *ob, ListBase *dispbase,
 
 	dl = dispbase->first;
 	while (dl) {
-		smooth = dl->rt & CU_SMOOTH ? 1 : 0;
+		int smooth = dl->rt & CU_SMOOTH ? 1 : 0;
 
 		if (dl->type == DL_SEGM) {
 			startvert = vertcount;
@@ -1285,14 +1304,9 @@ int BKE_mesh_nurbs_displist_to_mdata(Object *ob, ListBase *dispbase,
 			startvert = vertcount;
 			a = dl->nr;
 			data = dl->verts;
-			nors = dl->nors;
 			while (a--) {
 				copy_v3_v3(mvert->co, data);
 				data += 3;
-				if (nors) {
-					normal_float_to_short_v3(mvert->no, nors);
-					nors += 3;
-				}
 				vertcount++;
 				mvert++;
 			}
@@ -1308,6 +1322,8 @@ int BKE_mesh_nurbs_displist_to_mdata(Object *ob, ListBase *dispbase,
 				mpoly->mat_nr = dl->col;
 
 				if (mloopuv) {
+					int i;
+
 					for (i = 0; i < 3; i++, mloopuv++) {
 						mloopuv->uv[0] = (mloop[i].v - startvert) / (float)(dl->nr - 1);
 						mloopuv->uv[1] = 0.0f;
@@ -1651,7 +1667,6 @@ void BKE_mesh_to_curve_nurblist(DerivedMesh *dm, ListBase *nurblist, const int e
 				nu->orderu = 4;
 				nu->flagu = CU_NURB_ENDPOINT | (closed ? CU_NURB_CYCLIC : 0);  /* endpoint */
 				nu->resolu = 12;
-				nu->editknot = NULL;
 
 				nu->bp = (BPoint *)MEM_callocN(sizeof(BPoint) * totpoly, "bpoints");
 

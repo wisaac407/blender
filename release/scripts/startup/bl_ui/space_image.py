@@ -141,19 +141,6 @@ class IMAGE_MT_select(Menu):
 
         layout.operator("uv.select_split")
 
-class IMAGE_MT_trim(Menu):
-    bl_label = "Trim"
-    def draw(self, context):
-        layout = self.layout
-        layout.operator("uv.nurbsuv_delete_trim", text="Delete Trim")
-        layout.menu("IMAGE_MT_add")
-
-class IMAGE_MT_add(Menu):
-    bl_label = "Add"
-    def draw(self, context):
-        layout = self.layout
-        layout.operator("uv.nurbsuv_add_square", text="Square Trim", icon='MESH_PLANE')
-        layout.operator("uv.nurbsuv_add_circle", text="Circular Trim", icon='SURFACE_NCIRCLE')
 
 class IMAGE_MT_brush(Menu):
     bl_label = "Brush"
@@ -494,14 +481,11 @@ class MASK_MT_editor_menus(Menu):
         show_uvedit = sima.show_uvedit
         show_maskedit = sima.show_maskedit
         show_paint = sima.show_paint
-        show_nurbsuv = sima.show_nurbsuv
 
         layout.menu("IMAGE_MT_view")
 
         if show_uvedit:
             layout.menu("IMAGE_MT_select")
-        if show_nurbsuv:
-            layout.menu("IMAGE_MT_trim")
         if show_maskedit:
             layout.menu("MASK_MT_select")
         if show_paint:
@@ -614,34 +598,6 @@ class IMAGE_PT_game_properties(Panel):
         col.separator()
         col.prop(ima, "mapping", expand=True)
 
-class IMAGE_PT_view_nurbs(Panel):
-    bl_space_type = 'IMAGE_EDITOR'
-    bl_region_type = 'UI'
-    bl_label = 'NURBS:'
-
-    @classmethod
-    def poll(cls, context):
-        return context.space_data.show_nurbsuv
-
-    def draw(self, context):
-        layout = self.layout
-        split = layout.split()
-        col = split.column()
-        cu = context.edit_object.data
-        active_breakpt = cu.active_breakpt
-        active_trim = cu.active_trim
-        active_trim_nurb = cu.active_trim_nurb
-        if active_breakpt:
-            col.label(text="Active Breakpoint:")
-            col.prop(active_breakpt, "loc", text="Location")
-            col.prop(active_breakpt, "multiplicity", text="Multiplicity")
-        if active_trim:
-            col.label(text="Active Trim:")
-            sub = col.column()
-            sub.row().prop(active_trim, "type", expand=True)
-        if active_trim_nurb:
-            col.label(text="Active Trim Geometry:")
-            col.prop(active_trim_nurb, "resolution_u", text="Resolution:")
 
 class IMAGE_PT_view_properties(Panel):
     bl_space_type = 'IMAGE_EDITOR'
@@ -651,7 +607,7 @@ class IMAGE_PT_view_properties(Panel):
     @classmethod
     def poll(cls, context):
         sima = context.space_data
-        return (sima and (sima.image or sima.show_uvedit or sima.show_nurbsuv))
+        return (sima and (sima.image or sima.show_uvedit))
 
     def draw(self, context):
         layout = self.layout
@@ -660,7 +616,6 @@ class IMAGE_PT_view_properties(Panel):
         ima = sima.image
         show_uvedit = sima.show_uvedit
         show_maskedit = sima.show_maskedit
-        show_nurbsuv = sima.show_nurbsuv
         uvedit = sima.uv_editor
 
         split = layout.split()
@@ -679,7 +634,7 @@ class IMAGE_PT_view_properties(Panel):
             col.label(text="Coordinates:")
             col.prop(uvedit, "show_normalized_coords", text="Normalized")
 
-        if show_uvedit or show_maskedit or show_nurbsuv:
+        if show_uvedit or show_maskedit:
             col = layout.column()
             col.label("Cursor Location:")
             col.row().prop(sima, "cursor_location", text="")

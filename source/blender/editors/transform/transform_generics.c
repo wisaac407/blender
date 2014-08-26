@@ -668,9 +668,6 @@ static void recalcData_image(TransInfo *t)
 		
 		DAG_id_tag_update(t->obedit->data, 0);
 	}
-	else if (t->obedit && t->obedit->type == OB_SURF) {
-		flushTransUVs(t);
-	}
 }
 
 /* helper for recalcData() - for Movie Clip transforms */
@@ -746,7 +743,7 @@ static void recalcData_objects(TransInfo *t)
 			else {
 				/* Normal updating */
 				while (nu) {
-					BKE_nurb_ensure2D(nu);
+					BKE_nurb_test2D(nu);
 					BKE_nurb_handles_calc(nu);
 					nu = nu->next;
 				}

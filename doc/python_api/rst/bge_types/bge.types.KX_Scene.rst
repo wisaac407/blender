@@ -152,8 +152,6 @@ base class --- :class:`PyObjectPlus`
 
       :arg scene: The name of the scene to replace this scene with.
       :type scene: string
-      :return: True if the scene exists and was scheduled for addition, False otherwise.
-      :rtype: boolean
 
    .. method:: suspend()
 

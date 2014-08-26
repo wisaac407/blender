@@ -139,7 +139,6 @@ Nurb *add_nurbs_primitive(bContext *C, Object *obedit, float mat[4][4], int type
 		nu->type = cutype;
 		nu->resolu = cu->resolu;
 		nu->resolv = cu->resolv;
-		nu->editknot = NULL;
 	}
 
 	switch (stype) {
@@ -321,12 +320,12 @@ Nurb *add_nurbs_primitive(bContext *C, Object *obedit, float mat[4][4], int type
 				nu->orderv = 4;
 				nu->flag = CU_SMOOTH;
 				nu->bp = (BPoint *)MEM_callocN(sizeof(BPoint) * (4 * 4), "addNurbprim6");
-				nu->flagu = CU_NURB_ENDPOINT;
-				nu->flagv = CU_NURB_ENDPOINT;
+				nu->flagu = 0;
+				nu->flagv = 0;
 				bp = nu->bp;
 
-				for (b = 0; b < 4; b++) {
-					for (a = 0; a < 4; a++) {
+				for (a = 0; a < 4; a++) {
+					for (b = 0; b < 4; b++) {
 						bp->f1 = SELECT;
 						fac = (float)a - 1.5f;
 						bp->vec[0] += fac * grid;
@@ -464,7 +463,7 @@ Nurb *add_nurbs_primitive(bContext *C, Object *obedit, float mat[4][4], int type
 		cu->actnu = BLI_countlist(editnurb);
 		cu->actvert = CU_ACT_NONE;
 
-		BKE_nurb_ensure2D(nu);
+		BKE_nurb_test2D(nu);
 	}
 
 	return nu;

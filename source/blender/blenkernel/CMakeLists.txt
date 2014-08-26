@@ -80,8 +80,7 @@ set(SRC
 	intern/constraint.c
 	intern/context.c
         intern/crazyspace.c
-        intern/curve.cpp
-        intern/curve_eval.cpp
+        intern/curve.c
 	intern/customdata.c
 	intern/customdata_file.c
 	intern/deform.c
@@ -159,7 +158,6 @@ set(SRC
 	intern/speaker.c
 	intern/subsurf_ccg.c
 	intern/suggestions.c
-	intern/surf_gridmesh.cpp
 	intern/text.c
 	intern/texture.c
 	intern/tracking.c
@@ -261,7 +259,6 @@ set(SRC
 	BKE_speaker.h
 	BKE_subsurf.h
 	BKE_suggestions.h
-	BKE_surf_trimtess.h
 	BKE_editmesh.h
 	BKE_editmesh_bvh.h
 	BKE_text.h

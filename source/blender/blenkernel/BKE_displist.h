@@ -69,8 +69,7 @@ typedef struct DispList {
 	struct DispList *next, *prev;
 	short type, flag;
 	int parts, nr;
-	short col;
-	short rt; /* CU_SMOOTH: smooth normals */
+	short col, rt;              /* rt used by initrenderNurbs */
 	float *verts, *nors;
 	int *index;
 	int charidx;

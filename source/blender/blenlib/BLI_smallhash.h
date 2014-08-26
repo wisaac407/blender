@@ -70,8 +70,4 @@ void   *BLI_smallhash_iternext(SmallHashIter *iter, uintptr_t *key)  ATTR_NONNUL
 void   *BLI_smallhash_iternew(SmallHash *sh, SmallHashIter *iter, uintptr_t *key) ATTR_NONNULL(1) ATTR_WARN_UNUSED_RESULT;
 /* void BLI_smallhash_print(SmallHash *sh); */ /* UNUSED */
 
-#ifdef DEBUG
-double BLI_smallhash_calc_quality(SmallHash *sh);
-#endif
-
 #endif /* __BLI_SMALLHASH_H__ */
