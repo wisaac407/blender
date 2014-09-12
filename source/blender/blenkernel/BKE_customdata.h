@@ -41,6 +41,8 @@ extern "C" {
 #include "BLI_sys_types.h"
 #include "BLI_utildefines.h"
 
+#include "DNA_customdata_types.h"
+
 struct BMesh;
 struct ID;
 struct CustomData;
@@ -76,6 +78,9 @@ extern const CustomDataMask CD_MASK_EVERYTHING;
 #define CD_TYPE_AS_MASK(_type) (CustomDataMask)((CustomDataMask)1 << (CustomDataMask)(_type))
 
 void customData_mask_layers__print(CustomDataMask mask);
+
+typedef void (*cd_interp)(void **sources, const float *weights, const float *sub_weights, int count, void *dest);
+typedef void (*cd_copy)(const void *source, void *dest, int count);
 
 /**
  * Checks if the layer at physical offset \a layer_n (in data->layers) support math
@@ -245,14 +250,14 @@ void *CustomData_bmesh_get_n(const struct CustomData *data, void *block, int typ
 void *CustomData_bmesh_get_layer_n(const struct CustomData *data, void *block, int n);
 
 bool CustomData_set_layer_name(const struct CustomData *data, int type, int n, const char *name);
+const char *CustomData_get_layer_name(const struct CustomData *data, int type, int n);
 
 /* gets a pointer to the active or first layer of type
  * returns NULL if there is no layer of type
  */
 void *CustomData_get_layer(const struct CustomData *data, int type);
 void *CustomData_get_layer_n(const struct CustomData *data, int type, int n);
-void *CustomData_get_layer_named(const struct CustomData *data, int type,
-                                 const char *name);
+void *CustomData_get_layer_named(const struct CustomData *data, int type, const char *name);
 int CustomData_get_offset(const struct CustomData *data, int type);
 int CustomData_get_n_offset(const struct CustomData *data, int type, int n);
 
@@ -359,6 +364,60 @@ void CustomData_external_read(struct CustomData *data,
                               struct ID *id, CustomDataMask mask, int totelem);
 void CustomData_external_reload(struct CustomData *data,
                                 struct ID *id, CustomDataMask mask, int totelem);
+
+/* Mesh-to-mesh transfer data. */
+
+struct Mesh2MeshMapping;
+typedef struct DataTransferLayerMapping DataTransferLayerMapping;
+
+typedef void (*cd_datatransfer_interp)(const DataTransferLayerMapping *laymap,
+                                       void **sources, const float *weights, int count, void *dest);
+
+/* Fake CD_LAYERS (those are actually 'real' data stored directly into elements' structs). */
+enum {
+	CD_FAKE             = 1 << 8,
+
+	/* Vertices. */
+	CD_FAKE_MDEFORMVERT = CD_FAKE | CD_MDEFORMVERT,  /* *sigh* due to how vgroups are stored :( . */
+	CD_FAKE_SHAPEKEY    = CD_FAKE | CD_SHAPEKEY,  /* Not available as real CD layer in non-bmesh context. */
+
+	/* Edges. */
+	CD_FAKE_SEAM        = CD_FAKE | 100,  /* UV seam flag for edges. */
+	CD_FAKE_CREASE      = CD_FAKE | CD_CREASE,  /* *sigh*. */
+
+	/* Multiple types of mesh elements... */
+	CD_FAKE_BWEIGHT     = CD_FAKE | CD_BWEIGHT,  /* *sigh*. */
+
+	CD_FAKE_SHARP       = CD_FAKE | 200,  /* Sharp flag for edges, smooth flag for faces. */
+};
+
+enum {
+	ME_VERT = 1,
+	ME_EDGE = 2,
+	ME_POLY = 3,
+	ME_LOOP = 4,
+};
+
+typedef struct DataTransferLayerMapping {
+	DataTransferLayerMapping *next, *prev;
+
+	int data_type;
+
+	void *data_src;      /* Data source array (can be regular CD data, vertices/edges/etc., keyblocks...). */
+	void *data_dst;      /* Data dest array (same type as dat_src). */
+	int data_n_src;      /* Index to affect in data_src (used e.g. for vgroups). */
+	int data_n_dst;      /* Index to affect in data_dst (used e.g. for vgroups). */
+	size_t elem_size;    /* Size of one element of data_src/data_dst. */
+
+	size_t data_size;    /* Size of actual data we transfer. */
+	size_t data_offset;  /* Offset of actual data we transfer (in element contained in data_src/dst). */
+	uint64_t data_flag;  /* For bitflag transfer, flag(s) to affect in transfered data. */
+
+	cd_datatransfer_interp interp;
+} DataTransferLayerMapping;
+
+/* Those functions assume src_n and dst_n layers of given type exist in resp. src and dst. */
+void CustomData_data_transfer(const struct Mesh2MeshMapping *m2mmap, const DataTransferLayerMapping *laymap);
 
 #ifdef __cplusplus
 }

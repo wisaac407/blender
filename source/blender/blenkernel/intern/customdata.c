@@ -56,6 +56,7 @@
 #include "BKE_customdata_file.h"
 #include "BKE_global.h"
 #include "BKE_main.h"
+#include "BKE_mesh_mapping.h"
 #include "BKE_multires.h"
 
 #include "bmesh.h"
@@ -92,7 +93,7 @@ typedef struct LayerTypeInfo {
 	 * (deep copy if appropriate)
 	 * if NULL, memcpy is used
 	 */
-	void (*copy)(const void *source, void *dest, int count);
+	cd_copy copy;
 
 	/**
 	 * a function to free any dynamically allocated components of this
@@ -117,8 +118,7 @@ typedef struct LayerTypeInfo {
 	 *       applying changes while reading from sources.
 	 *       See bug [#32395] - Campbell.
 	 */
-	void (*interp)(void **sources, const float *weights, const float *sub_weights,
-	               int count, void *dest);
+	cd_interp interp;
 
 	/** a function to swap the data in corners of the element */
 	void (*swap)(void *data, const int *corner_indices);
@@ -294,6 +294,46 @@ static void layerInterp_mdeformvert(void **sources, const float *weights,
 		memset(dvert, 0, sizeof(*dvert));
 	}
 }
+
+#if 0
+static void layerInterp_mdeformvert_single(void **sources, const float *weights, const float *UNUSED(sub_weights),
+                                           int count, void *dest, int def_nr_src, int def_nr_dst)
+{
+	MDeformVert *dvert_dst = dest;
+	MDeformWeight *dw_dst = NULL;
+	float dw_weight = 0.0f;
+
+	if (count <= 0) {
+		return;
+	}
+
+	for (i = 0; i < dvert_dst->totweight; i++) {
+		if (dvert_dst->dw[i].def_nr == def_nr_dst) {
+			dw_dst = &dvert_dst->dw[i];
+		}
+	}
+
+	if (!dw_dst) {
+		return;
+	}
+
+	for (i = 0; i < count; ++i) {
+		MDeformVert *dvert_src = sources[i];
+		const float interp_weight = weights ? weights[i] : 1.0f;
+
+		for (j = 0; j < source->totweight; ++j) {
+			MDeformWeight *dw_src = &dvert_src->dw[j];
+
+			if (dw_src->def_nr == def_nr_src) {
+				dw_weight += dw_src->weight * interp_weight;
+			}
+		}
+	}
+
+	/* delay writing to the destination incase dest is in sources */
+	dw_dst->weight = dw_weight;
+}
+#endif
 
 static void layerCopy_tface(const void *source, void *dest, int count)
 {
@@ -2244,7 +2284,7 @@ int CustomData_get_n_offset(const CustomData *data, int type, int n)
 bool CustomData_set_layer_name(const CustomData *data, int type, int n, const char *name)
 {
 	/* get the layer index of the first layer of type */
-	int layer_index = CustomData_get_layer_index_n(data, type, n);
+	const int layer_index = CustomData_get_layer_index_n(data, type, n);
 
 	if (layer_index == -1) return false;
 	if (!name) return false;
@@ -2252,6 +2292,13 @@ bool CustomData_set_layer_name(const CustomData *data, int type, int n, const ch
 	BLI_strncpy(data->layers[layer_index].name, name, sizeof(data->layers[layer_index].name));
 	
 	return true;
+}
+
+const char *CustomData_get_layer_name(const CustomData *data, int type, int n)
+{
+	const int layer_index = CustomData_get_layer_index_n(data, type, n);
+
+	return (layer_index == -1) ? NULL : data->layers[layer_index].name;
 }
 
 void *CustomData_set_layer(const CustomData *data, int type, void *ptr)
@@ -3429,3 +3476,144 @@ void CustomData_external_remove_object(CustomData *data, ID *id)
 }
 #endif
 
+/* ********** Mesh-to-mesh data transfer ********** */
+static void customdata_data_transfer_interp_generic(const DataTransferLayerMapping *laymap, void **sources,
+                                                    const float *weights, int count, void *data_dst)
+{
+	/* Fake interpolation, we actually copy highest weighted source to dest.
+	 * Note we also handle bitflags here. */
+
+	int max_weight_idx = 0;
+
+	const size_t data_size = laymap->data_size;
+	const uint64_t data_flag = laymap->data_flag;
+
+	if (count > 1) {
+		float max_weight = 0.0f;
+		int i;
+
+		for (i = 0; i < count; i++) {
+			if (weights[i] > max_weight) {
+				max_weight = weights[i];
+				max_weight_idx = i;
+			}
+		}
+	}
+
+	if (data_flag) {
+#define COPY_BIT_FLAG(_type, _dst, _src, _f)                    \
+{                                                               \
+	const _type _flag = *((_type *)(_src)) & ((_type)(_f));     \
+	*((_type *)(_dst)) &= ~(_f);                                \
+	*((_type *)(_dst)) |= _flag;                                \
+} (void) 0
+		switch (data_size) {
+			case 1:
+				COPY_BIT_FLAG(uint8_t, data_dst, sources[max_weight_idx], data_flag);
+			case 2:
+				COPY_BIT_FLAG(uint16_t, data_dst, sources[max_weight_idx], data_flag);
+			case 4:
+				COPY_BIT_FLAG(uint32_t, data_dst, sources[max_weight_idx], data_flag);
+			case 8:
+				COPY_BIT_FLAG(uint64_t, data_dst, sources[max_weight_idx], data_flag);
+			default:
+				//printf("ERROR %s: Unknown flags-container size (%zu)\n", __func__, datasize);
+				break;
+		}
+#undef COPY_BIT_FLAG
+	}
+	else {
+		memcpy(data_dst, sources[max_weight_idx], data_size);
+	}
+}
+
+void CustomData_data_transfer(const Mesh2MeshMapping *m2mmap, const DataTransferLayerMapping *laymap)
+{
+	Mesh2MeshMappingItem *mapit = m2mmap->items;
+	const int totelem = m2mmap->nbr_items;
+	int i;
+
+	const int data_type = laymap->data_type;
+	void *data_src = laymap->data_src;
+	void *data_dst = laymap->data_dst;
+
+	size_t data_step;
+	size_t data_size;
+	size_t data_offset;
+
+	cd_datatransfer_interp interp = NULL;
+	cd_interp interp_cd = NULL;
+	cd_copy copy_cd = NULL;
+
+	size_t tmp_buff_size = 32;
+	void **tmp_data_src;
+
+	if (!data_src || !data_dst) {
+		return;
+	}
+
+	tmp_data_src = MEM_mallocN(sizeof(*tmp_data_src) * tmp_buff_size, __func__);
+
+	if (data_type & CD_FAKE) {
+		data_step = laymap->elem_size;
+		data_size = laymap->data_size;
+		data_offset = laymap->data_offset;
+
+		interp = laymap->interp ? laymap->interp : customdata_data_transfer_interp_generic;
+	}
+	else {
+		const LayerTypeInfo *type_info = layerType_getInfo(data_type);
+
+		/* Note: we can use 'fake' CDLayers, like e.g. for crease, bweight, etc. :/ */
+		data_size = (size_t)type_info->size;
+		data_step = laymap->elem_size ? laymap->elem_size : data_size;
+		data_offset = laymap->data_offset;
+		interp_cd = type_info->interp;
+		copy_cd = type_info->copy;
+	}
+
+	for (i = 0; i < totelem; i++, data_dst = (char *)data_dst + data_step, mapit++) {
+		const int nbr_sources = mapit->nbr_sources;
+		float max_weight = 0.0f;
+		int max_weight_idx = 0;
+		int j;
+
+		if (!nbr_sources) {
+			/* No sources for this element, skip it. */
+			continue;
+		}
+
+		if (UNLIKELY(nbr_sources > tmp_buff_size)) {
+			tmp_buff_size = (size_t)nbr_sources;
+			tmp_data_src = MEM_reallocN(tmp_data_src, sizeof(*tmp_data_src) * tmp_buff_size);
+		}
+
+		for (j = 0; j < nbr_sources; j++) {
+			const size_t src_idx = (size_t)mapit->indices_src[j];
+			tmp_data_src[j] = (char *)data_src + data_step * src_idx + data_offset;
+
+			if (mapit->weights_src[j] > max_weight) {
+				max_weight = mapit->weights_src[j];
+				max_weight_idx = j;
+			}
+		}
+
+		if (interp) {
+			interp(laymap, tmp_data_src, mapit->weights_src, nbr_sources, (char *)data_dst + data_offset);
+		}
+		else if (nbr_sources > 1 && interp_cd) {
+			interp_cd(tmp_data_src, mapit->weights_src, NULL, nbr_sources, (char *)data_dst + data_offset);
+		}
+		else {
+			/* No interpolation, just copy highest weight source element's data. */
+			if (copy_cd) {
+				copy_cd(tmp_data_src[max_weight_idx], (char *)data_dst + data_offset, 1);
+			}
+			else {
+				memcpy((char *)data_dst + data_offset, tmp_data_src[max_weight_idx], data_size);
+			}
+		}
+	}
+
+	MEM_freeN(tmp_data_src);
+}

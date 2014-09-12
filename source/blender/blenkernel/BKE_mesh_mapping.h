@@ -31,6 +31,9 @@
  *  \ingroup bke
  */
 
+struct CustomData;
+struct DerivedMesh;
+struct MVert;
 struct MPoly;
 struct MEdge;
 struct MLoop;
@@ -109,6 +112,10 @@ void BKE_mesh_vert_poly_map_create(
         MeshElemMap **r_map, int **r_mem,
         const struct MPoly *mface, const struct MLoop *mloop,
         int totvert, int totface, int totloop);
+void BKE_mesh_vert_loop_map_create(
+        MeshElemMap **r_map, int **r_mem,
+        const struct MPoly *mface, const struct MLoop *mloop,
+        int totvert, int totface, int totloop);
 void BKE_mesh_vert_edge_map_create(
         MeshElemMap **r_map, int **r_mem,
         const struct MEdge *medge, int totvert, int totedge);
@@ -128,6 +135,149 @@ int *BKE_mesh_calc_smoothgroups(
         const struct MPoly *mpoly, const int totpoly,
         const struct MLoop *mloop, const int totloop,
         int *r_totgroup, const bool use_bitflags);
+
+/* Generic ways to map some geometry elements from a source mesh to a dest one. */
+
+typedef struct Mesh2MeshMappingItem {
+	int nbr_sources;
+	int *indices_src;  /* NULL if no source found. */
+	float *weights_src;  /* NULL if no source found, else, always normalized! */
+	float hit_distance;  /* FLT_MAX if irrelevant or no source found. */
+	int island;  /* For loops only. */
+} Mesh2MeshMappingItem;
+
+/* All mapping computing func return this. */
+typedef struct Mesh2MeshMapping {
+	Mesh2MeshMappingItem *items;  /* Array, one item per dest element. */
+	int nbr_items;
+	void *mem;  /* Memory handler, internal use only. */
+} Mesh2MeshMapping;
+
+
+typedef struct Mesh2MeshMappingIslandItem {
+	int nbr_polys;
+	int *polys_idx;
+} Mesh2MeshMappingIslandItem;
+
+/* For loops, to which poly island each loop belongs.
+ * Island definition can vary based on data type (UVs, loop normals, etc.). */
+typedef struct Mesh2MeshMappingIslands {
+	int nbr_loops;
+	int *loops_to_islands_idx;
+	int nbr_islands;
+	Mesh2MeshMappingIslandItem *islands;  /* Array, one item per island. */
+	void *mem;  /* Memory handler, internal use only. */
+} Mesh2MeshMappingIslands;
+
+typedef bool (*loop_island_compute)(struct DerivedMesh *dm, Mesh2MeshMappingIslands *r_islands);
+
+/* Helpers! */
+void BKE_mesh2mesh_mapping_free(Mesh2MeshMapping *map);
+
+void BKE_mesh2mesh_mapping_islands_create(Mesh2MeshMappingIslands *r_islands, const int num_loops);
+void BKE_mesh2mesh_mapping_islands_add_island(Mesh2MeshMappingIslands *r_islands,
+                                              const int num_loops, int *loop_indices,
+                                              const int num_polys, int *poly_indices);
+
+/* TODO:
+ * Add other 'from/to' mapping sources, like e.g. using an UVMap, etc.
+ *     http://blenderartists.org/forum/showthread.php?346458-Move-Vertices-to-the-location-of-the-Reference-Mesh-based-on-the-UV-Position
+ * We could also use similar topology mappings inside a same mesh
+ * (cf. Campbell's 'select face islands from similar topology' wip work).
+ * Also, users will have to check, whether we can get rid of some modes here, not sure all will be useful!
+ */
+enum {
+	M2MMAP_USE_VERT                      = 1 << 4,
+	M2MMAP_USE_EDGE                      = 1 << 5,
+	M2MMAP_USE_POLY                      = 1 << 6,
+	M2MMAP_USE_LOOP                      = 1 << 7,
+
+	M2MMAP_USE_NEAREST                   = 1 << 8,
+	M2MMAP_USE_NORPROJ                   = 1 << 9,
+	M2MMAP_USE_INTERP                    = 1 << 10,
+	M2MMAP_USE_NORMAL                    = 1 << 11,
+
+	/* ***** Target's vertices ***** */
+	M2MMAP_MODE_VERT                     = 1 << 24,
+	/* Nearest source vert. */
+	M2MMAP_MODE_VERT_NEAREST             = M2MMAP_MODE_VERT | M2MMAP_USE_VERT | M2MMAP_USE_NEAREST,
+
+	/* Nearest vertex of nearest edge. */
+	M2MMAP_MODE_VERT_EDGE_NEAREST        = M2MMAP_MODE_VERT | M2MMAP_USE_EDGE | M2MMAP_USE_NEAREST,
+	/* This one uses two verts of selected edge (weighted interpolation). */
+	/* Nearest point on nearest edge. */
+	M2MMAP_MODE_VERT_EDGEINTERP_NEAREST  = M2MMAP_MODE_VERT | M2MMAP_USE_EDGE | M2MMAP_USE_NEAREST | M2MMAP_USE_INTERP,
+
+	/* Nearest vertex of nearest poly. */
+	M2MMAP_MODE_VERT_POLY_NEAREST        = M2MMAP_MODE_VERT | M2MMAP_USE_POLY | M2MMAP_USE_NEAREST,
+	/* Those two use all verts of selected poly (weighted interpolation). */
+	/* Nearest point on nearest poly. */
+	M2MMAP_MODE_VERT_POLYINTERP_NEAREST  = M2MMAP_MODE_VERT | M2MMAP_USE_POLY | M2MMAP_USE_NEAREST | M2MMAP_USE_INTERP,
+	/* Point on nearest face hit by ray from target vertex's normal. */
+	M2MMAP_MODE_VERT_POLYINTERP_VNORPROJ = M2MMAP_MODE_VERT | M2MMAP_USE_POLY | M2MMAP_USE_NORPROJ | M2MMAP_USE_INTERP,
+
+	/* ***** Target's edges ***** */
+	M2MMAP_MODE_EDGE                     = 1 << 25,
+
+	/* Source edge which both vertices are nearest of dest ones. */
+	M2MMAP_MODE_EDGE_VERT_NEAREST        = M2MMAP_MODE_EDGE | M2MMAP_USE_VERT | M2MMAP_USE_NEAREST,
+
+	/* Nearest source edge (using mid-point). */
+	M2MMAP_MODE_EDGE_NEAREST             = M2MMAP_MODE_EDGE | M2MMAP_USE_EDGE | M2MMAP_USE_NEAREST,
+
+	/* Nearest edge of nearest poly (using mid-point). */
+	M2MMAP_MODE_EDGE_POLY_NEAREST        = M2MMAP_MODE_EDGE | M2MMAP_USE_POLY | M2MMAP_USE_NEAREST,
+
+	/* ***** Target's polygons ***** */
+	M2MMAP_MODE_POLY                     = 1 << 26,
+
+	/* Nearest source poly. */
+	M2MMAP_MODE_POLY_NEAREST             = M2MMAP_MODE_POLY | M2MMAP_USE_POLY | M2MMAP_USE_NEAREST,
+	/* Source poly from best normal-matching dest poly. */
+	M2MMAP_MODE_POLY_NOR                 = M2MMAP_MODE_POLY | M2MMAP_USE_POLY | M2MMAP_USE_NORMAL,
+
+	/* Project dest poly onto source mesh using its normal, and use interpolation of all intersecting source polys. */
+	M2MMAP_MODE_POLY_POLYINTERP_PNORPROJ = M2MMAP_MODE_POLY | M2MMAP_USE_POLY | M2MMAP_USE_NORPROJ | M2MMAP_USE_INTERP,
+
+	/* ***** Target's loops ***** */
+	/* Note: when islands are given to loop mapping func, all loops from the same destination face will always be mapped
+	 *       to loops of source faces within a same island, regardless of mapping mode. */
+	M2MMAP_MODE_LOOP                     = 1 << 27,
+
+	/* Best normal-matching loop from nearest vert. */
+	M2MMAP_MODE_LOOP_NEAREST_LOOPNOR     = M2MMAP_MODE_LOOP | M2MMAP_USE_LOOP | M2MMAP_USE_VERT | M2MMAP_USE_NEAREST | M2MMAP_USE_NORMAL,
+	/* Loop from best normal-matching poly from nearest vert. */
+	M2MMAP_MODE_LOOP_NEAREST_POLYNOR     = M2MMAP_MODE_LOOP | M2MMAP_USE_POLY | M2MMAP_USE_VERT | M2MMAP_USE_NEAREST | M2MMAP_USE_NORMAL,
+
+	/* Loop from nearest vertex of nearest poly. */
+	M2MMAP_MODE_LOOP_POLY_NEAREST        = M2MMAP_MODE_LOOP | M2MMAP_USE_POLY | M2MMAP_USE_NEAREST,
+	/* Those two use all verts of selected poly (weighted interpolation). */
+	/* Nearest point on nearest poly. */
+	M2MMAP_MODE_LOOP_POLYINTERP_NEAREST  = M2MMAP_MODE_LOOP | M2MMAP_USE_POLY | M2MMAP_USE_NEAREST | M2MMAP_USE_INTERP,
+	/* Point on nearest face hit by ray from target loop's normal. */
+	M2MMAP_MODE_LOOP_POLYINTERP_LNORPROJ = M2MMAP_MODE_LOOP | M2MMAP_USE_POLY | M2MMAP_USE_NORPROJ | M2MMAP_USE_INTERP,
+
+	/* ***** Same topology, applies to all four elements types. ***** */
+	M2MMAP_MODE_TOPOLOGY                 = M2MMAP_MODE_VERT | M2MMAP_MODE_EDGE | M2MMAP_MODE_POLY | M2MMAP_MODE_LOOP,
+};
+
+/* TODO add mesh2mesh versions (we'll need mesh versions of bvhtree funcs too, though!). */
+
+void BKE_dm2mesh_mapping_verts_compute(
+        const int mode, const struct SpaceTransform *space_transform, const float max_dist,
+        const struct MVert *verts_dst, const int numverts_dst,
+        struct DerivedMesh *dm_src, Mesh2MeshMapping *r_map);
+
+void BKE_dm2mesh_mapping_edges_compute(
+        const int mode, const struct SpaceTransform *space_transform, const float max_dist,
+        const struct MVert *verts_dst, const int numverts_dst, const struct MEdge *edges_dst, const int numedges_dst,
+        struct DerivedMesh *dm_src, Mesh2MeshMapping *r_map);
+
+void BKE_dm2mesh_mapping_polys_compute(
+        const int mode, const struct SpaceTransform *space_transform, const float max_dist,
+        struct MVert *verts_dst, const int numverts_dst, struct MPoly *polys_dst, const int numpolys_dst,
+        struct MLoop *loops_dst, const int numloops_dst, struct CustomData *pdata_dst, struct DerivedMesh *dm_src,
+        struct Mesh2MeshMapping *r_map);
 
 /* No good (portable) way to have exported inlined functions... */
 #define BKE_MESH_TESSFACE_VINDEX_ORDER(_mf, _v)  (                          \

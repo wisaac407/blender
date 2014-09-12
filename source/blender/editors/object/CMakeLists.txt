@@ -55,6 +55,7 @@ set(SRC
 	object_relations.c
 	object_select.c
 	object_shapekey.c
+	object_transfer_data.c
 	object_transform.c
 	object_warp.c
 	object_vgroup.c

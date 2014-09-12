@@ -747,6 +747,194 @@ static void vgroup_copy_active_to_sel(Object *ob, eVGroupSelect subset_type)
 
 /***********************Start weight transfer (WT)*********************************/
 
+static void vgroups_datatransfer_interp(const DataTransferLayerMapping *laymap,
+                                        void **sources, const float *weights, int count, void *dest)
+{
+	MDeformVert **data_src = (MDeformVert **)sources;
+	MDeformVert *data_dst = (MDeformVert *)dest;
+	const int idx_src = laymap->data_n_src;
+	const int idx_dst = laymap->data_n_dst;
+	int i, j;
+
+	MDeformWeight *dw_src;
+	MDeformWeight *dw_dst = defvert_find_index(data_dst, idx_dst);
+	float weight_dst = 0.0f;
+
+	for (i = count; i--;) {
+		for (j = data_src[i]->totweight; j--;) {
+			if ((dw_src = &data_src[i]->dw[j])->def_nr == idx_src) {
+				weight_dst += dw_src->weight * weights[i];
+				break;
+			}
+		}
+	}
+
+	if (!dw_dst) {
+		defvert_add_index_notest(data_dst, idx_dst, weight_dst);
+	}
+	else {
+		dw_dst->weight = weight_dst;
+	}
+}
+
+static bool data_transfer_layersmapping_vgroups_multisrc_to_dst(
+        ListBase *r_map, const int num_create,
+        Object *ob_src, Object *ob_dst, MDeformVert *data_dst, MDeformVert *data_src,
+        const int tolayers_select, bool *use_layers_src, const int num_layers_src)
+{
+	int idx_src = num_layers_src;
+	int idx_dst;
+
+	const size_t elem_size = sizeof(*((MDeformVert *)NULL));
+
+	switch (tolayers_select) {
+		case MDT_TOLAYERS_INDEX:
+			{
+				idx_dst = BLI_countlist(&ob_dst->defbase);
+
+				/* Find last source actually used! */
+				while (idx_src-- && !use_layers_src[idx_src]);
+				idx_src++;
+
+				if (idx_dst < idx_src) {
+					if (!num_create) {
+						return false;
+					}
+					/* Create as much vgroups as necessary! */
+					for (; idx_dst < idx_src; idx_dst++) {
+						ED_vgroup_add(ob_dst);
+					}
+				}
+				while (idx_src--) {
+					if (!use_layers_src[idx_src]) {
+						continue;
+					}
+					data_transfer_layersmapping_add_item(r_map, CD_FAKE_MDEFORMVERT, data_src, data_dst, idx_src, idx_src,
+					                                     elem_size, 0, 0, 0, vgroups_datatransfer_interp);
+				}
+			}
+			break;
+		case MDT_TOLAYERS_NAME:
+			while (idx_src--) {
+				bDeformGroup *dg_src;
+
+				if (!use_layers_src[idx_src]) {
+					continue;
+				}
+
+				dg_src = BLI_findlink(&ob_src->defbase, idx_src);
+				if ((idx_dst = defgroup_name_index(ob_dst, dg_src->name)) == -1) {
+					if (!num_create) {
+						BLI_freelistN(r_map);
+						return false;
+					}
+					ED_vgroup_add_name(ob_dst, dg_src->name);
+					idx_dst = ob_dst->actdef - 1;
+				}
+				data_transfer_layersmapping_add_item(r_map, CD_FAKE_MDEFORMVERT, data_src, data_dst, idx_src, idx_dst,
+				                                     elem_size, 0, 0, 0, vgroups_datatransfer_interp);
+			}
+			break;
+		default:
+			return false;
+	}
+
+	return true;
+}
+
+bool data_transfer_layersmapping_vgroups(
+        struct ListBase *r_map, const int num_create, struct Object *ob_src, struct Object *ob_dst,
+        struct CustomData *cd_src, struct CustomData *cd_dst, const int fromlayers_select, const int tolayers_select)
+{
+	int idx_src, idx_dst;
+	MDeformVert *data_src, *data_dst = NULL;
+
+	const size_t elem_size = sizeof(*((MDeformVert *)NULL));
+
+	if ((data_src = CustomData_get_layer(cd_src, CD_MDEFORMVERT)) == NULL) {
+		return false;
+	}
+	if (!CustomData_has_layer(cd_dst, CD_MDEFORMVERT)) {
+		if (!num_create) {
+			return false;
+		}
+		ED_vgroup_data_create((ID *)ob_dst->data);
+		data_dst = CustomData_get_layer(cd_dst, CD_MDEFORMVERT);
+	}
+
+	if (fromlayers_select == MDT_FROMLAYERS_ACTIVE) {
+		if ((idx_src = ob_src->actdef - 1) == -1){
+			return false;
+		}
+		switch (tolayers_select) {
+			case MDT_TOLAYERS_ACTIVE:
+				if ((idx_dst = ob_dst->actdef - 1) == -1) {
+					bDeformGroup *dg_src;
+					if (!num_create) {
+						return false;
+					}
+					dg_src = BLI_findlink(&ob_src->defbase, idx_src);
+					ED_vgroup_add_name(ob_dst, dg_src->name);
+					idx_dst = ob_dst->actdef - 1;
+				}
+				break;
+			case MDT_TOLAYERS_INDEX:
+				{
+					int num = BLI_countlist(&ob_src->defbase);
+					idx_dst = idx_src;
+					if (num <= idx_dst) {
+						if (!num_create) {
+							return false;
+						}
+						/* Create as much vgroups as necessary! */
+						for (; num <= idx_dst; num++) {
+							ED_vgroup_add(ob_dst);
+						}
+					}
+				}
+				break;
+			case MDT_TOLAYERS_NAME:
+				{
+					bDeformGroup *dg_src = BLI_findlink(&ob_src->defbase, idx_src);
+					if ((idx_dst = defgroup_name_index(ob_dst, dg_src->name)) == -1) {
+						if (!num_create) {
+							return false;
+						}
+						ED_vgroup_add_name(ob_dst, dg_src->name);
+						idx_dst = ob_dst->actdef - 1;
+					}
+				}
+				break;
+			default:
+				return false;
+		}
+
+		data_transfer_layersmapping_add_item(r_map, CD_FAKE_MDEFORMVERT, data_src, data_dst, idx_src, idx_dst,
+		                                     elem_size, 0, 0, 0, vgroups_datatransfer_interp);
+	}
+	else if (fromlayers_select == MDT_FROMLAYERS_ALL) {
+		int num_src = BLI_countlist(&ob_src->defbase);
+		bool *use_layers_src = MEM_mallocN(sizeof(*use_layers_src) * (size_t)num_src, __func__);
+		bool ret;
+
+		memset(use_layers_src, true, sizeof(*use_layers_src) * num_src);
+
+		ret = data_transfer_layersmapping_vgroups_multisrc_to_dst(r_map, num_create, ob_src, ob_dst, data_src, data_dst,
+		                                                          tolayers_select, use_layers_src, num_src);
+
+		MEM_freeN(use_layers_src);
+		return ret;
+	}
+	/* TODO: add vgroups-specific 'from-select' modes here! */
+	else {
+		return false;
+	}
+
+	return true;
+}
+
+
+
 typedef enum WT_VertexGroupMode {
 	WT_REPLACE_ACTIVE_VERTEX_GROUP = 1,
 	WT_REPLACE_ALL_VERTEX_GROUPS = 2

@@ -28,6 +28,7 @@
  *  \ingroup bke
  */
 
+#include "DNA_customdata_types.h"     /* needed for all enum typdefs */
 #include "DNA_modifier_types.h"     /* needed for all enum typdefs */
 #include "BLI_compiler_attrs.h"
 #include "BKE_customdata.h"

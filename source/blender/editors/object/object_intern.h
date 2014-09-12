@@ -35,6 +35,8 @@ struct wmOperatorType;
 struct KeyBlock;
 struct Lattice;
 struct Curve;
+struct CustomData;
+struct DataTransferLayerMapping;
 struct Object;
 struct Mesh;
 struct HookModifierData;
@@ -237,6 +239,10 @@ void OBJECT_OT_vertex_weight_set_active(struct wmOperatorType *ot);
 void OBJECT_OT_vertex_weight_normalize_active_vertex(struct wmOperatorType *ot);
 void OBJECT_OT_vertex_weight_copy(struct wmOperatorType *ot);
 
+bool data_transfer_layersmapping_vgroups(
+        struct ListBase *r_map, const int num_create, struct Object *ob_src, struct Object *ob_dst,
+        struct CustomData *cd_src, struct CustomData *cd_dst, const int fromlayers_select, const int tolayers_select);
+
 /* object_warp.c */
 void OBJECT_OT_vertex_warp(struct wmOperatorType *ot);
 
@@ -265,6 +271,19 @@ void OBJECT_OT_lod_remove(struct wmOperatorType *ot);
 
 /* object_random.c */
 void OBJECT_OT_vertex_random(struct wmOperatorType *ot);
+
+/* object_transfer_data.c */
+void OBJECT_OT_data_transfer(struct wmOperatorType *ot);
+
+/* Copied from BKE_customdata.h :( */
+typedef void (*cd_datatransfer_interp)(const struct DataTransferLayerMapping *laymap,
+                                       void **sources, const float *weights, int count, void *dest);
+
+void data_transfer_layersmapping_add_item(
+        struct ListBase *r_map, const int data_type, void *data_src, void *data_dst,
+        const int data_n_src, const int data_n_dst,
+        const size_t elem_size, const size_t data_size, const size_t data_offset, const uint64_t data_flag,
+        cd_datatransfer_interp interp);
 
 #endif /* __OBJECT_INTERN_H__ */
 
