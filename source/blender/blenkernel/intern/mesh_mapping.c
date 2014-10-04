@@ -584,7 +584,7 @@ static void bke_mesh2mesh_mapping_item_define(
 
 void BKE_mesh2mesh_mapping_islands_create(Mesh2MeshMappingIslands *r_islands, const int num_loops)
 {
-	r_islands->loops_to_islands = MEM_mallocN(sizeof(*r_islands->loops_to_islands) * (size_t)num_loops, __func__);
+	r_islands->loops_to_islands_idx = MEM_mallocN(sizeof(*r_islands->loops_to_islands_idx) * (size_t)num_loops, __func__);
 	r_islands->islands = NULL;
 	r_islands->nbr_islands = 0;
 	r_islands->mem = NULL;
@@ -594,30 +594,28 @@ void BKE_mesh2mesh_mapping_islands_add_island(Mesh2MeshMappingIslands *r_islands
                                               const int num_loops, int *loop_indices,
                                               const int num_polys, int *poly_indices)
 {
-	Mesh2MeshMappingIslandItem *island;
+	Mesh2MeshMappingIslandItem *islands;
 	const int curr_island_idx = r_islands->nbr_islands++;
 	const size_t curr_num_islands = (size_t)r_islands->nbr_islands;
 	int i = num_loops;
 
+	r_islands->nbr_loops = num_loops;
 	while (i--) {
-		r_islands->loops_to_islands[loop_indices[i]] = curr_island_idx;
+		r_islands->loops_to_islands_idx[loop_indices[i]] = curr_island_idx;
 	}
 
 	/* XXX TODO UGLY!!! Quick code, to be done better. */
-	island = MEM_mallocN(sizeof(*islands) * curr_num_islands, __func__);
+	islands = MEM_mallocN(sizeof(*islands) * curr_num_islands, __func__);
 	if (curr_island_idx) {
-		memcpy(island, r_islands->islands, curr_num_islands - 1);
+		memcpy(islands, r_islands->islands, curr_num_islands - 1);
 		MEM_freeN(r_islands->islands);
 	}
 	r_islands->islands = islands;
 
 	islands = &islands[curr_island_idx];
-	islands->nbr_loops = num_loops;
-	islands->island_to_loops = MEM_mallocN(sizeof(*islands->island_to_loops) * (size_t)num_loops, __func__);
-	memcpy(islands->island_to_loops, loop_indices, sizeof(*islands->island_to_loops) * (size_t)num_loops);
 	islands->nbr_polys = num_polys;
-	islands->island_to_polys = MEM_mallocN(sizeof(*islands->island_to_polys) * (size_t)num_polys, __func__);
-	memcpy(islands->island_to_polys, poly_indices, sizeof(*islands->island_to_polys) * (size_t)num_polys);
+	islands->polys_idx = MEM_mallocN(sizeof(*islands->polys_idx) * (size_t)num_polys, __func__);
+	memcpy(islands->polys_idx, poly_indices, sizeof(*islands->polys_idx) * (size_t)num_polys);
 }
 
 static void bke_mesh2mesh_mapping_islands_free(Mesh2MeshMappingIslands *islands)
@@ -631,17 +629,16 @@ static void bke_mesh2mesh_mapping_islands_free(Mesh2MeshMappingIslands *islands)
 
 	while (i--) {
 		Mesh2MeshMappingIslandItem *it = &islands->islands[i];
-		if (it->nbr_loops) {
-			MEM_freeN(it->island_to_loops);
-		}
 		if (it->nbr_polys) {
-			MEM_freeN(it->island_to_polys);
+			MEM_freeN(it->polys_idx);
 		}
 	}
 
 	MEM_freeN(islands->islands);
-	MEM_freeN(islands->loops_to_islands);
+	MEM_freeN(islands->loops_to_islands_idx);
 
+	islands->nbr_loops = 0;
+	islands->loops_to_islands_idx = NULL;
 	islands->nbr_islands = 0;
 	islands->islands = NULL;
 	islands->mem = NULL;
@@ -1433,26 +1430,25 @@ void BKE_dm2mesh_mapping_loops_compute(
 		MPoly *polys_src = DM_get_poly_array(dm_src, &polys_allocated_src);
 		const int num_polys_src = dm_src->getNumPolys(dm_src);
 		bool faces_allocated_src;
-		MFace *faces_src;
+		MFace *faces_src = NULL;
 		int num_faces_src;
 
 		int *orig_poly_idx_src = NULL;
 
-		size_t interp_buff_size = 32;  /* Will be enough in 99% of cases. */
+		size_t buff_size_interp = 32;  /* Will be enough in 99% of cases. */
 		float (*vcos_interp)[3] = NULL;
 		int *indices_interp = NULL;
 		float *weights_interp = NULL;
 
-		int tidx, pidx_dst, lidx_dst, plidx_dst;
-		int i, j, k;
+		int tidx, pidx_dst, lidx_dst, plidx_dst, pidx_src, lidx_src;
 
 		if (!use_from_vert) {
 			vcos_src = MEM_mallocN(sizeof(*vcos_src) * (size_t)num_verts_src, __func__);
 			dm_src->getVertCos(dm_src, vcos_src);
 
-			vcos_interp = MEM_mallocN(sizeof(*vcos_interp) * interp_buff_size, __func__);
-			indices_interp = MEM_mallocN(sizeof(*indices_interp) * interp_buff_size, __func__);
-			weights_interp = MEM_mallocN(sizeof(*weights_interp) * interp_buff_size, __func__);
+			vcos_interp = MEM_mallocN(sizeof(*vcos_interp) * buff_size_interp, __func__);
+			indices_interp = MEM_mallocN(sizeof(*indices_interp) * buff_size_interp, __func__);
+			weights_interp = MEM_mallocN(sizeof(*weights_interp) * buff_size_interp, __func__);
 		}
 
 		{
@@ -1477,9 +1473,9 @@ void BKE_dm2mesh_mapping_loops_compute(
 				if (!loop_nors_dst) {
 					loop_nors_dst = CustomData_add_layer(ldata_dst, CD_NORMAL, CD_CALLOC, NULL, numloops_dst);
 					CustomData_set_layer_flag(ldata_dst, CD_NORMAL, CD_FLAG_TEMPORARY);
-					void BKE_mesh_normals_loop_split(verts_dst, numverts_dst, edges_dst, numedges_dst,
-					                                 loops_dst, loop_nors_dst, numloops_dst,
-					                                 polys_dst, poly_nors_dst, numpolys_dst, split_angle_dst);
+					BKE_mesh_normals_loop_split(verts_dst, numverts_dst, edges_dst, numedges_dst,
+					                            loops_dst, loop_nors_dst, numloops_dst,
+					                            polys_dst, poly_nors_dst, numpolys_dst, split_angle_dst);
 				}
 			}
 			if (need_pnors_src || need_lnors_src) {
@@ -1536,8 +1532,8 @@ void BKE_dm2mesh_mapping_loops_compute(
 						memset(verts_active, 0, sizeof(*verts_active) * (size_t)num_verts_src);
 						for (i = 0; i < isld->nbr_polys; i++) {
 							MPoly *mp_src = &polys_src[isld->polys_idx[i]];
-							for (lidx = mp->loopstart; lidx < mp_src->loopstart + mp_src->totloop; lidx++) {
-								verts_active[loops_src[lidx].v] = true;
+							for (lidx_src = mp_src->loopstart; lidx_src < mp_src->loopstart + mp_src->totloop; lidx_src++) {
+								verts_active[loops_src[lidx_src].v] = true;
 								num_verts_active++;
 							}
 						}
@@ -1553,13 +1549,15 @@ void BKE_dm2mesh_mapping_loops_compute(
 				MEM_freeN(verts_active);
 			}
 			else {
-				bvhtree_from_mesh_verts(&treedata[tidx], dm_src, 0.0, 2, 6);
+				for (tidx = 0; tidx < num_trees; tidx++) {
+					bvhtree_from_mesh_verts(&treedata[tidx], dm_src, 0.0, 2, 6);
+				}
 			}
 		}
 		else {  /* We use polygons. */
 			if (use_islands) {
 				/* bvhtree here uses tesselated faces... */
-				const int dirty_tess_flag = dm_src->dirty & DM_DIRTY_TESS_CDLAYERS;
+				const unsigned int dirty_tess_flag = dm_src->dirty & DM_DIRTY_TESS_CDLAYERS;
 				bool *faces_active;
 
 				/* We do not care about tessellated data here, only geometry itself is important. */
@@ -1575,7 +1573,7 @@ void BKE_dm2mesh_mapping_loops_compute(
 				orig_poly_idx_src = dm_src->getTessFaceDataArray(dm_src, CD_ORIGINDEX);
 				faces_active = MEM_mallocN(sizeof(*faces_active) * (size_t)num_faces_src, __func__);
 
-				for (tidx = 0; tidx < numtrees; tidx++) {
+				for (tidx = 0; tidx < num_trees; tidx++) {
 					Mesh2MeshMappingIslandItem *isld = gen_islands_src ? &islands.islands[tidx] : NULL;
 					if (isld) {
 						int num_faces_active = 0;
@@ -1599,9 +1597,13 @@ void BKE_dm2mesh_mapping_loops_compute(
 						}
 					}
 				}
+
+				MEM_freeN(faces_active);
 			}
 			else {
-				bvhtree_from_mesh_faces(&treedata[tidx], dm_src, 0.0, 2, 6);
+				for (tidx = 0; tidx < num_trees; tidx++) {
+					bvhtree_from_mesh_faces(&treedata[tidx], dm_src, 0.0, 2, 6);
+				}
 				orig_poly_idx_src = dm_src->getTessFaceDataArray(dm_src, CD_ORIGINDEX);
 			}
 		}
@@ -1648,7 +1650,7 @@ void BKE_dm2mesh_mapping_loops_compute(
 							int best_idx_src = -1;
 
 							if (mode == M2MMAP_MODE_LOOP_NEAREST_LOOPNOR) {
-								nor_dst = &loop_nors_dst[plidx + mp_src->loopstart];
+								nor_dst = &loop_nors_dst[plidx_dst + mp_dst->loopstart];
 								nors_src = loop_nors_src;
 							}
 							else {  /* if (mode == M2MMAP_MODE_LOOP_NEAREST_POLYNOR) { */
@@ -1682,14 +1684,14 @@ void BKE_dm2mesh_mapping_loops_compute(
 						copy_v3_v3(tmp_co, verts_dst[ml_dst->v].co);
 						copy_v3_v3(tmp_no, loop_nors_dst[plidx_dst + mp_dst->loopstart]);
 
-						hitdist = bke_mesh2mesh_bvhtree_query_raycast(&treedata, &rayhit, space_transform,
+						hitdist = bke_mesh2mesh_bvhtree_query_raycast(treedata, &rayhit, space_transform,
 						                                              tmp_co, tmp_no, radius, max_dist_sq);
 
 						if (rayhit.index >= 0 && hitdist <= max_dist) {
 							facs[tidx][plidx_dst][0] = (hitdist != 0.0f) ? (1.0f / hitdist) : FLT_MAX;
 							facs[tidx][plidx_dst][1] = hitdist;
 							facs[tidx][plidx_dst][2] = (float)orig_poly_idx_src[rayhit.index];
-							copy_v3_v3(facs[tidx][plidx_dst][3], rayhit.co);
+							copy_v3_v3(&facs[tidx][plidx_dst][3], rayhit.co);
 						}
 						else {
 							/* No source for this dest loop! */
@@ -1705,14 +1707,14 @@ void BKE_dm2mesh_mapping_loops_compute(
 						copy_v3_v3(tmp_co, verts_dst[ml_dst->v].co);
 						nearest.index = -1;
 
-						hitdist = bke_mesh2mesh_bvhtree_query_nearest(&treedata, &nearest, space_transform,
+						hitdist = bke_mesh2mesh_bvhtree_query_nearest(treedata, &nearest, space_transform,
 						                                              tmp_co, max_dist_sq);
 
 						if (nearest.index >= 0) {
 							facs[tidx][plidx_dst][0] = (hitdist != 0.0f) ? (1.0f / hitdist) : FLT_MAX;
 							facs[tidx][plidx_dst][1] = hitdist;
 							facs[tidx][plidx_dst][2] = (float)orig_poly_idx_src[rayhit.index];
-							copy_v3_v3(facs[tidx][plidx_dst][3], nearest.co);
+							copy_v3_v3(&facs[tidx][plidx_dst][3], nearest.co);
 						}
 						else {
 							/* No source for this dest loop! */
@@ -1744,16 +1746,15 @@ void BKE_dm2mesh_mapping_loops_compute(
 				}
 
 				for (plidx_dst = 0; plidx_dst < mp_dst->totloop; plidx_dst++) {
+					lidx_dst = plidx_dst + mp_dst->loopstart;
 					if (best_island_idx < 0) {
-						lidx_dst = plidx_dst + mp_dst->loopstart;
 						/* No source for any loops of our dest poly in any source islands. */
 						bke_mesh2mesh_mapping_item_define(&r_map->items[lidx_dst], FLT_MAX, 0, 0,
 						                                  NULL, NULL);
 					}
 					else if (use_from_vert) {
 						/* Indices stored in facs are those of loops, one per dest loop. */
-						const int lidx_src = (int)facs[tidx][plidx_dst][2];
-						lidx_dst = plidx_dst + mp_dst->loopstart;
+						lidx_src = (int)facs[tidx][plidx_dst][2];
 						if (lidx_src >= 0) {
 							bke_mesh2mesh_mapping_item_define(&r_map->items[lidx_dst],
 							                                  facs[best_island_idx][plidx_dst][1],
@@ -1768,19 +1769,17 @@ void BKE_dm2mesh_mapping_loops_compute(
 					}
 					else {
 						/* Else, we use source poly, indices stored in facs are those of polygons. */
-						const int pidx_src = (int)facs[tidx][plidx_dst][2];
+						pidx_src = (int)facs[tidx][plidx_dst][2];
 						if (pidx_src >= 0) {
 							MPoly *mp_src = &polys_src[pidx_src];
 							float *hit_co = &facs[tidx][plidx_dst][3];
 							int best_loop_idx_src;
 
-							lidx_dst = plidx_dst + mp_dst->loopstart;
-
 							if (mode == M2MMAP_MODE_LOOP_POLY_NEAREST) {
 								bke_mesh2mesh_mapping_get_interp_poly_data(
 								        mp_src, loops_src, (const float (*)[3])vcos_src, hit_co,
-								        &interp_buff_size, &interp_vcos, &interp_indices,
-								        &interp_weights, false, NULL, &best_loop_idx_src);
+								        &buff_size_interp, &vcos_interp, &indices_interp,
+								        &weights_interp, false, NULL, &best_loop_idx_src);
 
 								bke_mesh2mesh_mapping_item_define(&r_map->items[lidx_dst],
 								                                  facs[best_island_idx][plidx_dst][1], best_island_idx,
@@ -1789,12 +1788,12 @@ void BKE_dm2mesh_mapping_loops_compute(
 							else {
 								const int nbr_sources = bke_mesh2mesh_mapping_get_interp_poly_data(
 								                                mp_src, loops_src, (const float (*)[3])vcos_src, hit_co,
-								                                &interp_buff_size, &interp_vcos, &interp_indices,
-								                                &interp_weights, true, NULL, NULL);
+								                                &buff_size_interp, &vcos_interp, &indices_interp,
+								                                &weights_interp, true, NULL, NULL);
 
 								bke_mesh2mesh_mapping_item_define(&r_map->items[lidx_dst],
 								                                  facs[best_island_idx][plidx_dst][1], best_island_idx,
-								                                  nbr_sources, indices, weights);
+								                                  nbr_sources, indices_interp, weights_interp);
 							}
 						}
 						else {
@@ -1807,6 +1806,11 @@ void BKE_dm2mesh_mapping_loops_compute(
 				}
 			}
 		}
+
+		for (tidx = 0; tidx < num_trees; tidx++) {
+			MEM_freeN(facs[tidx]);
+		}
+		MEM_freeN(facs);
 		}
 
 		if (verts_allocated_src) {
@@ -1836,7 +1840,8 @@ void BKE_dm2mesh_mapping_loops_compute(
 		if (weights_interp) {
 			MEM_freeN(weights_interp);
 		}
-		bke_mesh2mesh_mapping_islands_free(islands);
+		bke_mesh2mesh_mapping_islands_free(&islands);
+		MEM_freeN(treedata);
 	}
 }
 

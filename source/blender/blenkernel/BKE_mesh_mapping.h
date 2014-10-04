@@ -279,6 +279,13 @@ void BKE_dm2mesh_mapping_polys_compute(
         struct MLoop *loops_dst, const int numloops_dst, struct CustomData *pdata_dst, struct DerivedMesh *dm_src,
         struct Mesh2MeshMapping *r_map);
 
+void BKE_dm2mesh_mapping_loops_compute(
+        const int mode, const struct SpaceTransform *space_transform, const float max_dist,
+        struct MVert *verts_dst, const int numverts_dst, struct MEdge *edges_dst, const int numedges_dst,
+        struct MPoly *polys_dst, const int numpolys_dst, struct MLoop *loops_dst, const int numloops_dst,
+        struct CustomData *pdata_dst, struct CustomData *ldata_dst, const float split_angle_dst,
+        struct DerivedMesh *dm_src, loop_island_compute gen_islands_src, struct Mesh2MeshMapping *r_map);
+
 /* No good (portable) way to have exported inlined functions... */
 #define BKE_MESH_TESSFACE_VINDEX_ORDER(_mf, _v)  (                          \
     (CHECK_TYPE_INLINE(_mf, MFace *),                                       \

@@ -590,8 +590,8 @@ BVHTree *bvhtree_from_mesh_faces(BVHTreeFromMesh *data, DerivedMesh *dm, float e
 	BMEditMesh *em = data->em_evil;
 	const int bvhcache_type = em ? BVHTREE_FROM_FACES_EDITMESH : BVHTREE_FROM_FACES;
 	BVHTree *tree;
-	MVert *vert;
-	MFace *face;
+	MVert *vert = NULL;
+	MFace *face = NULL;
 	bool vert_allocated = false, face_allocated = false;
 
 	BLI_rw_mutex_lock(&cache_rwlock, THREAD_LOCK_READ);
@@ -678,12 +678,6 @@ void free_bvhtree_from_mesh(struct BVHTreeFromMesh *data)
 		}
 		if (data->face_allocated) {
 			MEM_freeN(data->face);
-		}
-		if (data->loop_allocated) {
-			MEM_freeN(data->loop);
-		}
-		if (data->poly_allocated) {
-			MEM_freeN(data->poly);
 		}
 
 		memset(data, 0, sizeof(*data));
