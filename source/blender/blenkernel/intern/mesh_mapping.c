@@ -1408,7 +1408,7 @@ void BKE_dm2mesh_mapping_loops_compute(
 
 		const bool use_from_vert = (mode & M2MMAP_USE_VERT);
 
-		Mesh2MeshMappingIslands islands;
+		Mesh2MeshMappingIslands islands = {0};
 		bool use_islands = false;
 
 		float (*poly_nors_src)[3] = NULL;
@@ -1513,11 +1513,11 @@ void BKE_dm2mesh_mapping_loops_compute(
 		if (gen_islands_src) {
 			use_islands = gen_islands_src(dm_src, &islands);
 			num_trees = use_islands ? islands.nbr_islands : 1;
-			treedata = MEM_mallocN(sizeof(*treedata) * (size_t)num_trees, __func__);
+			treedata = MEM_callocN(sizeof(*treedata) * (size_t)num_trees, __func__);
 		}
 		else {
 			num_trees = 1;
-			treedata = MEM_mallocN(sizeof(*treedata), __func__);
+			treedata = MEM_callocN(sizeof(*treedata), __func__);
 		}
 
 		/* Build our BVHtrees, either from verts or tessfaces. */
@@ -1754,7 +1754,7 @@ void BKE_dm2mesh_mapping_loops_compute(
 					}
 					else if (use_from_vert) {
 						/* Indices stored in facs are those of loops, one per dest loop. */
-						lidx_src = (int)facs[tidx][plidx_dst][2];
+						lidx_src = (int)facs[best_island_idx][plidx_dst][2];
 						if (lidx_src >= 0) {
 							bke_mesh2mesh_mapping_item_define(&r_map->items[lidx_dst],
 							                                  facs[best_island_idx][plidx_dst][1],
@@ -1769,10 +1769,10 @@ void BKE_dm2mesh_mapping_loops_compute(
 					}
 					else {
 						/* Else, we use source poly, indices stored in facs are those of polygons. */
-						pidx_src = (int)facs[tidx][plidx_dst][2];
+						pidx_src = (int)facs[best_island_idx][plidx_dst][2];
 						if (pidx_src >= 0) {
 							MPoly *mp_src = &polys_src[pidx_src];
-							float *hit_co = &facs[tidx][plidx_dst][3];
+							float *hit_co = &facs[best_island_idx][plidx_dst][3];
 							int best_loop_idx_src;
 
 							if (mode == M2MMAP_MODE_LOOP_POLY_NEAREST) {

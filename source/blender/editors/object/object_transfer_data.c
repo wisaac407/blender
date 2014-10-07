@@ -88,10 +88,10 @@
 
 #define MDT_DATATYPE_IS_VERT(_dt) ELEM(_dt, CD_FAKE_MDEFORMVERT, CD_FAKE_SHAPEKEY, CD_MVERT_SKIN, CD_FAKE_BWEIGHT)
 #define MDT_DATATYPE_IS_EDGE(_dt) ELEM(_dt, CD_FAKE_CREASE, CD_FAKE_SHARP, CD_FAKE_SEAM, CD_FAKE_BWEIGHT)
-#define MDT_DATATYPE_IS_POLY(_dt) (_dt == CD_FAKE_SHARP)
-#define MDT_DATATYPE_IS_LOOP(_dt) (false)
+#define MDT_DATATYPE_IS_POLY(_dt) ELEM(_dt, CD_FAKE_UV, CD_FAKE_SHARP)
+#define MDT_DATATYPE_IS_LOOP(_dt) (_dt == CD_FAKE_UV)
 
-#define MDT_DATATYPE_IS_MULTILAYERS(_dt) ELEM(_dt, CD_FAKE_MDEFORMVERT, CD_FAKE_SHAPEKEY)
+#define MDT_DATATYPE_IS_MULTILAYERS(_dt) ELEM(_dt, CD_FAKE_MDEFORMVERT, CD_FAKE_SHAPEKEY, CD_FAKE_UV)
 
 /* All possible data to transfer.
  * Note some are 'fake' ones, i.e. they are not hold by real CDLayers. */
@@ -101,12 +101,14 @@ static EnumPropertyItem MDT_layer_items[] = {
 	{CD_FAKE_SHAPEKEY, "SHAPEKEYS", 0, "Shapekey(s)", "Transfer active or all shape keys"},
 	/* XXX When SkinModifier is enabled, it seems to erase its own CD_MVERT_SKIN layer from final DM :( */
 	{CD_MVERT_SKIN, "SKIN", 0, "Skin Weight", "Transfer skin weights"},
+	{CD_FAKE_BWEIGHT, "BEVEL_WEIGHT", 0, "Bevel Weight", "Transfer bevel weights"},
 	{0, "", 0, "Edge Data", ""},
 	{CD_FAKE_SHARP, "SHARP", 0, "Sharp", "Transfer sharp flag"},
 	{CD_FAKE_SEAM, "SEAM", 0, "Seam", "Transfer UV seam flag"},
 	{CD_FAKE_CREASE, "CREASE", 0, "Subsurf Crease", "Transfer crease values"},
+	{CD_FAKE_BWEIGHT, "BEVEL_WEIGHT", 0, "Bevel Weight", "Transfer bevel weights"},
 	{0, "", 0, "Face Data", ""},
-	/* TODO */
+	{CD_FAKE_UV, "UV", 0, "UVs", "Transfer UV layers"},
 	{0, "", 0, "Face Corner Data", ""},
 	/* TODO */
 	{0, NULL, 0, NULL, NULL}
@@ -141,13 +143,27 @@ static EnumPropertyItem MDT_method_edge_items[] = {
 
 static EnumPropertyItem MDT_method_poly_items[] = {
 	{M2MMAP_MODE_TOPOLOGY, "TOPOLOGY", 0, "Topology", "Copy from identical topology meshes"},
-	/* TODO add other modes */
+	{M2MMAP_MODE_POLY_NEAREST, "NEAREST", 0, "Nearest Face",
+			"Copy from nearest polygon (using center points)"},
+	{M2MMAP_MODE_POLY_NOR, "NORMAL", 0, "Best Normal-Matching",
+			"Copy from source polygon which normal is the closest to dest one"},
+	{M2MMAP_MODE_POLY_POLYINTERP_PNORPROJ, "POLYINTERP_PNORPROJ", 0, "Projected Face Interpolated",
+			"Interpolate all source polygons intersected by the projection of dest one along its own normal"},
 	{0, NULL, 0, NULL, NULL}
 };
 
 static EnumPropertyItem MDT_method_loop_items[] = {
 	{M2MMAP_MODE_TOPOLOGY, "TOPOLOGY", 0, "Topology", "Copy from identical topology meshes"},
-	/* TODO add other modes */
+	{M2MMAP_MODE_LOOP_NEAREST_LOOPNOR, "NEAREST_NORMAL", 0, "Nearest Corner And Best Matching Normal",
+			"Copy from nearest corner which has the best matching normal"},
+	{M2MMAP_MODE_LOOP_NEAREST_POLYNOR, "NEAREST_POLYNOR", 0, "Nearest Corner And Best Matching Face Normal",
+			"Copy from nearest corner which has the face with the best matching normal to dest corner's face one"},
+	{M2MMAP_MODE_LOOP_POLY_NEAREST, "NEAREST_POLY", 0, "Nearest Corner Of Nearest Face",
+			"Copy from nearest corner of nearest polygon"},
+	{M2MMAP_MODE_LOOP_POLYINTERP_NEAREST, "POLYINTERP_NEAREST", 0, "Nearest Face Interpolated",
+			"Copy from interpolated corners of the nearest source polygon"},
+	{M2MMAP_MODE_LOOP_POLYINTERP_LNORPROJ, "POLYINTERP_LNORPROJ", 0, "Projected Face Interpolated",
+			"Copy from interpolated corners of the source polygon hit by corner normal projection"},
 	{0, NULL, 0, NULL, NULL}
 };
 
@@ -350,8 +366,8 @@ static bool data_transfer_layersmapping_cdlayers_multisrc_to_dst(
 						BLI_freelistN(r_map);
 						return false;
 					}
-					CustomData_add_layer_named(data_dst, data_type, CD_CALLOC, NULL, num_create, name);
-					idx_dst = CustomData_get_named_layer(data_dst, data_type, name);
+					CustomData_add_layer_named(cd_dst, data_type, CD_CALLOC, NULL, num_create, name);
+					idx_dst = CustomData_get_named_layer(cd_dst, data_type, name);
 				}
 				data_src = CustomData_get_layer_n(cd_src, data_type, idx_src);
 				data_dst = CustomData_get_layer_n(cd_dst, data_type, idx_dst);
@@ -428,6 +444,7 @@ bool ED_data_transfer_layersmapping_cdlayers(
 						CustomData_add_layer_named(cd_dst, data_type, CD_CALLOC, NULL, num_create, name);
 						idx_dst = CustomData_get_named_layer(cd_dst, data_type, name);
 					}
+					data_dst = CustomData_get_layer_n(cd_dst, data_type, idx_dst);
 				}
 				break;
 			default:
@@ -457,12 +474,12 @@ bool ED_data_transfer_layersmapping_cdlayers(
 }
 
 static bool data_transfer_layersmapping_generate(
-        ListBase *r_map, Object *ob_src, Object *ob_dst, DerivedMesh *dm_src, Mesh *me_dst,
-        const int data_type, const int num_create, const int fromlayers_select, const int tolayers_select)
+        ListBase *r_map, Object *ob_src, Object *ob_dst, DerivedMesh *dm_src, Mesh *me_dst, const int elem_type,
+        int data_type, const int num_create, const int fromlayers_select, const int tolayers_select)
 {
 	CustomData *cd_src, *cd_dst;
 
-	if (MDT_DATATYPE_IS_VERT(data_type)) {
+	if (elem_type == ME_VERT) {
 		if (!(data_type & CD_FAKE)) {
 			cd_src = dm_src->getVertDataLayout(dm_src);
 			cd_dst = &me_dst->vdata;
@@ -507,7 +524,7 @@ static bool data_transfer_layersmapping_generate(
 			return false;
 		}
 	}
-	else if (MDT_DATATYPE_IS_EDGE(data_type)) {
+	if (elem_type == ME_EDGE) {
 		if (!(data_type & CD_FAKE)) {  /* Unused for edges, currently... */
 			cd_src = dm_src->getEdgeDataLayout(dm_src);
 			cd_dst = &me_dst->edata;
@@ -522,6 +539,7 @@ static bool data_transfer_layersmapping_generate(
 				/* We handle specific source selection cases here. */
 				return false;
 			}
+			return true;
 		}
 		else if (data_type == CD_FAKE_CREASE) {
 			const size_t elem_size = sizeof(*((MEdge *)NULL));
@@ -569,13 +587,63 @@ static bool data_transfer_layersmapping_generate(
 			return false;
 		}
 	}
+	if (elem_type == ME_POLY) {
+		if (data_type == CD_FAKE_UV) {
+			data_type = CD_MTEXPOLY;
+		}
+
+		if (!(data_type & CD_FAKE)) {
+			cd_src = dm_src->getPolyDataLayout(dm_src);
+			cd_dst = &me_dst->pdata;
+
+			if (!CustomData_has_layer(cd_src, data_type)) {
+				return false;
+			}
+
+			if (!ED_data_transfer_layersmapping_cdlayers(r_map, data_type, num_create, cd_src, cd_dst,
+			                                             fromlayers_select, tolayers_select))
+			{
+				/* We handle specific source selection cases here. */
+				return false;
+			}
+			return true;
+		}
+		else {
+			return false;
+		}
+	}
+	if (elem_type == ME_LOOP) {
+		if (data_type == CD_FAKE_UV) {
+			data_type = CD_MLOOPUV;
+		}
+
+		if (!(data_type & CD_FAKE)) {
+			cd_src = dm_src->getLoopDataLayout(dm_src);
+			cd_dst = &me_dst->ldata;
+
+			if (!CustomData_has_layer(cd_src, data_type)) {
+				return false;
+			}
+
+			if (!ED_data_transfer_layersmapping_cdlayers(r_map, data_type, num_create, cd_src, cd_dst,
+			                                             fromlayers_select, tolayers_select))
+			{
+				/* We handle specific source selection cases here. */
+				return false;
+			}
+			return true;
+		}
+		else {
+			return false;
+		}
+	}
 
 	return false;
 }
 
 bool ED_data_transfer(
         Scene *scene, Object *ob_src, Object *ob_dst, const int data_type, const bool use_create,
-        const int map_vert_mode, const int map_edge_mode, const int UNUSED(map_poly_mode), const int UNUSED(map_loop_mode),
+        const int map_vert_mode, const int map_edge_mode, const int map_poly_mode, const int map_loop_mode,
         SpaceTransform *space_transform, const float max_distance,
         const int UNUSED(replace_mode), const float UNUSED(replace_threshold),
         const int fromlayers_select, const int tolayers_select)
@@ -597,6 +665,9 @@ bool ED_data_transfer(
 	else if (data_type == CD_FAKE_MDEFORMVERT) {
 		dm_src_mask |= (1LL << CD_MDEFORMVERT);  /* Exception for vgroups :/ */
 	}
+	else if (data_type == CD_FAKE_UV) {
+		dm_src_mask |= (1LL << CD_MTEXPOLY) | (1LL << CD_MLOOPUV);
+	}
 	dm_src = mesh_get_derived_final(scene, ob_src, dm_src_mask);
 	me_dst = ob_dst->data;
 
@@ -608,8 +679,8 @@ bool ED_data_transfer(
 
 		/* TODO add further filtering of mapping data here! */
 
-		if (data_transfer_layersmapping_generate(&lay_map, ob_src, ob_dst, dm_src, me_dst, data_type, num_create,
-		                                         fromlayers_select, tolayers_select))
+		if (data_transfer_layersmapping_generate(&lay_map, ob_src, ob_dst, dm_src, me_dst, ME_VERT, data_type,
+		                                         num_create, fromlayers_select, tolayers_select))
 		{
 			DataTransferLayerMapping *lay_mapit;
 
@@ -622,7 +693,7 @@ bool ED_data_transfer(
 			BLI_freelistN(&lay_map);
 		}
 	}
-	else if (MDT_DATATYPE_IS_EDGE(data_type)) {
+	if (MDT_DATATYPE_IS_EDGE(data_type)) {
 		const int num_create = use_create ? me_dst->totedge : 0;
 
 		BKE_dm2mesh_mapping_edges_compute(map_edge_mode, space_transform, max_distance,
@@ -631,8 +702,57 @@ bool ED_data_transfer(
 
 		/* TODO add further filtering of mapping data here! */
 
-		if (data_transfer_layersmapping_generate(&lay_map, ob_src, ob_dst, dm_src, me_dst, data_type, num_create,
-		                                         fromlayers_select, tolayers_select))
+		if (data_transfer_layersmapping_generate(&lay_map, ob_src, ob_dst, dm_src, me_dst, ME_EDGE, data_type,
+		                                         num_create, fromlayers_select, tolayers_select))
+		{
+			DataTransferLayerMapping *lay_mapit;
+
+			changed = (lay_map.first != NULL);
+
+			for (lay_mapit = lay_map.first; lay_mapit; lay_mapit = lay_mapit->next) {
+				CustomData_data_transfer(&geom_map, lay_mapit);
+			}
+
+			BLI_freelistN(&lay_map);
+		}
+	}
+	if (MDT_DATATYPE_IS_POLY(data_type)) {
+		const int num_create = use_create ? me_dst->totpoly : 0;
+
+		BKE_dm2mesh_mapping_polys_compute(map_poly_mode, space_transform, max_distance,
+		                                  me_dst->mvert, me_dst->totvert, me_dst->mpoly, me_dst->totpoly,
+		                                  me_dst->mloop, me_dst->totloop, &me_dst->pdata, dm_src, &geom_map);
+
+		/* TODO add further filtering of mapping data here! */
+
+		if (data_transfer_layersmapping_generate(&lay_map, ob_src, ob_dst, dm_src, me_dst, ME_POLY, data_type,
+		                                         num_create, fromlayers_select, tolayers_select))
+		{
+			DataTransferLayerMapping *lay_mapit;
+
+			changed = (lay_map.first != NULL);
+
+			for (lay_mapit = lay_map.first; lay_mapit; lay_mapit = lay_mapit->next) {
+				CustomData_data_transfer(&geom_map, lay_mapit);
+			}
+
+			BLI_freelistN(&lay_map);
+		}
+	}
+	if (MDT_DATATYPE_IS_LOOP(data_type)) {
+		const int num_create = use_create ? me_dst->totloop : 0;
+
+		//loop_island_compute island_callback = data_transfer_get_loop_islands_generator(data_type);
+
+		BKE_dm2mesh_mapping_loops_compute(map_loop_mode, space_transform, max_distance,
+		                                  me_dst->mvert, me_dst->totvert, me_dst->medge, me_dst->totedge,
+		                                  me_dst->mpoly, me_dst->totpoly, me_dst->mloop, me_dst->totloop,
+		                                  &me_dst->pdata, &me_dst->ldata, me_dst->smoothresh, dm_src, NULL, &geom_map);
+
+		/* TODO add further filtering of mapping data here! */
+
+		if (data_transfer_layersmapping_generate(&lay_map, ob_src, ob_dst, dm_src, me_dst, ME_LOOP, data_type,
+		                                         num_create, fromlayers_select, tolayers_select))
 		{
 			DataTransferLayerMapping *lay_mapit;
 
@@ -699,7 +819,11 @@ static int data_transfer_exec(bContext *C, wmOperator *op)
 	}
 	CTX_DATA_END;
 
+#if 0  /* TODO */
+	return changed ? OPERATOR_FINISHED : OPERATOR_CANCELLED;
+#else
 	return OPERATOR_FINISHED;
+#endif
 }
 
 static int data_transfer_poll(bContext *C)
