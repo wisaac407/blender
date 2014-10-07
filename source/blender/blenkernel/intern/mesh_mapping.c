@@ -1416,8 +1416,10 @@ void BKE_dm2mesh_mapping_loops_compute(
 		float (*poly_nors_dst)[3] = NULL;
 		float (*loop_nors_dst)[3] = NULL;
 
-		MeshElemMap *vert_to_polyloop_map_src = NULL;
-		int *vert_to_polyloop_map_src_buff = NULL;
+		MeshElemMap *vert_to_loop_map_src = NULL;
+		int *vert_to_loop_map_src_buff = NULL;
+		MeshElemMap *vert_to_poly_map_src = NULL;
+		int *vert_to_poly_map_src_buff = NULL;
 
 		bool verts_allocated_src;
 		MVert *verts_src = DM_get_vert_array(dm_src, &verts_allocated_src);
@@ -1440,7 +1442,7 @@ void BKE_dm2mesh_mapping_loops_compute(
 		int *indices_interp = NULL;
 		float *weights_interp = NULL;
 
-		int tidx, pidx_dst, lidx_dst, plidx_dst, pidx_src, lidx_src;
+		int tidx, pidx_dst, lidx_dst, plidx_dst, pidx_src, lidx_src, plidx_src;
 
 		if (!use_from_vert) {
 			vcos_src = MEM_mallocN(sizeof(*vcos_src) * (size_t)num_verts_src, __func__);
@@ -1492,12 +1494,10 @@ void BKE_dm2mesh_mapping_loops_compute(
 		}
 
 		if (use_from_vert) {
-			if (mode & M2MMAP_USE_LOOP) {
-				BKE_mesh_vert_loop_map_create(&vert_to_polyloop_map_src, &vert_to_polyloop_map_src_buff,
-				                              polys_src, loops_src, num_verts_src, num_polys_src, num_loops_src);
-			}
-			else if (mode & M2MMAP_USE_POLY) {
-				BKE_mesh_vert_poly_map_create(&vert_to_polyloop_map_src, &vert_to_polyloop_map_src_buff,
+			BKE_mesh_vert_loop_map_create(&vert_to_loop_map_src, &vert_to_loop_map_src_buff,
+			                              polys_src, loops_src, num_verts_src, num_polys_src, num_loops_src);
+			if (mode & M2MMAP_USE_POLY) {
+				BKE_mesh_vert_poly_map_create(&vert_to_poly_map_src, &vert_to_poly_map_src_buff,
 				                              polys_src, loops_src, num_verts_src, num_polys_src, num_loops_src);
 			}
 		}
@@ -1636,6 +1636,7 @@ void BKE_dm2mesh_mapping_loops_compute(
 				for (plidx_dst = 0; plidx_dst < mp_dst->totloop; plidx_dst++, ml_dst++) {
 					if (use_from_vert) {
 						float tmp_co[3];
+						MeshElemMap *vert_to_refelem_map_src = NULL;
 
 						copy_v3_v3(tmp_co, verts_dst[ml_dst->v].co);
 						nearest.index = -1;
@@ -1652,18 +1653,32 @@ void BKE_dm2mesh_mapping_loops_compute(
 							if (mode == M2MMAP_MODE_LOOP_NEAREST_LOOPNOR) {
 								nor_dst = &loop_nors_dst[plidx_dst + mp_dst->loopstart];
 								nors_src = loop_nors_src;
+								vert_to_refelem_map_src = vert_to_loop_map_src;
 							}
 							else {  /* if (mode == M2MMAP_MODE_LOOP_NEAREST_POLYNOR) { */
 								nor_dst = pnor_dst;
 								nors_src = poly_nors_src;
+								vert_to_refelem_map_src = vert_to_poly_map_src;
 							}
 
-							for (i = vert_to_polyloop_map_src[nearest.index].count; i--;) {
-								const int idx_src = vert_to_polyloop_map_src[nearest.index].indices[i];
+							for (i = vert_to_refelem_map_src[nearest.index].count; i--;) {
+								const int idx_src = vert_to_refelem_map_src[nearest.index].indices[i];
 								const float dot = dot_v3v3(nors_src[idx_src], *nor_dst);
 								if (dot > best_nor_dot) {
 									best_nor_dot = dot;
 									best_idx_src = idx_src;
+								}
+							}
+							if (mode == M2MMAP_MODE_LOOP_NEAREST_POLYNOR) {
+								/* Our best_idx_src is a poly one for now!
+								 * Have to find its loop matching our closest vertex. */
+								MPoly *mp_src = &polys_src[best_idx_src];
+								MLoop *ml_src = &loops_src[mp_src->loopstart];
+								for (plidx_src = 0; plidx_src < mp_src->totloop; plidx_src++, ml_src++) {
+									if ((int)ml_src->v == nearest.index) {
+										best_idx_src = plidx_src + mp_src->loopstart;
+										break;
+									}
 								}
 							}
 							facs[tidx][plidx_dst][0] = (hitdist != 0.0f) ? (1.0f / hitdist * best_nor_dot) : FLT_MAX;
@@ -1703,7 +1718,6 @@ void BKE_dm2mesh_mapping_loops_compute(
 					else {  /* Nearest poly either to use all its loops/verts or just closest one. */
 						float tmp_co[3];
 
-						/* Convert the vertex to tree coordinates. */
 						copy_v3_v3(tmp_co, verts_dst[ml_dst->v].co);
 						nearest.index = -1;
 
@@ -1713,7 +1727,7 @@ void BKE_dm2mesh_mapping_loops_compute(
 						if (nearest.index >= 0) {
 							facs[tidx][plidx_dst][0] = (hitdist != 0.0f) ? (1.0f / hitdist) : FLT_MAX;
 							facs[tidx][plidx_dst][1] = hitdist;
-							facs[tidx][plidx_dst][2] = (float)orig_poly_idx_src[rayhit.index];
+							facs[tidx][plidx_dst][2] = (float)orig_poly_idx_src[nearest.index];
 							copy_v3_v3(&facs[tidx][plidx_dst][3], nearest.co);
 						}
 						else {
@@ -1828,8 +1842,11 @@ void BKE_dm2mesh_mapping_loops_compute(
 		if (faces_allocated_src) {
 			MEM_freeN(faces_src);
 		}
-		if (vert_to_polyloop_map_src_buff) {
-			MEM_freeN(vert_to_polyloop_map_src_buff);
+		if (vert_to_loop_map_src_buff) {
+			MEM_freeN(vert_to_loop_map_src_buff);
+		}
+		if (vert_to_poly_map_src_buff) {
+			MEM_freeN(vert_to_poly_map_src_buff);
 		}
 		if (vcos_interp) {
 			MEM_freeN(vcos_interp);
