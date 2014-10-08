@@ -713,7 +713,7 @@ static float bke_mesh2mesh_bvhtree_query_nearest(
 
 static float bke_mesh2mesh_bvhtree_query_raycast(
         BVHTreeFromMesh *treedata, BVHTreeRayHit *rayhit, const SpaceTransform *space_transform,
-        float co[3], float no[3], const float radius, const float max_dist_sq)
+        float co[3], float no[3], const float radius, const float max_dist)
 {
 	/* Convert the vertex to tree coordinates, if needed. */
 	if (space_transform) {
@@ -722,6 +722,7 @@ static float bke_mesh2mesh_bvhtree_query_raycast(
 	}
 
 	rayhit->index = -1;
+	rayhit->dist = max_dist;
 	BLI_bvhtree_ray_cast(treedata->tree, co, no, radius, rayhit, treedata->raycast_callback, treedata);
 
 #if 0  /* Stupid in fact!? */
@@ -731,9 +732,6 @@ static float bke_mesh2mesh_bvhtree_query_raycast(
 		BLI_bvhtree_ray_cast(treedata->tree, co, no, radius, rayhit, treedata->raycast_callback, treedata);
 	}
 #endif
-	if (rayhit->index >= 0 && (rayhit->dist * rayhit->dist) > max_dist_sq) {
-		rayhit->index = -1;
-	}
 
 	return rayhit->dist;
 }
@@ -862,7 +860,7 @@ void BKE_dm2mesh_mapping_verts_compute(
 					normal_short_to_float_v3(tmp_no, verts_dst[i].no);
 
 					hitdist = bke_mesh2mesh_bvhtree_query_raycast(&treedata, &rayhit, space_transform,
-					                                              tmp_co, tmp_no, radius, max_dist_sq);
+					                                              tmp_co, tmp_no, radius, max_dist);
 
 					if (rayhit.index >= 0 && hitdist <= max_dist) {
 						MPoly *mp_src = &polys_src[orig_poly_idx_src[rayhit.index]];
@@ -1238,7 +1236,7 @@ void BKE_dm2mesh_mapping_polys_compute(
 				copy_v3_v3(tmp_no, poly_nors_dst[i]);
 
 				hitdist = bke_mesh2mesh_bvhtree_query_raycast(&treedata, &rayhit, space_transform,
-				                                              tmp_co, tmp_no, radius, max_dist_sq);
+				                                              tmp_co, tmp_no, radius, max_dist);
 
 				if (rayhit.index >= 0 && hitdist <= max_dist) {
 					bke_mesh2mesh_mapping_item_define(&r_map->items[i], rayhit.dist, 0, 1,
@@ -1333,7 +1331,7 @@ void BKE_dm2mesh_mapping_polys_compute(
 						/* XXX This transform same tmp_no several times into src space, check whether optimizing this
 						 *     is worth it! */
 						hitdist = bke_mesh2mesh_bvhtree_query_raycast(&treedata, &rayhit, space_transform,
-						                                              tmp_co, tmp_no, radius, max_dist_sq);
+						                                              tmp_co, tmp_no, radius, max_dist);
 
 						if (rayhit.index >= 0 && hitdist <= max_dist) {
 							weights[orig_poly_idx_src[rayhit.index]] += 1.0f;
@@ -1602,7 +1600,7 @@ void BKE_dm2mesh_mapping_loops_compute(
 			}
 			else {
 				for (tidx = 0; tidx < num_trees; tidx++) {
-					bvhtree_from_mesh_faces(&treedata[tidx], dm_src, 0.0, 2, 6);
+					bvhtree_from_mesh_faces(&treedata[tidx], dm_src, 0.0f, 2, 6);
 				}
 				orig_poly_idx_src = dm_src->getTessFaceDataArray(dm_src, CD_ORIGINDEX);
 			}
@@ -1700,7 +1698,7 @@ void BKE_dm2mesh_mapping_loops_compute(
 						copy_v3_v3(tmp_no, loop_nors_dst[plidx_dst + mp_dst->loopstart]);
 
 						hitdist = bke_mesh2mesh_bvhtree_query_raycast(treedata, &rayhit, space_transform,
-						                                              tmp_co, tmp_no, radius, max_dist_sq);
+						                                              tmp_co, tmp_no, radius, max_dist);
 
 						if (rayhit.index >= 0 && hitdist <= max_dist) {
 							facs[tidx][plidx_dst][0] = (hitdist != 0.0f) ? (1.0f / hitdist) : FLT_MAX;

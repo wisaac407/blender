@@ -806,7 +806,7 @@ static int data_transfer_exec(bContext *C, wmOperator *op)
 		}
 
 		if (space_transform) {
-			BLI_SPACE_TRANSFORM_SETUP(space_transform, ob_src, ob_dst);
+			BLI_SPACE_TRANSFORM_SETUP(space_transform, ob_dst, ob_src);
 		}
 
 		if (ED_data_transfer(scene, ob_src, ob_dst, data_type, use_create,
