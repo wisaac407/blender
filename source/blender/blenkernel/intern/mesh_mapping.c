@@ -646,8 +646,8 @@ static void bke_mesh2mesh_mapping_islands_free(Mesh2MeshMappingIslands *islands)
 
 static int bke_mesh2mesh_mapping_get_interp_poly_data(
         const MPoly *mp, MLoop *mloops, const float (*vcos_src)[3], const float point[3],
-        size_t *buff_size, float (**vcos)[3], int **indices, float **weights, const bool do_weights,
-        int *r_closest_v, int *r_closest_l)
+        size_t *buff_size, float (**vcos)[3], const bool use_loops, int **indices, float **weights,
+        const bool do_weights, int *r_closest_idx)
 {
 	MLoop *ml;
 	float (*vco)[3];
@@ -666,19 +666,14 @@ static int bke_mesh2mesh_mapping_get_interp_poly_data(
 	}
 
 	for (i = 0, ml = &mloops[mp->loopstart], vco = *vcos, idx = *indices; i < nbr_sources; i++, ml++, vco++, idx++) {
-		*idx = (int)ml->v;
+		*idx = use_loops ? (int)mp->loopstart + i : (int)ml->v;
 		copy_v3_v3(*vco, vcos_src[ml->v]);
-		if (r_closest_v || r_closest_l) {
+		if (r_closest_idx) {
 			/* Find closest vert/loop in this case. */
 			const float dist_sq = len_squared_v3v3(point, *vco);
 			if (dist_sq < ref_dist_sq) {
 				ref_dist_sq = dist_sq;
-				if (r_closest_v) {
-					*r_closest_v = (int)ml->v;
-				}
-				if (r_closest_l) {
-					*r_closest_l = (int)mp->loopstart + i;
-				}
+				*r_closest_idx = *idx;
 			}
 		}
 	}
@@ -866,7 +861,7 @@ void BKE_dm2mesh_mapping_verts_compute(
 						MPoly *mp_src = &polys_src[orig_poly_idx_src[rayhit.index]];
 						const int nbr_sources = bke_mesh2mesh_mapping_get_interp_poly_data(
 						                                mp_src, loops_src, (const float (*)[3])vcos_src, rayhit.co,
-						                                &tmp_buff_size, &vcos, &indices, &weights, true, NULL, NULL);
+						                                &tmp_buff_size, &vcos, false, &indices, &weights, true, NULL);
 
 						bke_mesh2mesh_mapping_item_define(&r_map->items[i], rayhit.dist, 0,
 						                                  nbr_sources, indices, weights);
@@ -896,16 +891,16 @@ void BKE_dm2mesh_mapping_verts_compute(
 							int index;
 							bke_mesh2mesh_mapping_get_interp_poly_data(
 							                                mp, loops_src, (const float (*)[3])vcos_src, nearest.co,
-							                                &tmp_buff_size, &vcos, &indices, &weights, false,
-							                                &index, NULL);
+							                                &tmp_buff_size, &vcos, false, &indices, &weights, false,
+							                                &index);
 
 							bke_mesh2mesh_mapping_item_define(&r_map->items[i], hitdist, 0, 1, &index, &full_weight);
 						}
 						else if (mode == M2MMAP_MODE_VERT_POLYINTERP_NEAREST) {
 							const int nbr_sources = bke_mesh2mesh_mapping_get_interp_poly_data(
 							                                mp, loops_src, (const float (*)[3])vcos_src, nearest.co,
-							                                &tmp_buff_size, &vcos, &indices, &weights, true,
-							                                NULL, NULL);
+							                                &tmp_buff_size, &vcos, false, &indices, &weights, true,
+							                                NULL);
 
 							bke_mesh2mesh_mapping_item_define(&r_map->items[i], hitdist, 0,
 							                                  nbr_sources, indices, weights);
@@ -1790,8 +1785,8 @@ void BKE_dm2mesh_mapping_loops_compute(
 							if (mode == M2MMAP_MODE_LOOP_POLY_NEAREST) {
 								bke_mesh2mesh_mapping_get_interp_poly_data(
 								        mp_src, loops_src, (const float (*)[3])vcos_src, hit_co,
-								        &buff_size_interp, &vcos_interp, &indices_interp,
-								        &weights_interp, false, NULL, &best_loop_idx_src);
+								        &buff_size_interp, &vcos_interp, true, &indices_interp,
+								        &weights_interp, false, &best_loop_idx_src);
 
 								bke_mesh2mesh_mapping_item_define(&r_map->items[lidx_dst],
 								                                  facs[best_island_idx][plidx_dst][1], best_island_idx,
@@ -1800,8 +1795,8 @@ void BKE_dm2mesh_mapping_loops_compute(
 							else {
 								const int nbr_sources = bke_mesh2mesh_mapping_get_interp_poly_data(
 								                                mp_src, loops_src, (const float (*)[3])vcos_src, hit_co,
-								                                &buff_size_interp, &vcos_interp, &indices_interp,
-								                                &weights_interp, true, NULL, NULL);
+								                                &buff_size_interp, &vcos_interp, true, &indices_interp,
+								                                &weights_interp, true, NULL);
 
 								bke_mesh2mesh_mapping_item_define(&r_map->items[lidx_dst],
 								                                  facs[best_island_idx][plidx_dst][1], best_island_idx,
