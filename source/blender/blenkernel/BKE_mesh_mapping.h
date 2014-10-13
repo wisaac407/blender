@@ -170,6 +170,11 @@ typedef struct Mesh2MeshMappingIslands {
 } Mesh2MeshMappingIslands;
 
 typedef bool (*loop_island_compute)(struct DerivedMesh *dm, Mesh2MeshMappingIslands *r_islands);
+/* Above vert/UV mapping stuff does not do what we need here, but does things we do not need here.
+ * So better keep them separated for now, I think.
+ */
+bool BKE_loop_island_compute_uv((struct DerivedMesh *dm, Mesh2MeshMappingIslands *r_islands);
+
 
 /* Helpers! */
 void BKE_mesh2mesh_mapping_free(Mesh2MeshMapping *map);

@@ -267,6 +267,21 @@ static bool data_transfer_check(bContext *UNUSED(C), wmOperator *op)
 
 /* ********** */
 
+static bool data_transfer_get_loop_islands_uv(struct DerivedMesh *dm, Mesh2MeshMappingIslands *r_islands)
+{
+}
+
+static loop_island_compute data_transfer_get_loop_islands_generator(const int data_type)
+{
+	switch (data_type) {
+		case CD_FAKE_UV:
+			break;
+		default:
+			break;
+	}
+	return NULL;
+}
+
 static void data_transfer_interp_char(const DataTransferLayerMapping *UNUSED(laymap), void **sources,
                                       const float *weights, int count, void *dest)
 {
@@ -798,7 +813,6 @@ static int data_transfer_exec(bContext *C, wmOperator *op)
 	SpaceTransform space_transform_data;
 	SpaceTransform *space_transform = use_object_transform ? &space_transform_data : NULL;
 
-	/* Macro to loop through selected objects and perform operation depending on function, option and method.*/
 	CTX_DATA_BEGIN (C, Object *, ob_dst, selected_editable_objects)
 	{
 		if ((ob_dst == ob_src) || (ob_dst->type != OB_MESH)) {
