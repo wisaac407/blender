@@ -136,6 +136,34 @@ int *BKE_mesh_calc_smoothgroups(
         const struct MLoop *mloop, const int totloop,
         int *r_totgroup, const bool use_bitflags);
 
+/* Loop islands data helpers. */
+/* TODO: this ended up being the same as MeshElemMap... Should we use this generic struct instead? */
+typedef struct MeshIslandItem {
+	int *polys_idx;
+	int nbr_polys;
+} MeshIslandItem;
+
+/* For loops, to which poly island each loop belongs.
+ * Island definition can vary based on data type (UVs, loop normals, etc.). */
+typedef struct MeshIslands {
+	int nbr_loops;
+	int *loops_to_islands_idx;
+	int nbr_islands;
+	MeshIslandItem *islands;  /* Array, one item per island. */
+	void *mem;  /* Memory handler, internal use only. */
+} MeshIslands;
+
+void BKE_loop_islands_init(MeshIslands *islands, const int num_loops);
+void BKE_loop_islands_free(MeshIslands *islands);
+void BKE_loop_islands_add_island(MeshIslands *islands, const int num_loops, int *loop_indices,
+                                 const int num_polys, int *poly_indices);
+
+typedef bool (*loop_island_compute)(struct DerivedMesh *dm, MeshIslands *r_islands);
+/* Above vert/UV mapping stuff does not do what we need here, but does things we do not need here.
+ * So better keep them separated for now, I think.
+ */
+bool BKE_loop_island_compute_uv(struct DerivedMesh *dm, MeshIslands *r_islands);
+
 /* Generic ways to map some geometry elements from a source mesh to a dest one. */
 
 typedef struct Mesh2MeshMappingItem {
@@ -153,36 +181,8 @@ typedef struct Mesh2MeshMapping {
 	void *mem;  /* Memory handler, internal use only. */
 } Mesh2MeshMapping;
 
-
-typedef struct Mesh2MeshMappingIslandItem {
-	int nbr_polys;
-	int *polys_idx;
-} Mesh2MeshMappingIslandItem;
-
-/* For loops, to which poly island each loop belongs.
- * Island definition can vary based on data type (UVs, loop normals, etc.). */
-typedef struct Mesh2MeshMappingIslands {
-	int nbr_loops;
-	int *loops_to_islands_idx;
-	int nbr_islands;
-	Mesh2MeshMappingIslandItem *islands;  /* Array, one item per island. */
-	void *mem;  /* Memory handler, internal use only. */
-} Mesh2MeshMappingIslands;
-
-typedef bool (*loop_island_compute)(struct DerivedMesh *dm, Mesh2MeshMappingIslands *r_islands);
-/* Above vert/UV mapping stuff does not do what we need here, but does things we do not need here.
- * So better keep them separated for now, I think.
- */
-bool BKE_loop_island_compute_uv((struct DerivedMesh *dm, Mesh2MeshMappingIslands *r_islands);
-
-
 /* Helpers! */
 void BKE_mesh2mesh_mapping_free(Mesh2MeshMapping *map);
-
-void BKE_mesh2mesh_mapping_islands_create(Mesh2MeshMappingIslands *r_islands, const int num_loops);
-void BKE_mesh2mesh_mapping_islands_add_island(Mesh2MeshMappingIslands *r_islands,
-                                              const int num_loops, int *loop_indices,
-                                              const int num_polys, int *poly_indices);
 
 /* TODO:
  * Add other 'from/to' mapping sources, like e.g. using an UVMap, etc.

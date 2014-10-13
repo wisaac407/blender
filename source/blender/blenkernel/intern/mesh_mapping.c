@@ -370,22 +370,40 @@ void BKE_mesh_origindex_map_create(MeshElemMap **r_map, int **r_mem,
 /** \} */
 
 
-
 /* -------------------------------------------------------------------- */
 
-/** \name Mesh Smooth Groups
+/** \name Mesh loops/poly islands.
+ * Used currently for UVs and 'smooth groups'.
  * \{ */
 
-/**
- * Calculate smooth groups from sharp edges.
- *
- * \param r_totgroup The total number of groups, 1 or more.
- * \return Polygon aligned array of group index values (bitflags if use_bitflags is true), starting at 1.
+/** Callback deciding whether the given poly/loop/edge define an island boundary or not.
  */
-int *BKE_mesh_calc_smoothgroups(const MEdge *medge, const int totedge,
-                                const MPoly *mpoly, const int totpoly,
-                                const MLoop *mloop, const int totloop,
-                                int *r_totgroup, const bool use_bitflags)
+typedef bool (*check_island_boundary)(const MPoly *mpoly, const MLoop *mloop, const MEdge *medge,
+                                      const int nbr_egde_users);
+
+static bool bke_check_island_boundary_smooth(const MPoly *mp, const MLoop *UNUSED(ml), const MEdge *me,
+                                             const int nbr_egde_users)
+{
+	/* Edge is sharp if its poly is sharp, or edge itself is sharp, or edge is not used by exactly two polygons. */
+	return (!(mp->flag & ME_SMOOTH) || (me->flag & ME_SHARP) || (nbr_egde_users != 2));
+}
+
+/* TODO: I'm not sure edge seam flag is enough to define UV islands? Maybe we should also consider UVmaps values
+ *       themselves (i.e. different UV-edges for a same mesh-edge => boun dary edge too?).
+ *       Would make things much more complex though, and each UVMap would then need its own mesh mapping,
+ *       not sure we want that at all!
+ */
+static bool bke_check_island_boundary_uv(const MPoly *UNUSED(mp), const MLoop *UNUSED(ml), const MEdge *me,
+                                         const int UNUSED(nbr_egde_users))
+{
+	/* Edge is UV boundary if tagged as seam. */
+	return (me->flag & ME_SEAM) != 0;
+}
+
+static void bke_poly_loop_islands_compute(const MEdge *medge, const int totedge, const MPoly *mpoly, const int totpoly,
+                                          const MLoop *mloop, const int totloop, const bool use_bitflags,
+                                          check_island_boundary edge_boundary_check,
+                                          int **r_poly_groups, int *r_totgroup)
 {
 	int *poly_groups;
 	int *poly_stack;
@@ -402,7 +420,8 @@ int *BKE_mesh_calc_smoothgroups(const MEdge *medge, const int totedge,
 
 	if (totpoly == 0) {
 		*r_totgroup = 0;
-		return NULL;
+		*r_poly_groups = NULL;
+		return;
 	}
 
 	BKE_mesh_edge_poly_map_create(&edge_poly_map, &edge_poly_mem,
@@ -441,22 +460,19 @@ int *BKE_mesh_calc_smoothgroups(const MEdge *medge, const int totedge,
 		while (ps_curr_idx != ps_end_idx) {
 			const MPoly *mp;
 			const MLoop *ml;
-			bool sharp_poly;
 			int j;
 
 			poly = poly_stack[ps_curr_idx++];
 			BLI_assert(poly_groups[poly] == poly_group_id);
 
 			mp = &mpoly[poly];
-			sharp_poly = !(mp->flag & ME_SMOOTH);
 			for (ml = &mloop[mp->loopstart], j = mp->totloop; j--; ml++) {
 				/* loop over poly users */
+				const MEdge *me = &medge[ml->e];
 				const MeshElemMap *map_ele = &edge_poly_map[ml->e];
 				const int *p = map_ele->indices;
 				int i = map_ele->count;
-				/* Edge is smooth only if its poly is not sharp, edge is not sharp,
-				 * and edge is used by exactly two polygons. */
-				if (!sharp_poly && !(medge[ml->e].flag & ME_SHARP) && i == 2) {
+				if (!edge_boundary_check(mp, ml, me, i)) {
 					for (; i--; p++) {
 						/* if we meet other non initialized its a bug */
 						BLI_assert(ELEM(poly_groups[*p], 0, poly_group_id));
@@ -532,22 +548,154 @@ int *BKE_mesh_calc_smoothgroups(const MEdge *medge, const int totedge,
 	MEM_freeN(poly_stack);
 
 	*r_totgroup = tot_group;
+	*r_poly_groups = poly_groups;
+}
+
+/**
+ * Calculate smooth groups from sharp edges.
+ *
+ * \param r_totgroup The total number of groups, 1 or more.
+ * \return Polygon aligned array of group index values (bitflags if use_bitflags is true), starting at 1
+ *         (0 being used as 'invalid' flag).
+ *         Note it's callers's responsibility to MEM_freeN returned array.
+ */
+int *BKE_mesh_calc_smoothgroups(const MEdge *medge, const int totedge,
+                                const MPoly *mpoly, const int totpoly,
+                                const MLoop *mloop, const int totloop,
+                                int *r_totgroup, const bool use_bitflags)
+{
+	int *poly_groups = NULL;
+
+	bke_poly_loop_islands_compute(medge, totedge, mpoly, totpoly, mloop, totloop, use_bitflags,
+	                              bke_check_island_boundary_smooth, &poly_groups, r_totgroup);
 
 	return poly_groups;
 }
+
+void BKE_loop_islands_init(MeshIslands *islands, const int num_loops)
+{
+	islands->loops_to_islands_idx = MEM_mallocN(sizeof(*islands->loops_to_islands_idx) * (size_t)num_loops, __func__);
+	islands->islands = NULL;
+	islands->nbr_islands = 0;
+	islands->mem = NULL;
+}
+
+void BKE_loop_islands_free(MeshIslands *islands)
+{
+	/* For now, we use mere MEM_mallocN, later we'll probably switch to memarena! */
+	int i = islands->nbr_islands;
+
+	if (i) {
+		while (i--) {
+			MeshIslandItem *it = &islands->islands[i];
+			if (it->nbr_polys) {
+				MEM_freeN(it->polys_idx);
+			}
+		}
+
+		MEM_freeN(islands->islands);
+		MEM_freeN(islands->loops_to_islands_idx);
+	}
+
+	islands->nbr_loops = 0;
+	islands->loops_to_islands_idx = NULL;
+	islands->nbr_islands = 0;
+	islands->islands = NULL;
+	islands->mem = NULL;
+}
+
+void BKE_loop_islands_add_island(MeshIslands *islands, const int num_loops, int *loop_indices,
+                                 const int num_polys, int *poly_indices)
+{
+	MeshIslandItem *isl;
+	const int curr_island_idx = islands->nbr_islands++;
+	const size_t curr_num_islands = (size_t)islands->nbr_islands;
+	int i = num_loops;
+
+	islands->nbr_loops = num_loops;
+	while (i--) {
+		islands->loops_to_islands_idx[loop_indices[i]] = curr_island_idx;
+	}
+
+	/* XXX TODO UGLY!!! Quick code, to be done better. */
+	isl = MEM_mallocN(sizeof(*isl) * curr_num_islands, __func__);
+	if (curr_island_idx) {
+		memcpy(isl, islands->islands, sizeof(*isl) * (curr_num_islands - 1));
+		MEM_freeN(islands->islands);
+	}
+	islands->islands = isl;
+
+	isl = &isl[curr_island_idx];
+	isl->nbr_polys = num_polys;
+	isl->polys_idx = MEM_mallocN(sizeof(*isl->polys_idx) * (size_t)num_polys, __func__);
+	memcpy(isl->polys_idx, poly_indices, sizeof(*isl->polys_idx) * (size_t)num_polys);
+}
+
+/* Note: all this could be optimized... Not sure it would be worth the more complex code, though, those loops
+ *       are supposed to be really quick to do... */
+bool BKE_loop_island_compute_uv(struct DerivedMesh *dm, MeshIslands *r_islands)
+{
+	MEdge *edges = dm->getEdgeArray(dm);
+	MPoly *polys = dm->getPolyArray(dm);
+	MLoop *loops = dm->getLoopArray(dm);
+	const int num_edges = dm->getNumEdges(dm);
+	const int num_polys = dm->getNumPolys(dm);
+	const int num_loops = dm->getNumLoops(dm);
+
+	int *poly_groups = NULL;
+	int num_poly_groups;
+
+	int *poly_indices = MEM_mallocN(sizeof(*poly_indices) * (size_t)num_polys, __func__);
+	int *loop_indices = MEM_mallocN(sizeof(*loop_indices) * (size_t)num_loops, __func__);
+	int num_pidx, num_lidx;
+
+	int grp_idx, p_idx, pl_idx, l_idx;
+
+	BKE_loop_islands_free(r_islands);
+	BKE_loop_islands_init(r_islands, num_loops);
+
+	bke_poly_loop_islands_compute(edges, num_edges, polys, num_polys, loops, num_loops, false,
+	                              bke_check_island_boundary_uv, &poly_groups, &num_poly_groups);
+
+	if (!num_poly_groups) {
+		/* Should never happen... */
+		return false;
+	}
+
+	/* Note: here we ignore '0' invalid group - this should *never* happen in this case anyway? */
+	for (grp_idx = 1; grp_idx <= num_poly_groups; grp_idx++) {
+		num_pidx = num_lidx = 0;
+
+		for (p_idx = 0; p_idx < num_polys; p_idx++) {
+			MPoly *mp;
+
+			if (poly_groups[p_idx] != grp_idx) {
+				continue;
+			}
+
+			mp = &polys[p_idx];
+			poly_indices[num_pidx++] = p_idx;
+			for (l_idx = mp->loopstart, pl_idx = 0; pl_idx < mp->totloop; l_idx++, pl_idx++) {
+				loop_indices[num_lidx++] = l_idx;
+			}
+		}
+
+		BKE_loop_islands_add_island(r_islands, num_lidx, loop_indices, num_pidx, poly_indices);
+	}
+
+	MEM_freeN(poly_indices);
+	MEM_freeN(loop_indices);
+	MEM_freeN(poly_groups);
+
+	return true;
+}
+
 /** \} */
 
 /* -------------------------------------------------------------------- */
 
 /** \name Mesh to mesh mapping
  * \{ */
-
-/**
- * Calculate smooth groups from sharp edges.
- *
- * \param r_totgroup The total number of groups, 1 or more.
- * \return Polygon aligned array of group index values (bitflags if use_bitflags is true), starting at 1.
- */
 
 void BKE_mesh2mesh_mapping_free(Mesh2MeshMapping *map)
 {
@@ -591,68 +739,6 @@ static void bke_mesh2mesh_mapping_item_define(
 	}
 	mapit->hit_distance = hit_distance;
 	mapit->island = island;
-}
-
-void BKE_mesh2mesh_mapping_islands_create(Mesh2MeshMappingIslands *r_islands, const int num_loops)
-{
-	r_islands->loops_to_islands_idx = MEM_mallocN(sizeof(*r_islands->loops_to_islands_idx) * (size_t)num_loops, __func__);
-	r_islands->islands = NULL;
-	r_islands->nbr_islands = 0;
-	r_islands->mem = NULL;
-}
-
-void BKE_mesh2mesh_mapping_islands_add_island(Mesh2MeshMappingIslands *r_islands,
-                                              const int num_loops, int *loop_indices,
-                                              const int num_polys, int *poly_indices)
-{
-	Mesh2MeshMappingIslandItem *islands;
-	const int curr_island_idx = r_islands->nbr_islands++;
-	const size_t curr_num_islands = (size_t)r_islands->nbr_islands;
-	int i = num_loops;
-
-	r_islands->nbr_loops = num_loops;
-	while (i--) {
-		r_islands->loops_to_islands_idx[loop_indices[i]] = curr_island_idx;
-	}
-
-	/* XXX TODO UGLY!!! Quick code, to be done better. */
-	islands = MEM_mallocN(sizeof(*islands) * curr_num_islands, __func__);
-	if (curr_island_idx) {
-		memcpy(islands, r_islands->islands, curr_num_islands - 1);
-		MEM_freeN(r_islands->islands);
-	}
-	r_islands->islands = islands;
-
-	islands = &islands[curr_island_idx];
-	islands->nbr_polys = num_polys;
-	islands->polys_idx = MEM_mallocN(sizeof(*islands->polys_idx) * (size_t)num_polys, __func__);
-	memcpy(islands->polys_idx, poly_indices, sizeof(*islands->polys_idx) * (size_t)num_polys);
-}
-
-static void bke_mesh2mesh_mapping_islands_free(Mesh2MeshMappingIslands *islands)
-{
-	/* For now, we use mere MEM_mallocN, later we'll probably switch to memarena! */
-	int i = islands->nbr_islands;
-
-	if (!i) {
-		return;
-	}
-
-	while (i--) {
-		Mesh2MeshMappingIslandItem *it = &islands->islands[i];
-		if (it->nbr_polys) {
-			MEM_freeN(it->polys_idx);
-		}
-	}
-
-	MEM_freeN(islands->islands);
-	MEM_freeN(islands->loops_to_islands_idx);
-
-	islands->nbr_loops = 0;
-	islands->loops_to_islands_idx = NULL;
-	islands->nbr_islands = 0;
-	islands->islands = NULL;
-	islands->mem = NULL;
 }
 
 static int bke_mesh2mesh_mapping_get_interp_poly_data(
@@ -1412,7 +1498,7 @@ void BKE_dm2mesh_mapping_loops_compute(
 
 		const bool use_from_vert = (mode & M2MMAP_USE_VERT);
 
-		Mesh2MeshMappingIslands islands = {0};
+		MeshIslands islands = {0};
 		bool use_islands = false;
 
 		float (*poly_nors_src)[3] = NULL;
@@ -1518,6 +1604,7 @@ void BKE_dm2mesh_mapping_loops_compute(
 			use_islands = gen_islands_src(dm_src, &islands);
 			num_trees = use_islands ? islands.nbr_islands : 1;
 			treedata = MEM_callocN(sizeof(*treedata) * (size_t)num_trees, __func__);
+			printf("num trees/islands: %d (%d)\n", num_trees, use_islands);
 		}
 		else {
 			num_trees = 1;
@@ -1530,7 +1617,7 @@ void BKE_dm2mesh_mapping_loops_compute(
 				bool *verts_active = MEM_mallocN(sizeof(*verts_active) * (size_t)num_verts_src, __func__);
 
 				for (tidx = 0; tidx < num_trees; tidx++) {
-					Mesh2MeshMappingIslandItem *isld = &islands.islands[tidx];
+					MeshIslandItem *isld = &islands.islands[tidx];
 					if (isld) {
 						int num_verts_active = 0;
 						memset(verts_active, 0, sizeof(*verts_active) * (size_t)num_verts_src);
@@ -1578,13 +1665,14 @@ void BKE_dm2mesh_mapping_loops_compute(
 				faces_active = MEM_mallocN(sizeof(*faces_active) * (size_t)num_faces_src, __func__);
 
 				for (tidx = 0; tidx < num_trees; tidx++) {
-					Mesh2MeshMappingIslandItem *isld = gen_islands_src ? &islands.islands[tidx] : NULL;
+					MeshIslandItem *isld = &islands.islands[tidx];
 					if (isld) {
 						int num_faces_active = 0;
 						memset(faces_active, 0, sizeof(*faces_active) * (size_t)num_faces_src);
 						for (i = 0; i < num_faces_src; i++) {
 							MPoly *mp_src = &polys_src[orig_poly_idx_src[i]];
 							if (islands.loops_to_islands_idx[mp_src->loopstart] == tidx) {
+								printf("src poly %d in src island %d\n", orig_poly_idx_src[i], tidx);
 								faces_active[i] = true;
 								num_faces_active++;
 							}
@@ -1685,7 +1773,7 @@ void BKE_dm2mesh_mapping_loops_compute(
 									}
 								}
 							}
-							facs[tidx][plidx_dst][0] = (hitdist != 0.0f) ? (1.0f / hitdist * best_nor_dot) : FLT_MAX;
+							facs[tidx][plidx_dst][0] = (hitdist != 0.0f) ? (1.0f / hitdist * best_nor_dot) : 1e18f;
 							facs[tidx][plidx_dst][1] = hitdist;
 							facs[tidx][plidx_dst][2] = (float)best_idx_src;
 						}
@@ -1703,11 +1791,11 @@ void BKE_dm2mesh_mapping_loops_compute(
 						copy_v3_v3(tmp_co, verts_dst[ml_dst->v].co);
 						copy_v3_v3(tmp_no, loop_nors_dst[plidx_dst + mp_dst->loopstart]);
 
-						hitdist = bke_mesh2mesh_bvhtree_query_raycast(treedata, &rayhit, space_transform,
+						hitdist = bke_mesh2mesh_bvhtree_query_raycast(tdata, &rayhit, space_transform,
 						                                              tmp_co, tmp_no, radius, max_dist);
 
 						if (rayhit.index >= 0 && hitdist <= max_dist) {
-							facs[tidx][plidx_dst][0] = (hitdist != 0.0f) ? (1.0f / hitdist) : FLT_MAX;
+							facs[tidx][plidx_dst][0] = (hitdist != 0.0f) ? (1.0f / hitdist) : 1e18f;
 							facs[tidx][plidx_dst][1] = hitdist;
 							facs[tidx][plidx_dst][2] = (float)orig_poly_idx_src[rayhit.index];
 							copy_v3_v3(&facs[tidx][plidx_dst][3], rayhit.co);
@@ -1725,11 +1813,11 @@ void BKE_dm2mesh_mapping_loops_compute(
 						copy_v3_v3(tmp_co, verts_dst[ml_dst->v].co);
 						nearest.index = -1;
 
-						hitdist = bke_mesh2mesh_bvhtree_query_nearest(treedata, &nearest, space_transform,
+						hitdist = bke_mesh2mesh_bvhtree_query_nearest(tdata, &nearest, space_transform,
 						                                              tmp_co, max_dist_sq);
 
 						if (nearest.index >= 0) {
-							facs[tidx][plidx_dst][0] = (hitdist != 0.0f) ? (1.0f / hitdist) : FLT_MAX;
+							facs[tidx][plidx_dst][0] = (hitdist != 0.0f) ? (1.0f / hitdist) : 1e18f;
 							facs[tidx][plidx_dst][1] = hitdist;
 							facs[tidx][plidx_dst][2] = (float)orig_poly_idx_src[nearest.index];
 							copy_v3_v3(&facs[tidx][plidx_dst][3], nearest.co);
@@ -1861,7 +1949,7 @@ void BKE_dm2mesh_mapping_loops_compute(
 		if (weights_interp) {
 			MEM_freeN(weights_interp);
 		}
-		bke_mesh2mesh_mapping_islands_free(&islands);
+		BKE_loop_islands_free(&islands);
 		MEM_freeN(treedata);
 	}
 }

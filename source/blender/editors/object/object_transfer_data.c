@@ -267,14 +267,11 @@ static bool data_transfer_check(bContext *UNUSED(C), wmOperator *op)
 
 /* ********** */
 
-static bool data_transfer_get_loop_islands_uv(struct DerivedMesh *dm, Mesh2MeshMappingIslands *r_islands)
-{
-}
-
 static loop_island_compute data_transfer_get_loop_islands_generator(const int data_type)
 {
 	switch (data_type) {
 		case CD_FAKE_UV:
+			return BKE_loop_island_compute_uv;
 			break;
 		default:
 			break;
@@ -757,12 +754,13 @@ bool ED_data_transfer(
 	if (MDT_DATATYPE_IS_LOOP(data_type)) {
 		const int num_create = use_create ? me_dst->totloop : 0;
 
-		//loop_island_compute island_callback = data_transfer_get_loop_islands_generator(data_type);
+		loop_island_compute island_callback = data_transfer_get_loop_islands_generator(data_type);
 
 		BKE_dm2mesh_mapping_loops_compute(map_loop_mode, space_transform, max_distance,
 		                                  me_dst->mvert, me_dst->totvert, me_dst->medge, me_dst->totedge,
 		                                  me_dst->mpoly, me_dst->totpoly, me_dst->mloop, me_dst->totloop,
-		                                  &me_dst->pdata, &me_dst->ldata, me_dst->smoothresh, dm_src, NULL, &geom_map);
+		                                  &me_dst->pdata, &me_dst->ldata, me_dst->smoothresh, dm_src,
+		                                  island_callback, &geom_map);
 
 		/* TODO add further filtering of mapping data here! */
 
