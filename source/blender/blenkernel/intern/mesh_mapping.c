@@ -36,6 +36,7 @@
 #include "BLI_utildefines.h"
 #include "BLI_bitmap.h"
 #include "BLI_math.h"
+#include "BLI_memarena.h"
 
 #include "BKE_bvhutils.h"
 #include "BKE_customdata.h"
@@ -699,24 +700,23 @@ bool BKE_loop_island_compute_uv(struct DerivedMesh *dm, MeshIslands *r_islands)
 /** \name Mesh to mesh mapping
  * \{ */
 
+void BKE_mesh2mesh_mapping_init(Mesh2MeshMapping *map, const int num_items)
+{
+	MemArena *mem = BLI_memarena_new(BLI_MEMARENA_STD_BUFSIZE, __func__);
+
+	BKE_mesh2mesh_mapping_free(map);
+
+	map->items = BLI_memarena_alloc(mem, sizeof(*map->items) * (size_t)num_items);
+	map->nbr_items = num_items;
+
+	map->mem = mem;
+}
+
 void BKE_mesh2mesh_mapping_free(Mesh2MeshMapping *map)
 {
-	/* For now, we use mere MEM_mallocN, later we'll probably switch to memarena! */
-	int i = map->nbr_items;
-
-	if (!i) {
-		return;
+	if (map->mem) {
+		BLI_memarena_free((MemArena *)map->mem);
 	}
-
-	while (i--) {
-		Mesh2MeshMappingItem *it = &map->items[i];
-		if (it->nbr_sources) {
-			MEM_freeN(it->indices_src);
-			MEM_freeN(it->weights_src);
-		}
-	}
-
-	MEM_freeN(map->items);
 
 	map->nbr_items = 0;
 	map->items = NULL;
@@ -724,14 +724,17 @@ void BKE_mesh2mesh_mapping_free(Mesh2MeshMapping *map)
 }
 
 static void bke_mesh2mesh_mapping_item_define(
-        Mesh2MeshMappingItem *mapit, const float hit_distance, const int island,
+        Mesh2MeshMapping *map, const int idx, const float hit_distance, const int island,
         const int nbr_sources, const int *indices_src, const float *weights_src)
 {
+	Mesh2MeshMappingItem *mapit = &map->items[idx];
+	MemArena *mem = map->mem;
+
 	if (nbr_sources) {
 		mapit->nbr_sources = nbr_sources;
-		mapit->indices_src = MEM_mallocN(sizeof(*mapit->indices_src) * (size_t)nbr_sources, __func__);
+		mapit->indices_src = BLI_memarena_alloc(mem, sizeof(*mapit->indices_src) * (size_t)nbr_sources);
 		memcpy(mapit->indices_src, indices_src, sizeof(*mapit->indices_src) * (size_t)nbr_sources);
-		mapit->weights_src = MEM_mallocN(sizeof(*mapit->weights_src) * (size_t)nbr_sources, __func__);
+		mapit->weights_src = BLI_memarena_alloc(mem, sizeof(*mapit->weights_src) * (size_t)nbr_sources);
 		memcpy(mapit->weights_src, weights_src, sizeof(*mapit->weights_src) * (size_t)nbr_sources);
 	}
 	else {
@@ -841,13 +844,12 @@ void BKE_dm2mesh_mapping_verts_compute(
 
 	BLI_assert(mode & M2MMAP_MODE_VERT);
 
-	r_map->items = MEM_mallocN(sizeof(*r_map->items) * (size_t)numverts_dst, __func__);
-	r_map->nbr_items = numverts_dst;
+	BKE_mesh2mesh_mapping_init(r_map, numverts_dst);
 
 	if (mode == M2MMAP_MODE_TOPOLOGY) {
 		BLI_assert(numverts_dst == dm_src->getNumVerts(dm_src));
 		for (i = 0; i < numverts_dst; i++) {
-			bke_mesh2mesh_mapping_item_define(&r_map->items[i], FLT_MAX, 0, 1, &i, &full_weight);
+			bke_mesh2mesh_mapping_item_define(r_map, i, FLT_MAX, 0, 1, &i, &full_weight);
 		}
 	}
 	else {
@@ -869,11 +871,11 @@ void BKE_dm2mesh_mapping_verts_compute(
 				                                              tmp_co, max_dist_sq);
 
 				if (nearest.index >= 0) {
-					bke_mesh2mesh_mapping_item_define(&r_map->items[i], hitdist, 0, 1, &nearest.index, &full_weight);
+					bke_mesh2mesh_mapping_item_define(r_map, i, hitdist, 0, 1, &nearest.index, &full_weight);
 				}
 				else {
 					/* No source for this dest vertex! */
-					bke_mesh2mesh_mapping_item_define(&r_map->items[i], FLT_MAX, 0, 0, NULL, NULL);
+					bke_mesh2mesh_mapping_item_define(r_map, i, FLT_MAX, 0, 0, NULL, NULL);
 				}
 			}
 		}
@@ -902,7 +904,7 @@ void BKE_dm2mesh_mapping_verts_compute(
 						const float dist_v1 = len_squared_v3v3(tmp_co, *v1cos);
 						const float dist_v2 = len_squared_v3v3(tmp_co, *v2cos);
 						const int index = (int)((dist_v1 > dist_v2) ? me->v2 : me->v1);
-						bke_mesh2mesh_mapping_item_define(&r_map->items[i], hitdist, 0, 1, &index, &full_weight);
+						bke_mesh2mesh_mapping_item_define(r_map, i, hitdist, 0, 1, &index, &full_weight);
 					}
 					else if (mode == M2MMAP_MODE_VERT_EDGEINTERP_NEAREST) {
 						int indices[2];
@@ -916,12 +918,12 @@ void BKE_dm2mesh_mapping_verts_compute(
 						CLAMP(weights[0], 0.0f, 1.0f);
 						weights[1] = 1.0f - weights[0];
 
-						bke_mesh2mesh_mapping_item_define(&r_map->items[i], hitdist, 0, 2, indices, weights);
+						bke_mesh2mesh_mapping_item_define(r_map, i, hitdist, 0, 2, indices, weights);
 					}
 				}
 				else {
 					/* No source for this dest vertex! */
-					bke_mesh2mesh_mapping_item_define(&r_map->items[i], FLT_MAX, 0, 0, NULL, NULL);
+					bke_mesh2mesh_mapping_item_define(r_map, i, FLT_MAX, 0, 0, NULL, NULL);
 				}
 			}
 
@@ -962,12 +964,11 @@ void BKE_dm2mesh_mapping_verts_compute(
 						                                mp_src, loops_src, (const float (*)[3])vcos_src, rayhit.co,
 						                                &tmp_buff_size, &vcos, false, &indices, &weights, true, NULL);
 
-						bke_mesh2mesh_mapping_item_define(&r_map->items[i], rayhit.dist, 0,
-						                                  nbr_sources, indices, weights);
+						bke_mesh2mesh_mapping_item_define(r_map, i, rayhit.dist, 0, nbr_sources, indices, weights);
 					}
 					else {
 						/* No source for this dest vertex! */
-						bke_mesh2mesh_mapping_item_define(&r_map->items[i], FLT_MAX, 0, 0, NULL, NULL);
+						bke_mesh2mesh_mapping_item_define(r_map, i, FLT_MAX, 0, 0, NULL, NULL);
 					}
 				}
 			}
@@ -993,7 +994,7 @@ void BKE_dm2mesh_mapping_verts_compute(
 							                                &tmp_buff_size, &vcos, false, &indices, &weights, false,
 							                                &index);
 
-							bke_mesh2mesh_mapping_item_define(&r_map->items[i], hitdist, 0, 1, &index, &full_weight);
+							bke_mesh2mesh_mapping_item_define(r_map, i, hitdist, 0, 1, &index, &full_weight);
 						}
 						else if (mode == M2MMAP_MODE_VERT_POLYINTERP_NEAREST) {
 							const int nbr_sources = bke_mesh2mesh_mapping_get_interp_poly_data(
@@ -1001,13 +1002,12 @@ void BKE_dm2mesh_mapping_verts_compute(
 							                                &tmp_buff_size, &vcos, false, &indices, &weights, true,
 							                                NULL);
 
-							bke_mesh2mesh_mapping_item_define(&r_map->items[i], hitdist, 0,
-							                                  nbr_sources, indices, weights);
+							bke_mesh2mesh_mapping_item_define(r_map, i, hitdist, 0, nbr_sources, indices, weights);
 						}
 					}
 					else {
 						/* No source for this dest vertex! */
-						bke_mesh2mesh_mapping_item_define(&r_map->items[i], FLT_MAX, 0, 0, NULL, NULL);
+						bke_mesh2mesh_mapping_item_define(r_map, i, FLT_MAX, 0, 0, NULL, NULL);
 					}
 				}
 			}
@@ -1038,13 +1038,12 @@ void BKE_dm2mesh_mapping_edges_compute(
 
 	BLI_assert(mode & M2MMAP_MODE_EDGE);
 
-	r_map->items = MEM_mallocN(sizeof(*r_map->items) * (size_t)numedges_dst, __func__);
-	r_map->nbr_items = numedges_dst;
+	BKE_mesh2mesh_mapping_init(r_map, numedges_dst);
 
 	if (mode == M2MMAP_MODE_TOPOLOGY) {
 		BLI_assert(numedges_dst == dm_src->getNumEdges(dm_src));
 		for (i = 0; i < numedges_dst; i++) {
-			bke_mesh2mesh_mapping_item_define(&r_map->items[i], FLT_MAX, 0, 1, &i, &full_weight);
+			bke_mesh2mesh_mapping_item_define(r_map, i, FLT_MAX, 0, 1, &i, &full_weight);
 		}
 	}
 	else {
@@ -1155,11 +1154,11 @@ void BKE_dm2mesh_mapping_edges_compute(
 						}
 					}
 					hitdist = len_v3v3(co_dst, co_src);
-					bke_mesh2mesh_mapping_item_define(&r_map->items[i], hitdist, 0, 1, &best_eidx_src, &full_weight);
+					bke_mesh2mesh_mapping_item_define(r_map, i, hitdist, 0, 1, &best_eidx_src, &full_weight);
 				}
 				else {
 					/* No source for this dest edge! */
-					bke_mesh2mesh_mapping_item_define(&r_map->items[i], FLT_MAX, 0, 0, NULL, NULL);
+					bke_mesh2mesh_mapping_item_define(r_map, i, FLT_MAX, 0, 0, NULL, NULL);
 				}
 			}
 
@@ -1181,11 +1180,11 @@ void BKE_dm2mesh_mapping_edges_compute(
 				                                              tmp_co, max_dist_sq);
 
 				if (nearest.index >= 0) {
-					bke_mesh2mesh_mapping_item_define(&r_map->items[i], hitdist, 0, 1, &nearest.index, &full_weight);
+					bke_mesh2mesh_mapping_item_define(r_map, i, hitdist, 0, 1, &nearest.index, &full_weight);
 				}
 				else {
 					/* No source for this dest edge! */
-					bke_mesh2mesh_mapping_item_define(&r_map->items[i], FLT_MAX, 0, 0, NULL, NULL);
+					bke_mesh2mesh_mapping_item_define(r_map, i, FLT_MAX, 0, 0, NULL, NULL);
 				}
 			}
 		}
@@ -1231,12 +1230,12 @@ void BKE_dm2mesh_mapping_edges_compute(
 						}
 					}
 					if (best_eidx_src >= 0) {
-						bke_mesh2mesh_mapping_item_define(&r_map->items[i], hitdist, 0, 1, &best_eidx_src, &full_weight);
+						bke_mesh2mesh_mapping_item_define(r_map, i, hitdist, 0, 1, &best_eidx_src, &full_weight);
 					}
 				}
 				else {
 					/* No source for this dest edge! */
-					bke_mesh2mesh_mapping_item_define(&r_map->items[i], FLT_MAX, 0, 0, NULL, NULL);
+					bke_mesh2mesh_mapping_item_define(r_map, i, FLT_MAX, 0, 0, NULL, NULL);
 				}
 			}
 
@@ -1275,13 +1274,12 @@ void BKE_dm2mesh_mapping_polys_compute(
 		}
 	}
 
-	r_map->items = MEM_mallocN(sizeof(*r_map->items) * (size_t)numpolys_dst, __func__);
-	r_map->nbr_items = numpolys_dst;
+	BKE_mesh2mesh_mapping_init(r_map, numpolys_dst);
 
 	if (mode == M2MMAP_MODE_TOPOLOGY) {
 		BLI_assert(numpolys_dst == dm_src->getNumPolys(dm_src));
 		for (i = 0; i < numpolys_dst; i++) {
-			bke_mesh2mesh_mapping_item_define(&r_map->items[i], FLT_MAX, 0, 1, &i, &full_weight);
+			bke_mesh2mesh_mapping_item_define(r_map, i, FLT_MAX, 0, 1, &i, &full_weight);
 		}
 	}
 	else {
@@ -1309,12 +1307,12 @@ void BKE_dm2mesh_mapping_polys_compute(
 				                                              tmp_co, max_dist_sq);
 
 				if (nearest.index >= 0) {
-					bke_mesh2mesh_mapping_item_define(&r_map->items[i], hitdist, 0, 1,
-					                                  &orig_poly_idx_src[nearest.index], &full_weight);
+					bke_mesh2mesh_mapping_item_define(r_map, i, hitdist, 0,
+					                                  1, &orig_poly_idx_src[nearest.index], &full_weight);
 				}
 				else {
 					/* No source for this dest poly! */
-					bke_mesh2mesh_mapping_item_define(&r_map->items[i], FLT_MAX, 0, 0, NULL, NULL);
+					bke_mesh2mesh_mapping_item_define(r_map, i, FLT_MAX, 0, 0, NULL, NULL);
 				}
 			}
 		}
@@ -1333,12 +1331,12 @@ void BKE_dm2mesh_mapping_polys_compute(
 				                                              tmp_co, tmp_no, radius, max_dist);
 
 				if (rayhit.index >= 0 && hitdist <= max_dist) {
-					bke_mesh2mesh_mapping_item_define(&r_map->items[i], rayhit.dist, 0, 1,
-					                                  &orig_poly_idx_src[rayhit.index], &full_weight);
+					bke_mesh2mesh_mapping_item_define(r_map, i, rayhit.dist, 0,
+					                                  1, &orig_poly_idx_src[rayhit.index], &full_weight);
 				}
 				else {
 					/* No source for this dest vertex! */
-					bke_mesh2mesh_mapping_item_define(&r_map->items[i], FLT_MAX, 0, 0, NULL, NULL);
+					bke_mesh2mesh_mapping_item_define(r_map, i, FLT_MAX, 0, 0, NULL, NULL);
 				}
 			}
 		}
@@ -1444,12 +1442,12 @@ void BKE_dm2mesh_mapping_polys_compute(
 						indices[nbr_sources] = j;
 						nbr_sources++;
 					}
-					bke_mesh2mesh_mapping_item_define(&r_map->items[i], hitdist_accum / totweights, 0,
+					bke_mesh2mesh_mapping_item_define(r_map, i, hitdist_accum / totweights, 0,
 					                                  nbr_sources, indices, weights);
 				}
 				else {
 					/* No source for this dest poly! */
-					bke_mesh2mesh_mapping_item_define(&r_map->items[i], FLT_MAX, 0, 0, NULL, NULL);
+					bke_mesh2mesh_mapping_item_define(r_map, i, FLT_MAX, 0, 0, NULL, NULL);
 				}
 			}
 
@@ -1481,14 +1479,13 @@ void BKE_dm2mesh_mapping_loops_compute(
 
 	BLI_assert(mode & M2MMAP_MODE_LOOP);
 
-	r_map->items = MEM_mallocN(sizeof(*r_map->items) * (size_t)numloops_dst, __func__);
-	r_map->nbr_items = numloops_dst;
+	BKE_mesh2mesh_mapping_init(r_map, numloops_dst);
 
 	if (mode == M2MMAP_MODE_TOPOLOGY) {
 		/* In topology mapping, we assume meshes are identical, islands included! */
 		BLI_assert(numloops_dst == dm_src->getNumLoops(dm_src));
 		for (i = 0; i < numloops_dst; i++) {
-			bke_mesh2mesh_mapping_item_define(&r_map->items[i], FLT_MAX, 0, 1, &i, &full_weight);
+			bke_mesh2mesh_mapping_item_define(r_map, i, FLT_MAX, 0, 1, &i, &full_weight);
 		}
 	}
 	else {
@@ -1856,22 +1853,19 @@ void BKE_dm2mesh_mapping_loops_compute(
 					lidx_dst = plidx_dst + mp_dst->loopstart;
 					if (best_island_idx < 0) {
 						/* No source for any loops of our dest poly in any source islands. */
-						bke_mesh2mesh_mapping_item_define(&r_map->items[lidx_dst], FLT_MAX, 0, 0,
-						                                  NULL, NULL);
+						bke_mesh2mesh_mapping_item_define(r_map, lidx_dst, FLT_MAX, 0, 0, NULL, NULL);
 					}
 					else if (use_from_vert) {
 						/* Indices stored in facs are those of loops, one per dest loop. */
 						lidx_src = (int)facs[best_island_idx][plidx_dst][2];
 						if (lidx_src >= 0) {
-							bke_mesh2mesh_mapping_item_define(&r_map->items[lidx_dst],
-							                                  facs[best_island_idx][plidx_dst][1],
+							bke_mesh2mesh_mapping_item_define(r_map, lidx_dst, facs[best_island_idx][plidx_dst][1],
 							                                  best_island_idx, 1, &lidx_src, &full_weight);
 						}
 						else {
 							/* No source for this loop in this island. */
 							/* TODO: would probably be better to get a source at all cost in best island anyway? */
-							bke_mesh2mesh_mapping_item_define(&r_map->items[lidx_dst], FLT_MAX, best_island_idx, 0,
-							                                  NULL, NULL);
+							bke_mesh2mesh_mapping_item_define(r_map, lidx_dst, FLT_MAX, best_island_idx, 0, NULL, NULL);
 						}
 					}
 					else {
@@ -1888,9 +1882,8 @@ void BKE_dm2mesh_mapping_loops_compute(
 								        &buff_size_interp, &vcos_interp, true, &indices_interp,
 								        &weights_interp, false, &best_loop_idx_src);
 
-								bke_mesh2mesh_mapping_item_define(&r_map->items[lidx_dst],
-								                                  facs[best_island_idx][plidx_dst][1], best_island_idx,
-								                                  1, &best_loop_idx_src, &full_weight);
+								bke_mesh2mesh_mapping_item_define(r_map, lidx_dst, facs[best_island_idx][plidx_dst][1],
+								                                  best_island_idx, 1, &best_loop_idx_src, &full_weight);
 							}
 							else {
 								const int nbr_sources = bke_mesh2mesh_mapping_get_interp_poly_data(
@@ -1898,7 +1891,7 @@ void BKE_dm2mesh_mapping_loops_compute(
 								                                &buff_size_interp, &vcos_interp, true, &indices_interp,
 								                                &weights_interp, true, NULL);
 
-								bke_mesh2mesh_mapping_item_define(&r_map->items[lidx_dst],
+								bke_mesh2mesh_mapping_item_define(r_map, lidx_dst,
 								                                  facs[best_island_idx][plidx_dst][1], best_island_idx,
 								                                  nbr_sources, indices_interp, weights_interp);
 							}
@@ -1906,8 +1899,7 @@ void BKE_dm2mesh_mapping_loops_compute(
 						else {
 							/* No source for this loop in this island. */
 							/* TODO: would probably be better to get a source at all cost in best island anyway? */
-							bke_mesh2mesh_mapping_item_define(&r_map->items[lidx_dst], FLT_MAX, best_island_idx, 0,
-							                                  NULL, NULL);
+							bke_mesh2mesh_mapping_item_define(r_map, lidx_dst, FLT_MAX, best_island_idx, 0, NULL, NULL);
 						}
 					}
 				}

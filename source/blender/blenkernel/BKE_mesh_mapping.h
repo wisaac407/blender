@@ -182,6 +182,7 @@ typedef struct Mesh2MeshMapping {
 } Mesh2MeshMapping;
 
 /* Helpers! */
+void BKE_mesh2mesh_mapping_init(Mesh2MeshMapping *map, const int num_items);
 void BKE_mesh2mesh_mapping_free(Mesh2MeshMapping *map);
 
 /* TODO:
