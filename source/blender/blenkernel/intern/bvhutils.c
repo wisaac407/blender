@@ -242,9 +242,12 @@ static void mesh_edges_nearest_point(void *userdata, int index, const float co[3
 /*
  * BVH builders
  */
+
+/* ***** Vertex ***** */
+
 static BVHTree *bvhtree_from_mesh_verts_create_tree(float epsilon, int tree_type, int axis,
                                                     MVert *vert, const int numVerts,
-                                                    bool *mask, int numVerts_active)
+                                                    BLI_bitmap *mask, int numVerts_active)
 {
 	BVHTree *tree = NULL;
 	int i;
@@ -253,7 +256,7 @@ static BVHTree *bvhtree_from_mesh_verts_create_tree(float epsilon, int tree_type
 		if (mask && numVerts_active < 0) {
 			numVerts_active = 0;
 			for (i = 0; i < numVerts; i++) {
-				if (mask[i]) {
+				if (BLI_BITMAP_TEST_BOOL(mask, i)) {
 					numVerts_active++;
 				}
 			}
@@ -266,7 +269,7 @@ static BVHTree *bvhtree_from_mesh_verts_create_tree(float epsilon, int tree_type
 
 		if (tree) {
 			for (i = 0; i < numVerts; i++) {
-				if (mask && !mask[i]) {
+				if (mask && !BLI_BITMAP_TEST_BOOL(mask, i)) {
 					continue;
 				}
 				BLI_bvhtree_insert(tree, i, vert[i].co, 1);
@@ -350,7 +353,7 @@ BVHTree *bvhtree_from_mesh_verts(BVHTreeFromMesh *data, DerivedMesh *dm, float e
  * \param numVerts_active if >= 0, number of active verts to add to BVH tree (else will be computed from mask).
  */
 BVHTree *bvhtree_from_mesh_verts_ex(BVHTreeFromMesh *data, MVert *vert, const int numVerts, const bool vert_allocated,
-                                    bool *mask, int numVerts_active,
+                                    BLI_bitmap *mask, int numVerts_active,
                                     float epsilon, int tree_type, int axis)
 {
 	BVHTree *tree = bvhtree_from_mesh_verts_create_tree(epsilon, tree_type, axis, vert, numVerts, mask, numVerts_active);
@@ -360,6 +363,8 @@ BVHTree *bvhtree_from_mesh_verts_ex(BVHTreeFromMesh *data, MVert *vert, const in
 
 	return data->tree;
 }
+
+/* ***** Edge ***** */
 
 /* Builds a bvh tree where nodes are the edges of the given dm */
 BVHTree *bvhtree_from_mesh_edges(BVHTreeFromMesh *data, DerivedMesh *dm, float epsilon, int tree_type, int axis)
@@ -398,7 +403,7 @@ BVHTree *bvhtree_from_mesh_edges(BVHTreeFromMesh *data, DerivedMesh *dm, float e
 					BLI_bvhtree_balance(tree);
 
 					/* Save on cache for later use */
-//					printf("BVHTree built and saved on cache\n");
+					/* printf("BVHTree built and saved on cache\n"); */
 					bvhcache_insert(&dm->bvhCache, tree, BVHTREE_FROM_EDGES);
 				}
 			}
@@ -406,7 +411,7 @@ BVHTree *bvhtree_from_mesh_edges(BVHTreeFromMesh *data, DerivedMesh *dm, float e
 		BLI_rw_mutex_unlock(&cache_rwlock);
 	}
 	else {
-//		printf("BVHTree is already build, using cached tree\n");
+		/* printf("BVHTree is already build, using cached tree\n"); */
 	}
 
 
@@ -436,12 +441,13 @@ BVHTree *bvhtree_from_mesh_edges(BVHTreeFromMesh *data, DerivedMesh *dm, float e
 		}
 	}
 	return data->tree;
-
 }
+
+/* ***** Tessellated face ***** */
 
 static BVHTree *bvhtree_from_mesh_faces_create_tree(float epsilon, int tree_type, int axis,
                                                     BMEditMesh *em, MVert *vert, MFace *face, const int numFaces,
-                                                    bool *mask, int numFaces_active)
+                                                    BLI_bitmap *mask, int numFaces_active)
 {
 	BVHTree *tree = NULL;
 	int i;
@@ -450,7 +456,7 @@ static BVHTree *bvhtree_from_mesh_faces_create_tree(float epsilon, int tree_type
 		if (mask && numFaces_active < 0) {
 			numFaces_active = 0;
 			for (i = 0; i < numFaces; i++) {
-				if (mask[i]) {
+				if (BLI_BITMAP_TEST_BOOL(mask, i)) {
 					numFaces_active++;
 				}
 			}
@@ -482,7 +488,7 @@ static BVHTree *bvhtree_from_mesh_faces_create_tree(float epsilon, int tree_type
 				for (i = 0; i < numFaces; i++) {
 					const BMLoop **ltri = looptris[i];
 					BMFace *f = ltri[0]->f;
-					bool insert = mask ? mask[i] : true;
+					bool insert = mask ? BLI_BITMAP_TEST_BOOL(mask, i) : true;
 
 					/* Start with the assumption the triangle should be included for snapping. */
 					if (f == f_prev) {
@@ -525,7 +531,7 @@ static BVHTree *bvhtree_from_mesh_faces_create_tree(float epsilon, int tree_type
 				if (vert && face) {
 					for (i = 0; i < numFaces; i++) {
 						float co[4][3];
-						if (mask && !mask[i]) {
+						if (mask && !BLI_BITMAP_TEST_BOOL(mask, i)) {
 							continue;
 						}
 
@@ -651,7 +657,7 @@ BVHTree *bvhtree_from_mesh_faces(BVHTreeFromMesh *data, DerivedMesh *dm, float e
  */
 BVHTree *bvhtree_from_mesh_faces_ex(BVHTreeFromMesh *data, MVert *vert, const bool vert_allocated,
                                     MFace *face, const int numFaces, const bool face_allocated,
-                                    bool *mask, int numFaces_active, float epsilon, int tree_type, int axis)
+                                    BLI_bitmap *mask, int numFaces_active, float epsilon, int tree_type, int axis)
 {
 	BVHTree *tree = bvhtree_from_mesh_faces_create_tree(epsilon, tree_type, axis, NULL, vert, face, numFaces,
 	                                                    mask, numFaces_active);
@@ -685,7 +691,10 @@ void free_bvhtree_from_mesh(struct BVHTreeFromMesh *data)
 }
 
 
-/* BVHCache */
+/*
+ * BVHCache
+ */
+
 typedef struct BVHCacheItem {
 	int type;
 	BVHTree *tree;

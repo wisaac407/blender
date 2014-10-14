@@ -31,6 +31,7 @@
  *  \ingroup bke
  */
 
+#include "BLI_bitmap.h"
 #include "BLI_kdopbvh.h"
 
 /*
@@ -80,7 +81,7 @@ typedef struct BVHTreeFromMesh {
  */
 BVHTree *bvhtree_from_mesh_verts(struct BVHTreeFromMesh *data, struct DerivedMesh *mesh, float epsilon, int tree_type, int axis);
 BVHTree *bvhtree_from_mesh_verts_ex(struct BVHTreeFromMesh *data, struct MVert *vert, const int numVerts,
-                                    const bool vert_allocated, bool *mask, int numVerts_active,
+                                    const bool vert_allocated, BLI_bitmap *mask, int numVerts_active,
                                     float epsilon, int tree_type, int axis);
 
 BVHTree *bvhtree_from_mesh_edges(struct BVHTreeFromMesh *data, struct DerivedMesh *mesh, float epsilon, int tree_type, int axis);
@@ -88,7 +89,7 @@ BVHTree *bvhtree_from_mesh_edges(struct BVHTreeFromMesh *data, struct DerivedMes
 BVHTree *bvhtree_from_mesh_faces(struct BVHTreeFromMesh *data, struct DerivedMesh *mesh, float epsilon, int tree_type, int axis);
 BVHTree *bvhtree_from_mesh_faces_ex(struct BVHTreeFromMesh *data, struct MVert *vert, const bool vert_allocated,
                                     struct MFace *face, const int numFaces, const bool face_allocated,
-                                    bool *mask, int numFaces_active,
+                                    BLI_bitmap *mask, int numFaces_active,
                                     float epsilon, int tree_type, int axis);
 
 /*

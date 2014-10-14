@@ -27,11 +27,14 @@
  * eg: polys connected to verts, UV's connected to verts.
  */
 
+#include <limits.h>
+
 #include "MEM_guardedalloc.h"
 
 #include "DNA_meshdata_types.h"
 
 #include "BLI_utildefines.h"
+#include "BLI_bitmap.h"
 #include "BLI_math.h"
 
 #include "BKE_bvhutils.h"
@@ -41,7 +44,6 @@
 #include "BKE_mesh_mapping.h"
 
 #include "BLI_strict_flags.h"
-
 
 /* -------------------------------------------------------------------- */
 
@@ -1614,17 +1616,17 @@ void BKE_dm2mesh_mapping_loops_compute(
 		/* Build our BVHtrees, either from verts or tessfaces. */
 		if (use_from_vert) {
 			if (use_islands) {
-				bool *verts_active = MEM_mallocN(sizeof(*verts_active) * (size_t)num_verts_src, __func__);
+				BLI_bitmap *verts_active = BLI_BITMAP_NEW((size_t)num_verts_src, __func__);
 
 				for (tidx = 0; tidx < num_trees; tidx++) {
 					MeshIslandItem *isld = &islands.islands[tidx];
 					if (isld) {
 						int num_verts_active = 0;
-						memset(verts_active, 0, sizeof(*verts_active) * (size_t)num_verts_src);
+						BLI_BITMAP_SET_ALL(verts_active, false, (size_t)num_verts_src);
 						for (i = 0; i < isld->nbr_polys; i++) {
 							MPoly *mp_src = &polys_src[isld->polys_idx[i]];
 							for (lidx_src = mp_src->loopstart; lidx_src < mp_src->loopstart + mp_src->totloop; lidx_src++) {
-								verts_active[loops_src[lidx_src].v] = true;
+								BLI_BITMAP_ENABLE(verts_active, loops_src[lidx_src].v);
 								num_verts_active++;
 							}
 						}
@@ -1649,7 +1651,7 @@ void BKE_dm2mesh_mapping_loops_compute(
 			if (use_islands) {
 				/* bvhtree here uses tesselated faces... */
 				const unsigned int dirty_tess_flag = dm_src->dirty & DM_DIRTY_TESS_CDLAYERS;
-				bool *faces_active;
+				BLI_bitmap *faces_active;
 
 				/* We do not care about tessellated data here, only geometry itself is important. */
 				if (dirty_tess_flag) {
@@ -1662,18 +1664,17 @@ void BKE_dm2mesh_mapping_loops_compute(
 				faces_src = DM_get_tessface_array(dm_src, &faces_allocated_src);
 				num_faces_src = dm_src->getNumTessFaces(dm_src);
 				orig_poly_idx_src = dm_src->getTessFaceDataArray(dm_src, CD_ORIGINDEX);
-				faces_active = MEM_mallocN(sizeof(*faces_active) * (size_t)num_faces_src, __func__);
+				faces_active = BLI_BITMAP_NEW((size_t)num_faces_src, __func__);
 
 				for (tidx = 0; tidx < num_trees; tidx++) {
 					MeshIslandItem *isld = &islands.islands[tidx];
 					if (isld) {
 						int num_faces_active = 0;
-						memset(faces_active, 0, sizeof(*faces_active) * (size_t)num_faces_src);
+						BLI_BITMAP_SET_ALL(faces_active, false, (size_t)num_faces_src);
 						for (i = 0; i < num_faces_src; i++) {
 							MPoly *mp_src = &polys_src[orig_poly_idx_src[i]];
 							if (islands.loops_to_islands_idx[mp_src->loopstart] == tidx) {
-								printf("src poly %d in src island %d\n", orig_poly_idx_src[i], tidx);
-								faces_active[i] = true;
+								BLI_BITMAP_ENABLE(faces_active, i);
 								num_faces_active++;
 							}
 						}
