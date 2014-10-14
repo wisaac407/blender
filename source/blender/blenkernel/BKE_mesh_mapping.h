@@ -152,9 +152,10 @@ typedef struct MeshIslands {
 	int *items_to_islands_idx;
 
 	int nbr_islands;
-	MeshElemMap *islands;  /* Array, one item per island. */
+	MeshElemMap **islands;  /* Array of pointers, one item per island. */
 
 	void *mem;  /* Memory handler, internal use only. */
+	size_t allocated_islands;
 } MeshIslands;
 
 void BKE_loop_islands_init(MeshIslands *islands, const short item_type, const int num_items, const short island_type);

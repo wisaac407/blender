@@ -566,35 +566,30 @@ int *BKE_mesh_calc_smoothgroups(const MEdge *medge, const int totedge,
 
 void BKE_loop_islands_init(MeshIslands *islands, const short item_type, const int num_items, const short island_type)
 {
+	MemArena *mem = BLI_memarena_new(BLI_MEMARENA_STD_BUFSIZE, __func__);
+
 	BLI_assert(ELEM(item_type, MISLAND_TYPE_VERT, MISLAND_TYPE_EDGE, MISLAND_TYPE_POLY, MISLAND_TYPE_LOOP));
 	BLI_assert(ELEM(island_type, MISLAND_TYPE_VERT, MISLAND_TYPE_EDGE, MISLAND_TYPE_POLY, MISLAND_TYPE_LOOP));
 
+	BKE_loop_islands_free(islands);
+
 	islands->item_type = item_type;
 	islands->nbr_items = num_items;
-	islands->items_to_islands_idx = MEM_mallocN(sizeof(*islands->items_to_islands_idx) * (size_t)num_items, __func__);
+	islands->items_to_islands_idx = BLI_memarena_alloc(mem, sizeof(*islands->items_to_islands_idx) * (size_t)num_items);
 
 	islands->island_type = island_type;
-	islands->nbr_islands = 0;
-	islands->islands = NULL;
+	islands->allocated_islands = 64;
+	islands->islands = BLI_memarena_alloc(mem, sizeof(*islands->islands) * islands->allocated_islands);
 
-	islands->mem = NULL;
+	islands->mem = mem;
 }
 
 void BKE_loop_islands_free(MeshIslands *islands)
 {
-	/* For now, we use mere MEM_mallocN, later we'll probably switch to memarena! */
-	int i = islands->nbr_islands;
+	MemArena *mem = islands->mem;
 
-	if (i) {
-		while (i--) {
-			MeshElemMap *it = &islands->islands[i];
-			if (it->count) {
-				MEM_freeN(it->indices);
-			}
-		}
-
-		MEM_freeN(islands->islands);
-		MEM_freeN(islands->items_to_islands_idx);
+	if (mem) {
+		BLI_memarena_free(mem);
 	}
 
 	islands->item_type = 0;
@@ -606,12 +601,15 @@ void BKE_loop_islands_free(MeshIslands *islands)
 	islands->islands = NULL;
 
 	islands->mem = NULL;
+	islands->allocated_islands = 0;
 }
 
 void BKE_loop_islands_add_island(MeshIslands *islands, const int num_items, int *items_indices,
                                  const int num_island_items, int *island_item_indices)
 {
-	MeshElemMap *isl;
+	MemArena *mem = islands->mem;
+
+	MeshElemMap *isld;
 	const int curr_island_idx = islands->nbr_islands++;
 	const size_t curr_num_islands = (size_t)islands->nbr_islands;
 	int i = num_items;
@@ -621,18 +619,20 @@ void BKE_loop_islands_add_island(MeshIslands *islands, const int num_items, int 
 		islands->items_to_islands_idx[items_indices[i]] = curr_island_idx;
 	}
 
-	/* XXX TODO UGLY!!! Quick code, to be done better. */
-	isl = MEM_mallocN(sizeof(*isl) * curr_num_islands, __func__);
-	if (curr_island_idx) {
-		memcpy(isl, islands->islands, sizeof(*isl) * (curr_num_islands - 1));
-		MEM_freeN(islands->islands);
-	}
-	islands->islands = isl;
+	if (UNLIKELY(curr_num_islands > islands->allocated_islands)) {
+		MeshElemMap **islds;
 
-	isl = &isl[curr_island_idx];
-	isl->count = num_island_items;
-	isl->indices = MEM_mallocN(sizeof(*isl->indices) * (size_t)num_island_items, __func__);
-	memcpy(isl->indices, island_item_indices, sizeof(*isl->indices) * (size_t)num_island_items);
+		islands->allocated_islands *= 2;
+		islds = BLI_memarena_alloc(mem, sizeof(*islds) * islands->allocated_islands);
+		memcpy(islds, islands->islands, sizeof(*islds) * (curr_num_islands - 1));
+		islands->islands = islds;
+	}
+
+	islands->islands[curr_island_idx] = isld = BLI_memarena_alloc(mem, sizeof(*isld));
+
+	isld->count = num_island_items;
+	isld->indices = BLI_memarena_alloc(mem, sizeof(*isld->indices) * (size_t)num_island_items);
+	memcpy(isld->indices, island_item_indices, sizeof(*isld->indices) * (size_t)num_island_items);
 }
 
 /* TODO: I'm not sure edge seam flag is enough to define UV islands? Maybe we should also consider UVmaps values
@@ -1634,7 +1634,7 @@ void BKE_dm2mesh_mapping_loops_compute(
 				BLI_bitmap *verts_active = BLI_BITMAP_NEW((size_t)num_verts_src, __func__);
 
 				for (tidx = 0; tidx < num_trees; tidx++) {
-					MeshElemMap *isld = &islands.islands[tidx];
+					MeshElemMap *isld = islands.islands[tidx];
 					int num_verts_active = 0;
 					BLI_BITMAP_SET_ALL(verts_active, false, (size_t)num_verts_src);
 					for (i = 0; i < isld->count; i++) {
