@@ -109,6 +109,7 @@ static EnumPropertyItem MDT_layer_items[] = {
 	{CD_FAKE_BWEIGHT, "BEVEL_WEIGHT", 0, "Bevel Weight", "Transfer bevel weights"},
 	{0, "", 0, "Face Data", ""},
 	{CD_FAKE_UV, "UV", 0, "UVs", "Transfer UV layers"},
+	{CD_FAKE_SHARP, "SMOOTH", 0, "Smooth", "Transfer flat/smooth flag"},
 	{0, "", 0, "Face Corner Data", ""},
 	/* TODO */
 	{0, NULL, 0, NULL, NULL}
@@ -188,7 +189,8 @@ static EnumPropertyItem MDT_fromlayers_select_items[] = {
 	{0, NULL, 0, NULL, NULL}
 };
 
-static EnumPropertyItem *mdt_fromlayers_select_itemf(bContext *C, PointerRNA *ptr, PropertyRNA *UNUSED(prop), bool *r_free)
+static EnumPropertyItem *mdt_fromlayers_select_itemf(
+        bContext *C, PointerRNA *ptr, PropertyRNA *UNUSED(prop), bool *r_free)
 {
 	EnumPropertyItem *item = NULL;
 	int totitem = 0;
@@ -225,7 +227,8 @@ static EnumPropertyItem MDT_tolayers_select_items[] = {
 	{0, NULL, 0, NULL, NULL}
 };
 
-static EnumPropertyItem *mdt_tolayers_select_itemf(bContext *C, PointerRNA *ptr, PropertyRNA *UNUSED(prop), bool *r_free)
+static EnumPropertyItem *mdt_tolayers_select_itemf(
+        bContext *C, PointerRNA *ptr, PropertyRNA *UNUSED(prop), bool *r_free)
 {
 	EnumPropertyItem *item = NULL;
 	int totitem = 0;
@@ -618,6 +621,16 @@ static bool data_transfer_layersmapping_generate(
 				/* We handle specific source selection cases here. */
 				return false;
 			}
+			return true;
+		}
+		else if (data_type == CD_FAKE_SHARP) {
+			const size_t elem_size = sizeof(*((MPoly *)NULL));
+			const size_t data_size = sizeof(((MPoly *)NULL)->flag);
+			const size_t data_offset = offsetof(MPoly, flag);
+			const uint64_t data_flag = ME_SMOOTH;
+			data_transfer_layersmapping_add_item(r_map, data_type, dm_src->getPolyArray(dm_src), me_dst->mpoly,
+			                                     dm_src->getNumPolys(dm_src), me_dst->totpoly,
+			                                     elem_size, data_size, data_offset, data_flag, NULL);
 			return true;
 		}
 		else {
