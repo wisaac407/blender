@@ -384,25 +384,6 @@ void BKE_mesh_origindex_map_create(MeshElemMap **r_map, int **r_mem,
 typedef bool (*check_island_boundary)(const MPoly *mpoly, const MLoop *mloop, const MEdge *medge,
                                       const int nbr_egde_users);
 
-static bool bke_check_island_boundary_smooth(const MPoly *mp, const MLoop *UNUSED(ml), const MEdge *me,
-                                             const int nbr_egde_users)
-{
-	/* Edge is sharp if its poly is sharp, or edge itself is sharp, or edge is not used by exactly two polygons. */
-	return (!(mp->flag & ME_SMOOTH) || (me->flag & ME_SHARP) || (nbr_egde_users != 2));
-}
-
-/* TODO: I'm not sure edge seam flag is enough to define UV islands? Maybe we should also consider UVmaps values
- *       themselves (i.e. different UV-edges for a same mesh-edge => boun dary edge too?).
- *       Would make things much more complex though, and each UVMap would then need its own mesh mapping,
- *       not sure we want that at all!
- */
-static bool bke_check_island_boundary_uv(const MPoly *UNUSED(mp), const MLoop *UNUSED(ml), const MEdge *me,
-                                         const int UNUSED(nbr_egde_users))
-{
-	/* Edge is UV boundary if tagged as seam. */
-	return (me->flag & ME_SEAM) != 0;
-}
-
 static void bke_poly_loop_islands_compute(const MEdge *medge, const int totedge, const MPoly *mpoly, const int totpoly,
                                           const MLoop *mloop, const int totloop, const bool use_bitflags,
                                           check_island_boundary edge_boundary_check,
@@ -554,6 +535,13 @@ static void bke_poly_loop_islands_compute(const MEdge *medge, const int totedge,
 	*r_poly_groups = poly_groups;
 }
 
+static bool bke_check_island_boundary_smooth(const MPoly *mp, const MLoop *UNUSED(ml), const MEdge *me,
+                                             const int nbr_egde_users)
+{
+	/* Edge is sharp if its poly is sharp, or edge itself is sharp, or edge is not used by exactly two polygons. */
+	return (!(mp->flag & ME_SMOOTH) || (me->flag & ME_SHARP) || (nbr_egde_users != 2));
+}
+
 /**
  * Calculate smooth groups from sharp edges.
  *
@@ -575,11 +563,20 @@ int *BKE_mesh_calc_smoothgroups(const MEdge *medge, const int totedge,
 	return poly_groups;
 }
 
-void BKE_loop_islands_init(MeshIslands *islands, const int num_loops)
+
+void BKE_loop_islands_init(MeshIslands *islands, const short item_type, const int num_items, const short island_type)
 {
-	islands->loops_to_islands_idx = MEM_mallocN(sizeof(*islands->loops_to_islands_idx) * (size_t)num_loops, __func__);
-	islands->islands = NULL;
+	BLI_assert(ELEM(item_type, MISLAND_TYPE_VERT, MISLAND_TYPE_EDGE, MISLAND_TYPE_POLY, MISLAND_TYPE_LOOP));
+	BLI_assert(ELEM(island_type, MISLAND_TYPE_VERT, MISLAND_TYPE_EDGE, MISLAND_TYPE_POLY, MISLAND_TYPE_LOOP));
+
+	islands->item_type = item_type;
+	islands->nbr_items = num_items;
+	islands->items_to_islands_idx = MEM_mallocN(sizeof(*islands->items_to_islands_idx) * (size_t)num_items, __func__);
+
+	islands->island_type = island_type;
 	islands->nbr_islands = 0;
+	islands->islands = NULL;
+
 	islands->mem = NULL;
 }
 
@@ -590,34 +587,38 @@ void BKE_loop_islands_free(MeshIslands *islands)
 
 	if (i) {
 		while (i--) {
-			MeshIslandItem *it = &islands->islands[i];
-			if (it->nbr_polys) {
-				MEM_freeN(it->polys_idx);
+			MeshElemMap *it = &islands->islands[i];
+			if (it->count) {
+				MEM_freeN(it->indices);
 			}
 		}
 
 		MEM_freeN(islands->islands);
-		MEM_freeN(islands->loops_to_islands_idx);
+		MEM_freeN(islands->items_to_islands_idx);
 	}
 
-	islands->nbr_loops = 0;
-	islands->loops_to_islands_idx = NULL;
+	islands->item_type = 0;
+	islands->nbr_items = 0;
+	islands->items_to_islands_idx = NULL;
+
+	islands->island_type = 0;
 	islands->nbr_islands = 0;
 	islands->islands = NULL;
+
 	islands->mem = NULL;
 }
 
-void BKE_loop_islands_add_island(MeshIslands *islands, const int num_loops, int *loop_indices,
-                                 const int num_polys, int *poly_indices)
+void BKE_loop_islands_add_island(MeshIslands *islands, const int num_items, int *items_indices,
+                                 const int num_island_items, int *island_item_indices)
 {
-	MeshIslandItem *isl;
+	MeshElemMap *isl;
 	const int curr_island_idx = islands->nbr_islands++;
 	const size_t curr_num_islands = (size_t)islands->nbr_islands;
-	int i = num_loops;
+	int i = num_items;
 
-	islands->nbr_loops = num_loops;
+	islands->nbr_items = num_items;
 	while (i--) {
-		islands->loops_to_islands_idx[loop_indices[i]] = curr_island_idx;
+		islands->items_to_islands_idx[items_indices[i]] = curr_island_idx;
 	}
 
 	/* XXX TODO UGLY!!! Quick code, to be done better. */
@@ -629,14 +630,26 @@ void BKE_loop_islands_add_island(MeshIslands *islands, const int num_loops, int 
 	islands->islands = isl;
 
 	isl = &isl[curr_island_idx];
-	isl->nbr_polys = num_polys;
-	isl->polys_idx = MEM_mallocN(sizeof(*isl->polys_idx) * (size_t)num_polys, __func__);
-	memcpy(isl->polys_idx, poly_indices, sizeof(*isl->polys_idx) * (size_t)num_polys);
+	isl->count = num_island_items;
+	isl->indices = MEM_mallocN(sizeof(*isl->indices) * (size_t)num_island_items, __func__);
+	memcpy(isl->indices, island_item_indices, sizeof(*isl->indices) * (size_t)num_island_items);
+}
+
+/* TODO: I'm not sure edge seam flag is enough to define UV islands? Maybe we should also consider UVmaps values
+ *       themselves (i.e. different UV-edges for a same mesh-edge => boundary edge too?).
+ *       Would make things much more complex though, and each UVMap would then need its own mesh mapping,
+ *       not sure we want that at all!
+ */
+static bool bke_check_island_boundary_uv(const MPoly *UNUSED(mp), const MLoop *UNUSED(ml), const MEdge *me,
+                                         const int UNUSED(nbr_egde_users))
+{
+	/* Edge is UV boundary if tagged as seam. */
+	return (me->flag & ME_SEAM) != 0;
 }
 
 /* Note: all this could be optimized... Not sure it would be worth the more complex code, though, those loops
  *       are supposed to be really quick to do... */
-bool BKE_loop_island_compute_uv(struct DerivedMesh *dm, MeshIslands *r_islands)
+bool BKE_loop_poly_island_compute_uv(struct DerivedMesh *dm, MeshIslands *r_islands)
 {
 	MEdge *edges = dm->getEdgeArray(dm);
 	MPoly *polys = dm->getPolyArray(dm);
@@ -655,7 +668,7 @@ bool BKE_loop_island_compute_uv(struct DerivedMesh *dm, MeshIslands *r_islands)
 	int grp_idx, p_idx, pl_idx, l_idx;
 
 	BKE_loop_islands_free(r_islands);
-	BKE_loop_islands_init(r_islands, num_loops);
+	BKE_loop_islands_init(r_islands, MISLAND_TYPE_LOOP, num_loops, MISLAND_TYPE_POLY);
 
 	bke_poly_loop_islands_compute(edges, num_edges, polys, num_polys, loops, num_loops, false,
 	                              bke_check_island_boundary_uv, &poly_groups, &num_poly_groups);
@@ -1603,7 +1616,12 @@ void BKE_dm2mesh_mapping_loops_compute(
 			use_islands = gen_islands_src(dm_src, &islands);
 			num_trees = use_islands ? islands.nbr_islands : 1;
 			treedata = MEM_callocN(sizeof(*treedata) * (size_t)num_trees, __func__);
-			printf("num trees/islands: %d (%d)\n", num_trees, use_islands);
+
+			if (use_islands) {
+				/* We expect our islands to contain poly indices, and a mapping loops -> islands indices.
+				 * This implies all loops of a same poly are in the same island. */
+				BLI_assert((islands.item_type == MISLAND_TYPE_LOOP) && (islands.island_type == MISLAND_TYPE_POLY));
+			}
 		}
 		else {
 			num_trees = 1;
@@ -1616,23 +1634,21 @@ void BKE_dm2mesh_mapping_loops_compute(
 				BLI_bitmap *verts_active = BLI_BITMAP_NEW((size_t)num_verts_src, __func__);
 
 				for (tidx = 0; tidx < num_trees; tidx++) {
-					MeshIslandItem *isld = &islands.islands[tidx];
-					if (isld) {
-						int num_verts_active = 0;
-						BLI_BITMAP_SET_ALL(verts_active, false, (size_t)num_verts_src);
-						for (i = 0; i < isld->nbr_polys; i++) {
-							MPoly *mp_src = &polys_src[isld->polys_idx[i]];
-							for (lidx_src = mp_src->loopstart; lidx_src < mp_src->loopstart + mp_src->totloop; lidx_src++) {
-								BLI_BITMAP_ENABLE(verts_active, loops_src[lidx_src].v);
-								num_verts_active++;
-							}
+					MeshElemMap *isld = &islands.islands[tidx];
+					int num_verts_active = 0;
+					BLI_BITMAP_SET_ALL(verts_active, false, (size_t)num_verts_src);
+					for (i = 0; i < isld->count; i++) {
+						MPoly *mp_src = &polys_src[isld->indices[i]];
+						for (lidx_src = mp_src->loopstart; lidx_src < mp_src->loopstart + mp_src->totloop; lidx_src++) {
+							BLI_BITMAP_ENABLE(verts_active, loops_src[lidx_src].v);
+							num_verts_active++;
 						}
-						/* verts 'ownership' is transfered to treedata here, which will handle its freeing. */
-						bvhtree_from_mesh_verts_ex(&treedata[tidx], verts_src, num_verts_src, verts_allocated_src,
-						                           verts_active, num_verts_active, 0.0, 2, 6);
-						if (verts_allocated_src) {
-							verts_allocated_src = false;  /* Only 'give' our verts once, to first tree! */
-						}
+					}
+					/* verts 'ownership' is transfered to treedata here, which will handle its freeing. */
+					bvhtree_from_mesh_verts_ex(&treedata[tidx], verts_src, num_verts_src, verts_allocated_src,
+					                           verts_active, num_verts_active, 0.0, 2, 6);
+					if (verts_allocated_src) {
+						verts_allocated_src = false;  /* Only 'give' our verts once, to first tree! */
 					}
 				}
 
@@ -1664,27 +1680,24 @@ void BKE_dm2mesh_mapping_loops_compute(
 				faces_active = BLI_BITMAP_NEW((size_t)num_faces_src, __func__);
 
 				for (tidx = 0; tidx < num_trees; tidx++) {
-					MeshIslandItem *isld = &islands.islands[tidx];
-					if (isld) {
-						int num_faces_active = 0;
-						BLI_BITMAP_SET_ALL(faces_active, false, (size_t)num_faces_src);
-						for (i = 0; i < num_faces_src; i++) {
-							MPoly *mp_src = &polys_src[orig_poly_idx_src[i]];
-							if (islands.loops_to_islands_idx[mp_src->loopstart] == tidx) {
-								BLI_BITMAP_ENABLE(faces_active, i);
-								num_faces_active++;
-							}
+					int num_faces_active = 0;
+					BLI_BITMAP_SET_ALL(faces_active, false, (size_t)num_faces_src);
+					for (i = 0; i < num_faces_src; i++) {
+						MPoly *mp_src = &polys_src[orig_poly_idx_src[i]];
+						if (islands.items_to_islands_idx[mp_src->loopstart] == tidx) {
+							BLI_BITMAP_ENABLE(faces_active, i);
+							num_faces_active++;
 						}
-						/* verts 'ownership' is transfered to treedata here, which will handle its freeing. */
-						bvhtree_from_mesh_faces_ex(&treedata[tidx], verts_src, verts_allocated_src,
-						                           faces_src, num_faces_src, faces_allocated_src,
-						                           faces_active, num_faces_active, 0.0, 2, 6);
-						if (verts_allocated_src) {
-							verts_allocated_src = false;  /* Only 'give' our verts once, to first tree! */
-						}
-						if (faces_allocated_src) {
-							faces_allocated_src = false;  /* Only 'give' our faces once, to first tree! */
-						}
+					}
+					/* verts 'ownership' is transfered to treedata here, which will handle its freeing. */
+					bvhtree_from_mesh_faces_ex(&treedata[tidx], verts_src, verts_allocated_src,
+					                           faces_src, num_faces_src, faces_allocated_src,
+					                           faces_active, num_faces_active, 0.0, 2, 6);
+					if (verts_allocated_src) {
+						verts_allocated_src = false;  /* Only 'give' our verts once, to first tree! */
+					}
+					if (faces_allocated_src) {
+						faces_allocated_src = false;  /* Only 'give' our faces once, to first tree! */
 					}
 				}
 

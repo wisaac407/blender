@@ -137,32 +137,36 @@ int *BKE_mesh_calc_smoothgroups(
         int *r_totgroup, const bool use_bitflags);
 
 /* Loop islands data helpers. */
-/* TODO: this ended up being the same as MeshElemMap... Should we use this generic struct instead? */
-typedef struct MeshIslandItem {
-	int *polys_idx;
-	int nbr_polys;
-} MeshIslandItem;
+enum {
+	MISLAND_TYPE_VERT = 1,
+	MISLAND_TYPE_EDGE = 2,
+	MISLAND_TYPE_POLY = 3,
+	MISLAND_TYPE_LOOP = 4,
+};
 
-/* For loops, to which poly island each loop belongs.
- * Island definition can vary based on data type (UVs, loop normals, etc.). */
 typedef struct MeshIslands {
-	int nbr_loops;
-	int *loops_to_islands_idx;
+	short item_type;  /* MISLAND_TYPE_... */
+	short island_type;  /* MISLAND_TYPE_... */
+
+	int nbr_items;
+	int *items_to_islands_idx;
+
 	int nbr_islands;
-	MeshIslandItem *islands;  /* Array, one item per island. */
+	MeshElemMap *islands;  /* Array, one item per island. */
+
 	void *mem;  /* Memory handler, internal use only. */
 } MeshIslands;
 
-void BKE_loop_islands_init(MeshIslands *islands, const int num_loops);
+void BKE_loop_islands_init(MeshIslands *islands, const short item_type, const int num_items, const short island_type);
 void BKE_loop_islands_free(MeshIslands *islands);
-void BKE_loop_islands_add_island(MeshIslands *islands, const int num_loops, int *loop_indices,
-                                 const int num_polys, int *poly_indices);
+void BKE_loop_islands_add_island(MeshIslands *islands, const int num_items, int *item_indices,
+                                 const int num_island_items, int *island_item_indices);
 
 typedef bool (*loop_island_compute)(struct DerivedMesh *dm, MeshIslands *r_islands);
 /* Above vert/UV mapping stuff does not do what we need here, but does things we do not need here.
  * So better keep them separated for now, I think.
  */
-bool BKE_loop_island_compute_uv(struct DerivedMesh *dm, MeshIslands *r_islands);
+bool BKE_loop_poly_island_compute_uv(struct DerivedMesh *dm, MeshIslands *r_islands);
 
 /* Generic ways to map some geometry elements from a source mesh to a dest one. */
 
@@ -176,8 +180,9 @@ typedef struct Mesh2MeshMappingItem {
 
 /* All mapping computing func return this. */
 typedef struct Mesh2MeshMapping {
-	Mesh2MeshMappingItem *items;  /* Array, one item per dest element. */
 	int nbr_items;
+	Mesh2MeshMappingItem *items;  /* Array, one item per dest element. */
+
 	void *mem;  /* Memory handler, internal use only. */
 } Mesh2MeshMapping;
 

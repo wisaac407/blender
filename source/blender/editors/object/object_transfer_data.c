@@ -271,7 +271,7 @@ static loop_island_compute data_transfer_get_loop_islands_generator(const int da
 {
 	switch (data_type) {
 		case CD_FAKE_UV:
-			return BKE_loop_island_compute_uv;
+			return BKE_loop_poly_island_compute_uv;
 			break;
 		default:
 			break;
