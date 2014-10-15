@@ -847,7 +847,7 @@ static float bke_mesh2mesh_bvhtree_query_raycast(
 }
 
 void BKE_dm2mesh_mapping_verts_compute(
-        const int mode, const SpaceTransform *space_transform, const float max_dist, const float bvh_epsilon,
+        const int mode, const SpaceTransform *space_transform, const float max_dist, const float ray_radius,
         const MVert *verts_dst, const int numverts_dst, DerivedMesh *dm_src,
         Mesh2MeshMapping *r_map)
 {
@@ -872,7 +872,7 @@ void BKE_dm2mesh_mapping_verts_compute(
 		float hitdist;
 
 		if (mode == M2MMAP_MODE_VERT_NEAREST) {
-			bvhtree_from_mesh_verts(&treedata, dm_src, bvh_epsilon, 2, 6);
+			bvhtree_from_mesh_verts(&treedata, dm_src, 0.0f, 2, 6);
 			nearest.index = -1;
 
 			for (i = 0; i < numverts_dst; i++) {
@@ -897,7 +897,7 @@ void BKE_dm2mesh_mapping_verts_compute(
 			float (*vcos_src)[3] = MEM_mallocN(sizeof(*vcos_src) * (size_t)dm_src->getNumVerts(dm_src), __func__);
 			dm_src->getVertCos(dm_src, vcos_src);
 
-			bvhtree_from_mesh_edges(&treedata, dm_src, bvh_epsilon, 2, 6);
+			bvhtree_from_mesh_edges(&treedata, dm_src, 0.0f, 2, 6);
 			nearest.index = -1;
 
 			for (i = 0; i < numverts_dst; i++) {
@@ -956,20 +956,19 @@ void BKE_dm2mesh_mapping_verts_compute(
 			float *weights = MEM_mallocN(sizeof(*weights) * tmp_buff_size, __func__);
 
 			dm_src->getVertCos(dm_src, vcos_src);
-			bvhtree_from_mesh_faces(&treedata, dm_src, bvh_epsilon, 2, 6);
+			bvhtree_from_mesh_faces(&treedata, dm_src, 0.0f, 2, 6);
 			/* bvhtree here uses tesselated faces... */
 			orig_poly_idx_src = dm_src->getTessFaceDataArray(dm_src, CD_ORIGINDEX);
 
 			if (mode == M2MMAP_MODE_VERT_POLYINTERP_VNORPROJ) {
 				for (i = 0; i < numverts_dst; i++) {
 					float tmp_co[3], tmp_no[3];
-					const float radius = 1.0e-6f;
 
 					copy_v3_v3(tmp_co, verts_dst[i].co);
 					normal_short_to_float_v3(tmp_no, verts_dst[i].no);
 
 					hitdist = bke_mesh2mesh_bvhtree_query_raycast(&treedata, &rayhit, space_transform,
-					                                              tmp_co, tmp_no, radius, max_dist);
+					                                              tmp_co, tmp_no, ray_radius, max_dist);
 
 					if (rayhit.index >= 0 && hitdist <= max_dist) {
 						MPoly *mp_src = &polys_src[orig_poly_idx_src[rayhit.index]];
@@ -1041,7 +1040,7 @@ void BKE_dm2mesh_mapping_verts_compute(
 
 /* TODO: all those 'nearest' edge computations could be hugely enhanced, not top priority though. */
 void BKE_dm2mesh_mapping_edges_compute(
-        const int mode, const SpaceTransform *space_transform, const float max_dist, const float bvh_epsilon,
+        const int mode, const SpaceTransform *space_transform, const float max_dist, const float ray_radius,
         const MVert *verts_dst, const int numverts_dst, const MEdge *edges_dst, const int numedges_dst,
         DerivedMesh *dm_src, Mesh2MeshMapping *r_map)
 {
@@ -1062,6 +1061,7 @@ void BKE_dm2mesh_mapping_edges_compute(
 	else {
 		BVHTreeFromMesh treedata = {NULL};
 		BVHTreeNearest nearest = {0};
+		BVHTreeRayHit rayhit = {0};
 		float hitdist;
 
 		if (mode == M2MMAP_MODE_EDGE_VERT_NEAREST) {
@@ -1082,7 +1082,7 @@ void BKE_dm2mesh_mapping_edges_compute(
 
 			dm_src->getVertCos(dm_src, vcos_src);
 
-			bvhtree_from_mesh_verts(&treedata, dm_src, bvh_epsilon, 2, 6);
+			bvhtree_from_mesh_verts(&treedata, dm_src, 0.0f, 2, 6);
 			nearest.index = -1;
 
 			for (i = 0; i < numedges_dst; i++) {
@@ -1181,7 +1181,7 @@ void BKE_dm2mesh_mapping_edges_compute(
 			MEM_freeN(vert2edge_src_map_mem);
 		}
 		else if (mode == M2MMAP_MODE_EDGE_NEAREST) {
-			bvhtree_from_mesh_edges(&treedata, dm_src, bvh_epsilon, 2, 6);
+			bvhtree_from_mesh_edges(&treedata, dm_src, 0.0f, 2, 6);
 			nearest.index = -1;
 
 			for (i = 0; i < numedges_dst; i++) {
@@ -1209,7 +1209,7 @@ void BKE_dm2mesh_mapping_edges_compute(
 			int *orig_poly_idx_src;
 
 			dm_src->getVertCos(dm_src, vcos_src);
-			bvhtree_from_mesh_faces(&treedata, dm_src, bvh_epsilon, 2, 6);
+			bvhtree_from_mesh_faces(&treedata, dm_src, 0.0f, 2, 6);
 			/* bvhtree here uses tesselated faces... */
 			orig_poly_idx_src = dm_src->getTessFaceDataArray(dm_src, CD_ORIGINDEX);
 
@@ -1264,7 +1264,7 @@ void BKE_dm2mesh_mapping_edges_compute(
 }
 
 void BKE_dm2mesh_mapping_polys_compute(
-        const int mode, const SpaceTransform *space_transform, const float max_dist, const float bvh_epsilon,
+        const int mode, const SpaceTransform *space_transform, const float max_dist, const float ray_radius,
         MVert *verts_dst, const int numverts_dst, MPoly *polys_dst, const int numpolys_dst,
         MLoop *loops_dst, const int numloops_dst, CustomData *pdata_dst, DerivedMesh *dm_src,
         Mesh2MeshMapping *r_map)
@@ -1303,7 +1303,7 @@ void BKE_dm2mesh_mapping_polys_compute(
 
 		int *orig_poly_idx_src;
 
-		bvhtree_from_mesh_faces(&treedata, dm_src, bvh_epsilon, 2, 6);
+		bvhtree_from_mesh_faces(&treedata, dm_src, 0.0f, 2, 6);
 		/* bvhtree here uses tesselated faces... */
 		orig_poly_idx_src = dm_src->getTessFaceDataArray(dm_src, CD_ORIGINDEX);
 
@@ -1478,7 +1478,7 @@ void BKE_dm2mesh_mapping_polys_compute(
 }
 
 void BKE_dm2mesh_mapping_loops_compute(
-        const int mode, const SpaceTransform *space_transform, const float max_dist, const float bvh_epsilon,
+        const int mode, const SpaceTransform *space_transform, const float max_dist, const float ray_radius,
         MVert *verts_dst, const int numverts_dst, MEdge *edges_dst, const int numedges_dst,
         MPoly *polys_dst, const int numpolys_dst, MLoop *loops_dst, const int numloops_dst,
         CustomData *pdata_dst, CustomData *ldata_dst, const float split_angle_dst,
@@ -1645,7 +1645,7 @@ void BKE_dm2mesh_mapping_loops_compute(
 					}
 					/* verts 'ownership' is transfered to treedata here, which will handle its freeing. */
 					bvhtree_from_mesh_verts_ex(&treedata[tidx], verts_src, num_verts_src, verts_allocated_src,
-					                           verts_active, num_verts_active, bvh_epsilon, 2, 6);
+					                           verts_active, num_verts_active, 0.0f, 2, 6);
 					if (verts_allocated_src) {
 						verts_allocated_src = false;  /* Only 'give' our verts once, to first tree! */
 					}
@@ -1655,7 +1655,7 @@ void BKE_dm2mesh_mapping_loops_compute(
 			}
 			else {
 				BLI_assert(num_trees == 1);
-				bvhtree_from_mesh_verts(&treedata[0], dm_src, bvh_epsilon, 2, 6);
+				bvhtree_from_mesh_verts(&treedata[0], dm_src, 0.0f, 2, 6);
 			}
 		}
 		else {  /* We use polygons. */
@@ -1690,7 +1690,7 @@ void BKE_dm2mesh_mapping_loops_compute(
 					/* verts 'ownership' is transfered to treedata here, which will handle its freeing. */
 					bvhtree_from_mesh_faces_ex(&treedata[tidx], verts_src, verts_allocated_src,
 					                           faces_src, num_faces_src, faces_allocated_src,
-					                           faces_active, num_faces_active, bvh_epsilon, 2, 6);
+					                           faces_active, num_faces_active, 0.0f, 2, 6);
 					if (verts_allocated_src) {
 						verts_allocated_src = false;  /* Only 'give' our verts once, to first tree! */
 					}
@@ -1703,7 +1703,7 @@ void BKE_dm2mesh_mapping_loops_compute(
 			}
 			else {
 				BLI_assert(num_tress == 1);
-				bvhtree_from_mesh_faces(&treedata[0], dm_src, bvh_epsilon, 2, 6);
+				bvhtree_from_mesh_faces(&treedata[0], dm_src, 0.0f, 2, 6);
 				orig_poly_idx_src = dm_src->getTessFaceDataArray(dm_src, CD_ORIGINDEX);
 			}
 		}
@@ -1794,13 +1794,12 @@ void BKE_dm2mesh_mapping_loops_compute(
 					}
 					else if (mode & M2MMAP_USE_NORPROJ) {
 						float tmp_co[3], tmp_no[3];
-						const float radius = 1.0e-6f;
 
 						copy_v3_v3(tmp_co, verts_dst[ml_dst->v].co);
 						copy_v3_v3(tmp_no, loop_nors_dst[plidx_dst + mp_dst->loopstart]);
 
 						hitdist = bke_mesh2mesh_bvhtree_query_raycast(tdata, &rayhit, space_transform,
-						                                              tmp_co, tmp_no, radius, max_dist);
+						                                              tmp_co, tmp_no, ray_radius, max_dist);
 
 						if (rayhit.index >= 0 && hitdist <= max_dist) {
 							facs[tidx][plidx_dst][0] = (hitdist != 0.0f) ? (1.0f / hitdist) : 1e18f;

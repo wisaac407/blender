@@ -669,7 +669,7 @@ static bool data_transfer_layersmapping_generate(
 bool ED_data_transfer(
         Scene *scene, Object *ob_src, Object *ob_dst, const int data_type, const bool use_create,
         const int map_vert_mode, const int map_edge_mode, const int map_poly_mode, const int map_loop_mode,
-        SpaceTransform *space_transform, const float max_distance, const float precision,
+        SpaceTransform *space_transform, const float max_distance, const float ray_radius,
         const int UNUSED(replace_mode), const float UNUSED(replace_threshold),
         const int fromlayers_select, const int tolayers_select)
 {
@@ -699,7 +699,7 @@ bool ED_data_transfer(
 	if (MDT_DATATYPE_IS_VERT(data_type)) {
 		const int num_create = use_create ? me_dst->totvert : 0;
 
-		BKE_dm2mesh_mapping_verts_compute(map_vert_mode, space_transform, max_distance, precision,
+		BKE_dm2mesh_mapping_verts_compute(map_vert_mode, space_transform, max_distance, ray_radius,
 		                                  me_dst->mvert, me_dst->totvert, dm_src, &geom_map);
 
 		/* TODO add further filtering of mapping data here! */
@@ -721,7 +721,7 @@ bool ED_data_transfer(
 	if (MDT_DATATYPE_IS_EDGE(data_type)) {
 		const int num_create = use_create ? me_dst->totedge : 0;
 
-		BKE_dm2mesh_mapping_edges_compute(map_edge_mode, space_transform, max_distance, precision,
+		BKE_dm2mesh_mapping_edges_compute(map_edge_mode, space_transform, max_distance, ray_radius,
 		                                  me_dst->mvert, me_dst->totvert, me_dst->medge, me_dst->totedge,
 		                                  dm_src, &geom_map);
 
@@ -744,7 +744,7 @@ bool ED_data_transfer(
 	if (MDT_DATATYPE_IS_POLY(data_type)) {
 		const int num_create = use_create ? me_dst->totpoly : 0;
 
-		BKE_dm2mesh_mapping_polys_compute(map_poly_mode, space_transform, max_distance, precision,
+		BKE_dm2mesh_mapping_polys_compute(map_poly_mode, space_transform, max_distance, ray_radius,
 		                                  me_dst->mvert, me_dst->totvert, me_dst->mpoly, me_dst->totpoly,
 		                                  me_dst->mloop, me_dst->totloop, &me_dst->pdata, dm_src, &geom_map);
 
@@ -769,7 +769,7 @@ bool ED_data_transfer(
 
 		loop_island_compute island_callback = data_transfer_get_loop_islands_generator(data_type);
 
-		BKE_dm2mesh_mapping_loops_compute(map_loop_mode, space_transform, max_distance, precision,
+		BKE_dm2mesh_mapping_loops_compute(map_loop_mode, space_transform, max_distance, ray_radius,
 		                                  me_dst->mvert, me_dst->totvert, me_dst->medge, me_dst->totedge,
 		                                  me_dst->mpoly, me_dst->totpoly, me_dst->mloop, me_dst->totloop,
 		                                  &me_dst->pdata, &me_dst->ldata, me_dst->smoothresh, dm_src,
@@ -814,7 +814,7 @@ static int data_transfer_exec(bContext *C, wmOperator *op)
 	const bool use_object_transform = RNA_boolean_get(op->ptr, "use_object_transform");
 	const bool use_max_distance = RNA_boolean_get(op->ptr, "use_max_distance");
 	const float max_distance = use_max_distance ? RNA_float_get(op->ptr, "max_distance") : FLT_MAX;
-	const float precision = RNA_float_get(op->ptr, "precision");
+	const float ray_radius = RNA_float_get(op->ptr, "ray_radius");
 
 	const int replace_mode = RNA_enum_get(op->ptr, "replace_mode");
 	const float replace_threshold = RNA_float_get(op->ptr, "replace_threshold");
@@ -837,7 +837,7 @@ static int data_transfer_exec(bContext *C, wmOperator *op)
 
 		if (ED_data_transfer(scene, ob_src, ob_dst, data_type, use_create,
 		                     map_vert_mode, map_edge_mode, map_poly_mode, map_loop_mode,
-		                     space_transform, max_distance, precision, replace_mode, replace_threshold,
+		                     space_transform, max_distance, ray_radius, replace_mode, replace_threshold,
 		                     fromlayers_select, tolayers_select))
 		{
 			changed = true;
@@ -953,9 +953,8 @@ void OBJECT_OT_data_transfer(wmOperatorType *ot)
 	                     "Maximum allowed distance between source and destination element, for non-topology mappings",
 	                     0.0f, 100.0f);
 	RNA_def_property_subtype(prop, PROP_DISTANCE);
-	prop = RNA_def_float(ot->srna, "precision", 0.0f, 0.0f, FLT_MAX, "RayHit/Nearest Precision",
-	                     "'Margin' around elements when checking for nearest/ray-hit ones, during mapping creation "
-	                     "(especially useful when raycasting against vertices or edges)",
+	prop = RNA_def_float(ot->srna, "ray_radius", 0.0f, 0.0f, FLT_MAX, "Ray Radius",
+	                     "'Width' of rays (especially useful when raycasting against vertices or edges)",
 	                     0.0f, 10.0f);
 	RNA_def_property_subtype(prop, PROP_DISTANCE);
 	RNA_def_enum(ot->srna, "replace_mode", MDT_replace_mode_items, MDT_REPLACE, "Replace Mode",
