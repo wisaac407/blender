@@ -275,7 +275,7 @@ bool ED_data_transfer_layersmapping_cdlayers(
 bool ED_data_transfer(
         struct Scene *scene, struct Object *ob_src, struct Object *ob_dst, const int data_type, const bool use_create,
         const int map_vert_mode, const int map_edge_mode, const int map_poly_mode, const int map_loop_mode,
-        struct SpaceTransform *space_transform, const float max_distance,
+        struct SpaceTransform *space_transform, const float max_distance, const float precision,
         const int replace_mode, const float replace_threshold,
         const int fromlayers_select, const int tolayers_select);
 

@@ -240,6 +240,9 @@ enum {
 	/* Nearest edge of nearest poly (using mid-point). */
 	M2MMAP_MODE_EDGE_POLY_NEAREST        = M2MMAP_MODE_EDGE | M2MMAP_USE_POLY | M2MMAP_USE_NEAREST,
 
+	/* Project dest edge along both its vertices' normals, and use shortest edge-path between hitting points. */
+	//M2MMAP_MODE_EDGE_EDGEINTERP_VNORPROJ = M2MMAP_MODE_EDGE | M2MMAP_USE_VERT | M2MMAP_USE_NORPROJ | M2MMAP_USE_INTERP,
+
 	/* ***** Target's polygons ***** */
 	M2MMAP_MODE_POLY                     = 1 << 26,
 
@@ -276,23 +279,23 @@ enum {
 /* TODO add mesh2mesh versions (we'll need mesh versions of bvhtree funcs too, though!). */
 
 void BKE_dm2mesh_mapping_verts_compute(
-        const int mode, const struct SpaceTransform *space_transform, const float max_dist,
+        const int mode, const struct SpaceTransform *space_transform, const float max_dist, const float bvh_epsilon,
         const struct MVert *verts_dst, const int numverts_dst,
         struct DerivedMesh *dm_src, Mesh2MeshMapping *r_map);
 
 void BKE_dm2mesh_mapping_edges_compute(
-        const int mode, const struct SpaceTransform *space_transform, const float max_dist,
+        const int mode, const struct SpaceTransform *space_transform, const float max_dist, const float bvh_epsilon,
         const struct MVert *verts_dst, const int numverts_dst, const struct MEdge *edges_dst, const int numedges_dst,
         struct DerivedMesh *dm_src, Mesh2MeshMapping *r_map);
 
 void BKE_dm2mesh_mapping_polys_compute(
-        const int mode, const struct SpaceTransform *space_transform, const float max_dist,
+        const int mode, const struct SpaceTransform *space_transform, const float max_dist, const float bvh_epsilon,
         struct MVert *verts_dst, const int numverts_dst, struct MPoly *polys_dst, const int numpolys_dst,
         struct MLoop *loops_dst, const int numloops_dst, struct CustomData *pdata_dst, struct DerivedMesh *dm_src,
         struct Mesh2MeshMapping *r_map);
 
 void BKE_dm2mesh_mapping_loops_compute(
-        const int mode, const struct SpaceTransform *space_transform, const float max_dist,
+        const int mode, const struct SpaceTransform *space_transform, const float max_dist, const float bvh_epsilon,
         struct MVert *verts_dst, const int numverts_dst, struct MEdge *edges_dst, const int numedges_dst,
         struct MPoly *polys_dst, const int numpolys_dst, struct MLoop *loops_dst, const int numloops_dst,
         struct CustomData *pdata_dst, struct CustomData *ldata_dst, const float split_angle_dst,
