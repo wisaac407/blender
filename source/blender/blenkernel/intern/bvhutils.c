@@ -239,6 +239,84 @@ static void mesh_edges_nearest_point(void *userdata, int index, const float co[3
 	}
 }
 
+/* XXX To be moved to BLI most likely? */
+static float dot_v3v3v3(const float p[3], const float a[3], const float b[3])
+{
+	float vec1[3], vec2[3];
+
+	sub_v3_v3v3(vec1, a, p);
+	sub_v3_v3v3(vec2, b, p);
+	if (is_zero_v3(vec1) || is_zero_v3(vec2)) {
+		return 0.0f;
+	}
+	return dot_v3v3(vec1, vec2);
+}
+
+/* Helper, does all the point-spherecast work actually. */
+static void mesh_verts_spherecast_do(
+	const BVHTreeFromMesh *data, int index, const float v[3], const BVHTreeRay *ray, BVHTreeRayHit *hit)
+{
+	const float radius_sq = SQUARE(data->sphere_radius);
+	float dist;
+	const float *r1;
+	float r2[3], i1[3];
+	r1 = ray->origin;
+	add_v3_v3v3(r2, r1, ray->direction);
+
+	closest_to_line_segment_v3(i1, v, r1, r2);
+
+	/* No hit if closest point is 'behind' the origin of the ray, or too far away from it. */
+	if ((dot_v3v3v3(r1, i1, r2) >= 0.0f) && ((dist = len_v3v3(r1, i1)) < hit->dist)) {
+		hit->index = index;
+		hit->dist = dist;
+		copy_v3_v3(hit->co, i1);
+	}
+}
+
+/* Callback to bvh tree raycast. The tree must bust have been built using bvhtree_from_mesh_verts.
+ * userdata must be a BVHMeshCallbackUserdata built from the same mesh as the tree. */
+static void mesh_verts_spherecast(void *userdata, int index, const BVHTreeRay *ray, BVHTreeRayHit *hit)
+{
+	const BVHTreeFromMesh *data = (BVHTreeFromMesh *)userdata;
+	float *v = data->vert[index].co;
+
+	mesh_verts_spherecast_do(data, index, v, ray, hit);
+}
+
+/* Callback to bvh tree raycast. The tree must bust have been built using bvhtree_from_mesh_edges.
+ * userdata must be a BVHMeshCallbackUserdata built from the same mesh as the tree. */
+static void mesh_edges_spherecast(void *userdata, int index, const BVHTreeRay *ray, BVHTreeRayHit *hit)
+{
+	const BVHTreeFromMesh *data = (BVHTreeFromMesh *)userdata;
+	MVert *vert = data->vert;
+	MEdge *edge = &data->edge[index];
+
+	const float radius_sq = SQUARE(data->sphere_radius);
+	float dist;
+	const float *v1, *v2, *r1;
+	float r2[3], i1[3], i2[3];
+	v1 = vert[edge->v1].co;
+	v2 = vert[edge->v2].co;
+
+	/* In case we get a zero-length edge, handle it as a point! */
+	if (equals_v3v3(v1, v2)) {
+		mesh_verts_spherecast_do(data, index, v1, ray, hit);
+		return;
+	}
+
+	r1 = ray->origin;
+	add_v3_v3v3(r2, r1, ray->direction);
+
+	if (isect_line_line_v3(v1, v2, r1, r2, i1, i2)) {
+		/* No hit if intersection point is 'behind' the origin of the ray, or too far away from it. */
+		if ((dot_v3v3v3(r1, i2, r2) >= 0.0f) && ((dist = len_v3v3(r1, i2)) < hit->dist)) {
+			hit->index = index;
+			hit->dist = dist;
+			copy_v3_v3(hit->co, i2);
+		}
+	}
+}
+
 /*
  * BVH builders
  */
@@ -294,7 +372,7 @@ static void bvhtree_from_mesh_verts_setup_data(BVHTreeFromMesh *data, BVHTree *t
 		/* a NULL nearest callback works fine
 		 * remember the min distance to point is the same as the min distance to BV of point */
 		data->nearest_callback = NULL;
-		data->raycast_callback = NULL;
+		data->raycast_callback = mesh_verts_spherecast;
 
 		data->vert = vert;
 		data->vert_allocated = vert_allocated;
@@ -423,7 +501,7 @@ BVHTree *bvhtree_from_mesh_edges(BVHTreeFromMesh *data, DerivedMesh *dm, float e
 		data->cached = true;
 
 		data->nearest_callback = mesh_edges_nearest_point;
-		data->raycast_callback = NULL;
+		data->raycast_callback = mesh_edges_spherecast;
 
 		data->vert = vert;
 		data->vert_allocated = vert_allocated;
