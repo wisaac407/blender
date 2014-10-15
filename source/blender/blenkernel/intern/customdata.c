@@ -3480,51 +3480,120 @@ void CustomData_external_remove_object(CustomData *data, ID *id)
 static void customdata_data_transfer_interp_generic(const DataTransferLayerMapping *laymap, void **sources,
                                                     const float *weights, int count, void *data_dst)
 {
-	/* Fake interpolation, we actually copy highest weighted source to dest.
-	 * Note we also handle bitflags here. */
-
-	int max_weight_idx = 0;
-
-	const size_t data_size = laymap->data_size;
-	const uint64_t data_flag = laymap->data_flag;
-
-	if (count > 1) {
-		float max_weight = 0.0f;
-		int i;
-
-		for (i = 0; i < count; i++) {
-			if (weights[i] > max_weight) {
-				max_weight = weights[i];
-				max_weight_idx = i;
-			}
-		}
-	}
-
-	if (data_flag) {
 #define COPY_BIT_FLAG(_type, _dst, _src, _f)                    \
 {                                                               \
 	const _type _flag = *((_type *)(_src)) & ((_type)(_f));     \
 	*((_type *)(_dst)) &= ~(_f);                                \
 	*((_type *)(_dst)) |= _flag;                                \
 } (void) 0
+#define CHECK_BIT_FLAG(_type, _item, _f) ((*((_type *)(_item)) & ((_type)(_f))) != 0)
+
+	/* Fake interpolation, we actually copy highest weighted source to dest.
+	 * Note we also handle bitflags here, in which case we rather choose to transfer value of elements totalizing
+	 * more than 0.5 of weight. */
+
+	int best_src_idx = 0;
+
+	const size_t data_size = laymap->data_size;
+	const uint64_t data_flag = laymap->data_flag;
+
+	if (count > 1) {
+		int i;
+
+		if (data_flag) {
+			/* Boolean case, we can 'interpolate' in two groups, and choose value from highest weighted group. */
+			float tot_weight_true = 0.0f, tot_weight_false = 0.0f;
+			int item_true_idx = -1, item_false_idx = -1;
+
+			for (i = 0; i < count; i++) {
+				switch (data_size) {
+					case 1:
+						if (CHECK_BIT_FLAG(uint8_t, sources[i], data_flag)) {
+							tot_weight_true += weights[i];
+							item_true_idx = i;
+						}
+						else {
+							tot_weight_false += weights[i];
+							item_false_idx = i;
+						}
+						break;
+					case 2:
+						if (CHECK_BIT_FLAG(uint32_t, sources[i], data_flag)) {
+							tot_weight_true += weights[i];
+							item_true_idx = i;
+						}
+						else {
+							tot_weight_false += weights[i];
+							item_false_idx = i;
+						}
+						break;
+					case 4:
+						if (CHECK_BIT_FLAG(uint32_t, sources[i], data_flag)) {
+							tot_weight_true += weights[i];
+							item_true_idx = i;
+						}
+						else {
+							tot_weight_false += weights[i];
+							item_false_idx = i;
+						}
+						break;
+					case 8:
+						if (CHECK_BIT_FLAG(uint64_t, sources[i], data_flag)) {
+							tot_weight_true += weights[i];
+							item_true_idx = i;
+						}
+						else {
+							tot_weight_false += weights[i];
+							item_false_idx = i;
+						}
+						break;
+					default:
+						//printf("ERROR %s: Unknown flags-container size (%zu)\n", __func__, datasize);
+						break;
+				}
+			}
+			best_src_idx = (tot_weight_true >= 0.5f) ? item_true_idx : item_false_idx;
+		}
+		else {
+			/* We just choose highest weighted source. */
+			float max_weight = 0.0f;
+
+			for (i = 0; i < count; i++) {
+				if (weights[i] > max_weight) {
+					max_weight = weights[i];
+					best_src_idx = i;
+				}
+			}
+		}
+	}
+
+	BLI_assert(best_src_idx >= 0);
+
+	if (data_flag) {
 		switch (data_size) {
 			case 1:
-				COPY_BIT_FLAG(uint8_t, data_dst, sources[max_weight_idx], data_flag);
+				COPY_BIT_FLAG(uint8_t, data_dst, sources[best_src_idx], data_flag);
+				break;
 			case 2:
-				COPY_BIT_FLAG(uint16_t, data_dst, sources[max_weight_idx], data_flag);
+				COPY_BIT_FLAG(uint16_t, data_dst, sources[best_src_idx], data_flag);
+				break;
 			case 4:
-				COPY_BIT_FLAG(uint32_t, data_dst, sources[max_weight_idx], data_flag);
+				COPY_BIT_FLAG(uint32_t, data_dst, sources[best_src_idx], data_flag);
+				break;
 			case 8:
-				COPY_BIT_FLAG(uint64_t, data_dst, sources[max_weight_idx], data_flag);
+				COPY_BIT_FLAG(uint64_t, data_dst, sources[best_src_idx], data_flag);
+				break;
 			default:
 				//printf("ERROR %s: Unknown flags-container size (%zu)\n", __func__, datasize);
 				break;
 		}
-#undef COPY_BIT_FLAG
 	}
 	else {
-		memcpy(data_dst, sources[max_weight_idx], data_size);
+		memcpy(data_dst, sources[best_src_idx], data_size);
 	}
+
+#undef COPY_BIT_FLAG
+#undef CHECK_BIT_FLAG
 }
 
 void CustomData_data_transfer(const Mesh2MeshMapping *m2mmap, const DataTransferLayerMapping *laymap)

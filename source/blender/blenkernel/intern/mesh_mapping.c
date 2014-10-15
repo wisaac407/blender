@@ -1255,13 +1255,15 @@ void BKE_dm2mesh_mapping_edges_compute(
 			MEM_freeN(vcos_src);
 		}
 		else if (mode == M2MMAP_MODE_EDGE_EDGEINTERP_VNORPROJ) {
+			const int num_rays_min = 5, num_rays_max = 100;
 			const int numedges_src = dm_src->getNumEdges(dm_src);
 
+			/* Subtleness - this one we can allocate only max number of cast rays per edges! */
+			int *indices = MEM_mallocN(sizeof(*indices) * (size_t)min_ii(numedges_src, num_rays_max), __func__);
 			/* Here it's simpler to just allocate for all edges :/ */
-			int *indices = MEM_mallocN(sizeof(*indices) * (size_t)numedges_src, __func__);
 			float *weights = MEM_mallocN(sizeof(*weights) * (size_t)numedges_src, __func__);
 
-			bvhtree_from_mesh_edges(&treedata, dm_src, 0.0f, 2, 6);
+			bvhtree_from_mesh_edges(&treedata, dm_src, ray_radius, 2, 6);
 
 			for (i = 0; i < numedges_dst; i++) {
 				/* For each dst edge, we sample some rays from it (interpolated from its vertices)
@@ -1300,9 +1302,9 @@ void BKE_dm2mesh_mapping_edges_compute(
 				edge_dst_len = len_v3v3(v1_co, v2_co);
 
 				grid_size = (int)((edge_dst_len / ray_radius) + 0.5f);
-				CLAMP(grid_size, 5, 100);  /* min 5 rays/edge, max 100. */
+				CLAMP(grid_size, num_rays_min, num_rays_max);  /* min 5 rays/edge, max 100. */
 
-				grid_step = edge_dst_len / (float)grid_size;
+				grid_step = 1.0f / (float)grid_size;  /* Not actual distance here, rather an interp fac... */
 
 				/* And now we can cast all our rays, and see what we get! */
 				for (j = 0; j < grid_size; j++) {
@@ -1320,7 +1322,9 @@ void BKE_dm2mesh_mapping_edges_compute(
 						hitdist_accum += hitdist;
 					}
 				}
-				if (totweights > 0.0f) {
+				/* A sampling is valid (as in, its result can be considered as valid sources) only if at least
+				 * half of the rays found a source! */
+				if (totweights > ((float)grid_size / 2.0f)) {
 					for (j = 0; j < (int)numedges_src; j++) {
 						if (!weights[j]) {
 							continue;

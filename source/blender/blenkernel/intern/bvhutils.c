@@ -81,7 +81,7 @@ static float sphereray_tri_intersection(const BVHTreeRay *ray, float radius, con
  * BVH from meshes callbacks
  */
 
-/* Callback to bvh tree nearest point. The tree must bust have been built using bvhtree_from_mesh_faces.
+/* Callback to bvh tree nearest point. The tree must have been built using bvhtree_from_mesh_faces.
  * userdata must be a BVHMeshCallbackUserdata built from the same mesh as the tree. */
 static void mesh_faces_nearest_point(void *userdata, int index, const float co[3], BVHTreeNearest *nearest)
 {
@@ -145,7 +145,7 @@ static void editmesh_faces_nearest_point(void *userdata, int index, const float 
 	}
 }
 
-/* Callback to bvh tree raycast. The tree must bust have been built using bvhtree_from_mesh_faces.
+/* Callback to bvh tree raycast. The tree must have been built using bvhtree_from_mesh_faces.
  * userdata must be a BVHMeshCallbackUserdata built from the same mesh as the tree. */
 static void mesh_faces_spherecast(void *userdata, int index, const BVHTreeRay *ray, BVHTreeRayHit *hit)
 {
@@ -214,7 +214,7 @@ static void editmesh_faces_spherecast(void *userdata, int index, const BVHTreeRa
 	}
 }
 
-/* Callback to bvh tree nearest point. The tree must bust have been built using bvhtree_from_mesh_edges.
+/* Callback to bvh tree nearest point. The tree must have been built using bvhtree_from_mesh_edges.
  * userdata must be a BVHMeshCallbackUserdata built from the same mesh as the tree. */
 static void mesh_edges_nearest_point(void *userdata, int index, const float co[3], BVHTreeNearest *nearest)
 {
@@ -272,7 +272,7 @@ static void mesh_verts_spherecast_do(
 	}
 }
 
-/* Callback to bvh tree raycast. The tree must bust have been built using bvhtree_from_mesh_verts.
+/* Callback to bvh tree raycast. The tree must have been built using bvhtree_from_mesh_verts.
  * userdata must be a BVHMeshCallbackUserdata built from the same mesh as the tree. */
 static void mesh_verts_spherecast(void *userdata, int index, const BVHTreeRay *ray, BVHTreeRayHit *hit)
 {
@@ -282,7 +282,7 @@ static void mesh_verts_spherecast(void *userdata, int index, const BVHTreeRay *r
 	mesh_verts_spherecast_do(data, index, v, ray, hit);
 }
 
-/* Callback to bvh tree raycast. The tree must bust have been built using bvhtree_from_mesh_edges.
+/* Callback to bvh tree raycast. The tree must have been built using bvhtree_from_mesh_edges.
  * userdata must be a BVHMeshCallbackUserdata built from the same mesh as the tree. */
 static void mesh_edges_spherecast(void *userdata, int index, const BVHTreeRay *ray, BVHTreeRayHit *hit)
 {
@@ -290,6 +290,7 @@ static void mesh_edges_spherecast(void *userdata, int index, const BVHTreeRay *r
 	MVert *vert = data->vert;
 	MEdge *edge = &data->edge[index];
 
+	const float radius_sq = SQUARE(data->sphere_radius);
 	float dist;
 	const float *v1, *v2, *r1;
 	float r2[3], i1[3], i2[3];
@@ -308,9 +309,19 @@ static void mesh_edges_spherecast(void *userdata, int index, const BVHTreeRay *r
 	if (isect_line_line_v3(v1, v2, r1, r2, i1, i2)) {
 		/* No hit if intersection point is 'behind' the origin of the ray, or too far away from it. */
 		if ((dot_v3v3v3(r1, i2, r2) >= 0.0f) && ((dist = len_v3v3(r1, i2)) < hit->dist)) {
-			hit->index = index;
-			hit->dist = dist;
-			copy_v3_v3(hit->co, i2);
+			const float e_fac = line_point_factor_v3(i1, v1, v2);
+			if (e_fac < 0.0f) {
+				copy_v3_v3(i1, v1);
+			}
+			else if (e_fac > 1.0f) {
+				copy_v3_v3(i1, v2);
+			}
+			/* Ensure ray is really close enough from edge! */
+			if (len_squared_v3v3(i1, i2) <= radius_sq) {
+				hit->index = index;
+				hit->dist = dist;
+				copy_v3_v3(hit->co, i2);
+			}
 		}
 	}
 }

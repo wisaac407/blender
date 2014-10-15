@@ -139,6 +139,8 @@ static EnumPropertyItem MDT_method_edge_items[] = {
 	{M2MMAP_MODE_EDGE_NEAREST, "NEAREST", 0, "Nearest Edge", "Copy from closest edge (using midpoints)"},
 	{M2MMAP_MODE_EDGE_POLY_NEAREST, "POLY_NEAREST", 0, "Nearest Face Edge",
 			"Copy from closest edge of closest face (using midpoints)"},
+	{M2MMAP_MODE_EDGE_EDGEINTERP_VNORPROJ, "EDGEINTERP_VNORPROJ", 0, "Projected Edge Interpolated",
+			"Interpolate all source edges hit by the projection of dest one along its own normal (from vertices)"},
 	{0, NULL, 0, NULL, NULL}
 };
 
