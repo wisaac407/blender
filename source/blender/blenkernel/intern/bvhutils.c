@@ -254,9 +254,8 @@ static float dot_v3v3v3(const float p[3], const float a[3], const float b[3])
 
 /* Helper, does all the point-spherecast work actually. */
 static void mesh_verts_spherecast_do(
-	const BVHTreeFromMesh *data, int index, const float v[3], const BVHTreeRay *ray, BVHTreeRayHit *hit)
+	const BVHTreeFromMesh *UNUSED(data), int index, const float v[3], const BVHTreeRay *ray, BVHTreeRayHit *hit)
 {
-	const float radius_sq = SQUARE(data->sphere_radius);
 	float dist;
 	const float *r1;
 	float r2[3], i1[3];
@@ -291,7 +290,6 @@ static void mesh_edges_spherecast(void *userdata, int index, const BVHTreeRay *r
 	MVert *vert = data->vert;
 	MEdge *edge = &data->edge[index];
 
-	const float radius_sq = SQUARE(data->sphere_radius);
 	float dist;
 	const float *v1, *v2, *r1;
 	float r2[3], i1[3], i2[3];

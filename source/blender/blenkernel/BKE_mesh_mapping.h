@@ -240,8 +240,8 @@ enum {
 	/* Nearest edge of nearest poly (using mid-point). */
 	M2MMAP_MODE_EDGE_POLY_NEAREST        = M2MMAP_MODE_EDGE | M2MMAP_USE_POLY | M2MMAP_USE_NEAREST,
 
-	/* Project dest edge along both its vertices' normals, and use shortest edge-path between hitting points. */
-	//M2MMAP_MODE_EDGE_EDGEINTERP_VNORPROJ = M2MMAP_MODE_EDGE | M2MMAP_USE_VERT | M2MMAP_USE_NORPROJ | M2MMAP_USE_INTERP,
+	/* Cast a set of rays from along dest edge, interpolating its vertices' normals, and use hit source edges. */
+	M2MMAP_MODE_EDGE_EDGEINTERP_VNORPROJ = M2MMAP_MODE_EDGE | M2MMAP_USE_VERT | M2MMAP_USE_NORPROJ | M2MMAP_USE_INTERP,
 
 	/* ***** Target's polygons ***** */
 	M2MMAP_MODE_POLY                     = 1 << 26,

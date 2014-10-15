@@ -1254,6 +1254,94 @@ void BKE_dm2mesh_mapping_edges_compute(
 
 			MEM_freeN(vcos_src);
 		}
+		else if (mode == M2MMAP_MODE_EDGE_EDGEINTERP_VNORPROJ) {
+			const int numedges_src = dm_src->getNumEdges(dm_src);
+
+			/* Here it's simpler to just allocate for all edges :/ */
+			int *indices = MEM_mallocN(sizeof(*indices) * (size_t)numedges_src, __func__);
+			float *weights = MEM_mallocN(sizeof(*weights) * (size_t)numedges_src, __func__);
+
+			bvhtree_from_mesh_edges(&treedata, dm_src, 0.0f, 2, 6);
+
+			for (i = 0; i < numedges_dst; i++) {
+				/* For each dst edge, we sample some rays from it (interpolated from its vertices)
+				 * and use their hits to interpolate from source edges. */
+				const MEdge *me = &edges_dst[i];
+				float tmp_co[3], v1_co[3], v2_co[3];
+				float tmp_no[3], v1_no[3], v2_no[3];
+
+				int grid_size;
+				float edge_dst_len;
+				float grid_step;
+
+				float totweights = 0.0f;
+				float hitdist_accum = 0.0f;
+				int nbr_sources = 0;
+				int j;
+
+				copy_v3_v3(v1_co, verts_dst[me->v1].co);
+				copy_v3_v3(v2_co, verts_dst[me->v2].co);
+
+				normal_short_to_float_v3(v1_no, verts_dst[me->v1].no);
+				normal_short_to_float_v3(v2_no, verts_dst[me->v2].no);
+
+				/* We do our transform here, allows to interpolate from normals already in src space. */
+				if (space_transform) {
+					BLI_space_transform_apply(space_transform, v1_co);
+					BLI_space_transform_apply(space_transform, v2_co);
+					BLI_space_transform_apply_normal(space_transform, v1_no);
+					BLI_space_transform_apply_normal(space_transform, v2_no);
+				}
+
+				fill_vn_fl(weights, (int)numedges_src, 0.0f);
+
+				/* We adjust our ray-casting grid to ray_radius (the smaller, the more rays are cast),
+				 * with lower/upper bounds. */
+				edge_dst_len = len_v3v3(v1_co, v2_co);
+
+				grid_size = (int)((edge_dst_len / ray_radius) + 0.5f);
+				CLAMP(grid_size, 5, 100);  /* min 5 rays/edge, max 100. */
+
+				grid_step = edge_dst_len / (float)grid_size;
+
+				/* And now we can cast all our rays, and see what we get! */
+				for (j = 0; j < grid_size; j++) {
+					const float fac = grid_step * (float)j;
+					interp_v3_v3v3(tmp_co, v1_co, v2_co, fac);
+					interp_v3_v3v3_slerp_safe(tmp_no, v1_no, v2_no, fac);
+
+					/* Note we handle dest to src space conversion ourself, here! */
+					hitdist = bke_mesh2mesh_bvhtree_query_raycast(&treedata, &rayhit, NULL,
+					                                              tmp_co, tmp_no, ray_radius, max_dist);
+
+					if (rayhit.index >= 0 && hitdist <= max_dist) {
+						weights[rayhit.index] += 1.0f;
+						totweights += 1.0f;
+						hitdist_accum += hitdist;
+					}
+				}
+				if (totweights > 0.0f) {
+					for (j = 0; j < (int)numedges_src; j++) {
+						if (!weights[j]) {
+							continue;
+						}
+						/* Note: nbr_sources is always <= j! */
+						weights[nbr_sources] = weights[j] / totweights;
+						indices[nbr_sources] = j;
+						nbr_sources++;
+					}
+					bke_mesh2mesh_mapping_item_define(r_map, i, hitdist_accum / totweights, 0,
+					                                  nbr_sources, indices, weights);
+				}
+				else {
+					/* No source for this dest edge! */
+					bke_mesh2mesh_mapping_item_define(r_map, i, FLT_MAX, 0, 0, NULL, NULL);
+				}
+			}
+
+			MEM_freeN(indices);
+			MEM_freeN(weights);
+		}
 		else {
 			printf("WARNING! Unsupported mesh-to-mesh edge mapping mode (%d)!\n", mode);
 			memset(r_map->items, 0, sizeof(*r_map->items) * (size_t)numedges_dst);
@@ -1335,13 +1423,12 @@ void BKE_dm2mesh_mapping_polys_compute(
 			for (i = 0; i < numpolys_dst; i++) {
 				MPoly *mp = &polys_dst[i];
 				float tmp_co[3], tmp_no[3];
-				const float radius = 1.0e-6f;
 
 				BKE_mesh_calc_poly_center(mp, &loops_dst[mp->loopstart], verts_dst, tmp_co);
 				copy_v3_v3(tmp_no, poly_nors_dst[i]);
 
 				hitdist = bke_mesh2mesh_bvhtree_query_raycast(&treedata, &rayhit, space_transform,
-				                                              tmp_co, tmp_no, radius, max_dist);
+				                                              tmp_co, tmp_no, ray_radius, max_dist);
 
 				if (rayhit.index >= 0 && hitdist <= max_dist) {
 					bke_mesh2mesh_mapping_item_define(r_map, i, rayhit.dist, 0,
@@ -1366,15 +1453,16 @@ void BKE_dm2mesh_mapping_polys_compute(
 			for (i = 0; i < numpolys_dst; i++) {
 				/* For each dst poly, we sample some rays from it (2D grid in pnor space)
 				 * and use their hits to interpolate from source polys. */
+				/* Note: dst poly is early-converted into src space! */
 				MPoly *mp = &polys_dst[i];
 				float tmp_co[3], tmp_no[3];
-				const float radius = 1.0e-6f;
 
-				const int grid_size = 10;
+				int grid_size;
 				const float zvec[3] = {0.0f, 0.0f, 1.0f};
 				float pcent_dst[3];
 				float to_pnor_2d_mat[3][3], from_pnor_2d_mat[3][3];
 				float poly_dst_2d_min_x, poly_dst_2d_min_y, poly_dst_2d_max_x, poly_dst_2d_max_y, poly_dst_2d_z;
+				float poly_dst_2d_size_x, poly_dst_2d_size_y;
 				float grid_step_x, grid_step_y;
 
 				float totweights = 0.0f;
@@ -1382,7 +1470,14 @@ void BKE_dm2mesh_mapping_polys_compute(
 				int nbr_sources = 0;
 				int j, k;
 
+				BKE_mesh_calc_poly_center(mp, &loops_dst[mp->loopstart], verts_dst, pcent_dst);
 				copy_v3_v3(tmp_no, poly_nors_dst[i]);
+				/* We do our transform here, else it'd be redone by raycast helper for each ray, ugh! */
+				if (space_transform) {
+					BLI_space_transform_apply(space_transform, pcent_dst);
+					BLI_space_transform_apply_normal(space_transform, tmp_no);
+				}
+
 				fill_vn_fl(weights, (int)numpolys_src, 0.0f);
 
 				if ((size_t)mp->totloop > tmp_poly_size) {
@@ -1390,21 +1485,23 @@ void BKE_dm2mesh_mapping_polys_compute(
 					poly_vcos_2d = MEM_reallocN(poly_vcos_2d, sizeof(*poly_vcos_2d) * tmp_poly_size);
 				}
 
-				rotation_between_vecs_to_mat3(to_pnor_2d_mat, poly_nors_dst[i], zvec);
+				rotation_between_vecs_to_mat3(to_pnor_2d_mat, tmp_no, zvec);
 				invert_m3_m3(from_pnor_2d_mat, to_pnor_2d_mat);
 
-				BKE_mesh_calc_poly_center(mp, &loops_dst[mp->loopstart], verts_dst, pcent_dst);
+				mul_m3_v3(to_pnor_2d_mat, pcent_dst);
+				poly_dst_2d_z = pcent_dst[2];
+				printf("%f\n", pcent_dst[2]);
 
-				mul_m3_v3(to_pnor_2d_mat, tmp_co);
-				poly_dst_2d_z = tmp_co[2];
-				printf("%f\n", tmp_co[2]);
-
+				/* Get (2D) bounding square of our poly. */
 				poly_dst_2d_min_x = poly_dst_2d_min_y = FLT_MAX;
 				poly_dst_2d_max_x = poly_dst_2d_max_y = -FLT_MAX;
 
 				for (j = 0; j < mp->totloop; j++) {
 					MLoop *ml = &loops_dst[j + mp->loopstart];
 					copy_v3_v3(tmp_co, verts_dst[ml->v].co);
+					if (space_transform) {
+						BLI_space_transform_apply(space_transform, tmp_co);
+					}
 					mul_m3_v3(to_pnor_2d_mat, tmp_co);
 					copy_v2_v2(poly_vcos_2d[j], tmp_co);
 					printf("%f\n", tmp_co[2]);
@@ -1414,9 +1511,18 @@ void BKE_dm2mesh_mapping_polys_compute(
 					if (tmp_co[1] < poly_dst_2d_min_y) poly_dst_2d_min_y = tmp_co[1];
 				}
 
-				grid_step_x = (poly_dst_2d_max_x - poly_dst_2d_min_x) / (float)grid_size;
-				grid_step_y = (poly_dst_2d_max_y - poly_dst_2d_min_y) / (float)grid_size;
+				/* We adjust our ray-casting grid to ray_radius (the smaller, the more rays are cast),
+				 * with lower/upper bounds. */
+				poly_dst_2d_size_x = poly_dst_2d_max_x - poly_dst_2d_min_x;
+				poly_dst_2d_size_y = poly_dst_2d_max_y - poly_dst_2d_min_y;
 
+				grid_size = (int)((max_ff(poly_dst_2d_size_x, poly_dst_2d_size_y) / ray_radius) + 0.5f);
+				CLAMP(grid_size, 4, 20);  /* min 16 rays/face, max 400. */
+
+				grid_step_x = poly_dst_2d_size_x / (float)grid_size;
+				grid_step_y = poly_dst_2d_size_y / (float)grid_size;
+
+				/* And now we can cast all our rays, and see what we get! */
 				for (j = 0; j < grid_size; j++) {
 					for (k = 0; k < grid_size; k++) {
 						tmp_co[0] = poly_dst_2d_min_x + grid_step_x * (float)j;
@@ -1431,12 +1537,11 @@ void BKE_dm2mesh_mapping_polys_compute(
 						tmp_co[2] = poly_dst_2d_z;
 						mul_m3_v3(from_pnor_2d_mat, tmp_co);
 
-						/* At this point, tmp_co is a point on our poly surface, in mesh_dst space! */
+						/* At this point, tmp_co is a point on our poly surface, in mesh_src space! */
 
-						/* XXX This transform same tmp_no several times into src space, check whether optimizing this
-						 *     is worth it! */
-						hitdist = bke_mesh2mesh_bvhtree_query_raycast(&treedata, &rayhit, space_transform,
-						                                              tmp_co, tmp_no, radius, max_dist);
+						/* Note we handle dest to src space conversion ourself, here! */
+						hitdist = bke_mesh2mesh_bvhtree_query_raycast(&treedata, &rayhit, NULL,
+						                                              tmp_co, tmp_no, ray_radius, max_dist);
 
 						if (rayhit.index >= 0 && hitdist <= max_dist) {
 							weights[orig_poly_idx_src[rayhit.index]] += 1.0f;
@@ -1445,7 +1550,7 @@ void BKE_dm2mesh_mapping_polys_compute(
 						}
 					}
 				}
-				if (nbr_sources > 0) {
+				if (totweights > 0.0f) {
 					for (j = 0; j < (int)numpolys_src; j++) {
 						if (!weights[j]) {
 							continue;
