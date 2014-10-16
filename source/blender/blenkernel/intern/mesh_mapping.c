@@ -846,6 +846,14 @@ static float bke_mesh2mesh_bvhtree_query_raycast(
 	return rayhit->dist;
 }
 
+/* Little helper when dealing with source islands */
+typedef struct IslandResult {
+	float factor;        /* A factor, based on which best island for a given set of elements will be selected. */
+	int idx_src;         /* Index of the source. */
+	float hit_distance;  /* The actual hit distance. */
+	float hit_point[3];  /* The hit point, if relevant. */
+} IslandResult;
+
 void BKE_dm2mesh_mapping_verts_compute(
         const int mode, const SpaceTransform *space_transform, const float max_dist, const float ray_radius,
         const MVert *verts_dst, const int numverts_dst, DerivedMesh *dm_src,
@@ -1263,6 +1271,7 @@ void BKE_dm2mesh_mapping_edges_compute(
 			/* Here it's simpler to just allocate for all edges :/ */
 			float *weights = MEM_mallocN(sizeof(*weights) * (size_t)numedges_src, __func__);
 
+			/* Not sure I understand why, but this works much better if we pass ray_radius as bvhtree epsilon too :/ */
 			bvhtree_from_mesh_edges(&treedata, dm_src, ray_radius, 2, 6);
 
 			for (i = 0; i < numedges_dst; i++) {
@@ -1654,6 +1663,9 @@ void BKE_dm2mesh_mapping_loops_compute(
 
 		int tidx, pidx_dst, lidx_dst, plidx_dst, pidx_src, lidx_src, plidx_src;
 
+		IslandResult **islands_res;
+		size_t islands_res_buff_size = 32;
+
 		if (!use_from_vert) {
 			vcos_src = MEM_mallocN(sizeof(*vcos_src) * (size_t)num_verts_src, __func__);
 			dm_src->getVertCos(dm_src, vcos_src);
@@ -1817,24 +1829,20 @@ void BKE_dm2mesh_mapping_loops_compute(
 			}
 		}
 
-		{
-		/* facs: [0] is actual factor; [1] is hitdist; [2] is loop/poly src idx,
-		 *       [3-5] are hit coordinates (if interpolated) */
-		float (**facs)[6] = MEM_mallocN(sizeof(*facs) * (size_t)num_trees, __func__);
-		size_t facs_buff_size = 32;
+		/* And check each dest poly! */
+		islands_res = MEM_mallocN(sizeof(*islands_res) * (size_t)num_trees, __func__);
 		for (tidx = 0; tidx < num_trees; tidx++) {
-			facs[tidx] = MEM_mallocN(sizeof(**facs) * facs_buff_size, __func__);
+			islands_res[tidx] = MEM_mallocN(sizeof(**islands_res) * islands_res_buff_size, __func__);
 		}
 
-		/* And check each dest poly! */
 		for (pidx_dst = 0; pidx_dst < numpolys_dst; pidx_dst++) {
 			MPoly *mp_dst = &polys_dst[pidx_dst];
 			float (*pnor_dst)[3] = &poly_nors_dst[pidx_dst];
 
-			if ((size_t)mp_dst->totloop > facs_buff_size) {
-				facs_buff_size = (size_t)mp_dst->totloop;
+			if ((size_t)mp_dst->totloop > islands_res_buff_size) {
+				islands_res_buff_size = (size_t)mp_dst->totloop;
 				for (tidx = 0; tidx < num_trees; tidx++) {
-					facs[tidx] = MEM_reallocN(facs[tidx], sizeof(**facs) * facs_buff_size);
+					islands_res[tidx] = MEM_reallocN(islands_res[tidx], sizeof(**islands_res) * islands_res_buff_size);
 				}
 			}
 
@@ -1890,15 +1898,15 @@ void BKE_dm2mesh_mapping_loops_compute(
 									}
 								}
 							}
-							facs[tidx][plidx_dst][0] = (hitdist != 0.0f) ? (1.0f / hitdist * best_nor_dot) : 1e18f;
-							facs[tidx][plidx_dst][1] = hitdist;
-							facs[tidx][plidx_dst][2] = (float)best_idx_src;
+							islands_res[tidx][plidx_dst].factor = hitdist ? (1.0f / hitdist * best_nor_dot) : 1e18f;
+							islands_res[tidx][plidx_dst].hit_distance = hitdist;
+							islands_res[tidx][plidx_dst].idx_src = best_idx_src;
 						}
 						else {
 							/* No source for this dest loop! */
-							facs[tidx][plidx_dst][0] = 0.0f;
-							facs[tidx][plidx_dst][1] = FLT_MAX;
-							facs[tidx][plidx_dst][2] = (float)-1;
+							islands_res[tidx][plidx_dst].factor = 0.0f;
+							islands_res[tidx][plidx_dst].hit_distance = FLT_MAX;
+							islands_res[tidx][plidx_dst].idx_src = -1;
 						}
 					}
 					else if (mode & M2MMAP_USE_NORPROJ) {
@@ -1911,16 +1919,16 @@ void BKE_dm2mesh_mapping_loops_compute(
 						                                              tmp_co, tmp_no, ray_radius, max_dist);
 
 						if (rayhit.index >= 0 && hitdist <= max_dist) {
-							facs[tidx][plidx_dst][0] = (hitdist != 0.0f) ? (1.0f / hitdist) : 1e18f;
-							facs[tidx][plidx_dst][1] = hitdist;
-							facs[tidx][plidx_dst][2] = (float)orig_poly_idx_src[rayhit.index];
-							copy_v3_v3(&facs[tidx][plidx_dst][3], rayhit.co);
+							islands_res[tidx][plidx_dst].factor = hitdist ? (1.0f / hitdist) : 1e18f;
+							islands_res[tidx][plidx_dst].hit_distance = hitdist;
+							islands_res[tidx][plidx_dst].idx_src = orig_poly_idx_src[rayhit.index];
+							copy_v3_v3(islands_res[tidx][plidx_dst].hit_point, rayhit.co);
 						}
 						else {
 							/* No source for this dest loop! */
-							facs[tidx][plidx_dst][0] = 0.0f;
-							facs[tidx][plidx_dst][1] = FLT_MAX;
-							facs[tidx][plidx_dst][2] = (float)-1;
+							islands_res[tidx][plidx_dst].factor = 0.0f;
+							islands_res[tidx][plidx_dst].hit_distance = FLT_MAX;
+							islands_res[tidx][plidx_dst].idx_src = -1;
 						}
 					}
 					else {  /* Nearest poly either to use all its loops/verts or just closest one. */
@@ -1933,16 +1941,16 @@ void BKE_dm2mesh_mapping_loops_compute(
 						                                              tmp_co, max_dist_sq);
 
 						if (nearest.index >= 0) {
-							facs[tidx][plidx_dst][0] = (hitdist != 0.0f) ? (1.0f / hitdist) : 1e18f;
-							facs[tidx][plidx_dst][1] = hitdist;
-							facs[tidx][plidx_dst][2] = (float)orig_poly_idx_src[nearest.index];
-							copy_v3_v3(&facs[tidx][plidx_dst][3], nearest.co);
+							islands_res[tidx][plidx_dst].factor = hitdist ? (1.0f / hitdist) : 1e18f;
+							islands_res[tidx][plidx_dst].hit_distance = hitdist;
+							islands_res[tidx][plidx_dst].idx_src = orig_poly_idx_src[nearest.index];
+							copy_v3_v3(islands_res[tidx][plidx_dst].hit_point, nearest.co);
 						}
 						else {
 							/* No source for this dest loop! */
-							facs[tidx][plidx_dst][0] = 0.0f;
-							facs[tidx][plidx_dst][1] = FLT_MAX;
-							facs[tidx][plidx_dst][2] = (float)-1;
+							islands_res[tidx][plidx_dst].factor = 0.0f;
+							islands_res[tidx][plidx_dst].hit_distance = FLT_MAX;
+							islands_res[tidx][plidx_dst].idx_src = -1;
 						}
 					}
 				}
@@ -1950,34 +1958,39 @@ void BKE_dm2mesh_mapping_loops_compute(
 
 			/* And now, find best island to use! */
 			{
-				float best_island_val = 0.0f;
+				float best_island_fac = 0.0f;
 				int best_island_idx = -1;
 
 				for (tidx = 0; tidx < num_trees; tidx++) {
-					float island_val = 0.0f;
+					float island_fac = 0.0f;
 
 					for (plidx_dst = 0; plidx_dst < mp_dst->totloop; plidx_dst++) {
-						island_val += facs[tidx][plidx_dst][0];
+						island_fac += islands_res[tidx][plidx_dst].factor;
 					}
-					island_val /= (float)mp_dst->totloop;
+					island_fac /= (float)mp_dst->totloop;
 
-					if (island_val > best_island_val) {
-						best_island_val = island_val;
+					if (island_fac > best_island_fac) {
+						best_island_fac = island_fac;
 						best_island_idx = tidx;
 					}
 				}
 
 				for (plidx_dst = 0; plidx_dst < mp_dst->totloop; plidx_dst++) {
+					IslandResult *isld_res;
 					lidx_dst = plidx_dst + mp_dst->loopstart;
+
 					if (best_island_idx < 0) {
 						/* No source for any loops of our dest poly in any source islands. */
 						bke_mesh2mesh_mapping_item_define(r_map, lidx_dst, FLT_MAX, 0, 0, NULL, NULL);
+						continue;
 					}
-					else if (use_from_vert) {
-						/* Indices stored in facs are those of loops, one per dest loop. */
-						lidx_src = (int)facs[best_island_idx][plidx_dst][2];
+
+					isld_res = &islands_res[best_island_idx][plidx_dst];
+					if (use_from_vert) {
+						/* Indices stored in islands_res are those of loops, one per dest loop. */
+						lidx_src = isld_res->idx_src;
 						if (lidx_src >= 0) {
-							bke_mesh2mesh_mapping_item_define(r_map, lidx_dst, facs[best_island_idx][plidx_dst][1],
+							bke_mesh2mesh_mapping_item_define(r_map, lidx_dst, isld_res->hit_distance,
 							                                  best_island_idx, 1, &lidx_src, &full_weight);
 						}
 						else {
@@ -1988,10 +2001,10 @@ void BKE_dm2mesh_mapping_loops_compute(
 					}
 					else {
 						/* Else, we use source poly, indices stored in facs are those of polygons. */
-						pidx_src = (int)facs[best_island_idx][plidx_dst][2];
+						pidx_src = isld_res->idx_src;
 						if (pidx_src >= 0) {
 							MPoly *mp_src = &polys_src[pidx_src];
-							float *hit_co = &facs[best_island_idx][plidx_dst][3];
+							float *hit_co = isld_res->hit_point;
 							int best_loop_idx_src;
 
 							if (mode == M2MMAP_MODE_LOOP_POLY_NEAREST) {
@@ -2000,7 +2013,7 @@ void BKE_dm2mesh_mapping_loops_compute(
 								        &buff_size_interp, &vcos_interp, true, &indices_interp,
 								        &weights_interp, false, &best_loop_idx_src);
 
-								bke_mesh2mesh_mapping_item_define(r_map, lidx_dst, facs[best_island_idx][plidx_dst][1],
+								bke_mesh2mesh_mapping_item_define(r_map, lidx_dst, isld_res->hit_distance,
 								                                  best_island_idx, 1, &best_loop_idx_src, &full_weight);
 							}
 							else {
@@ -2010,7 +2023,7 @@ void BKE_dm2mesh_mapping_loops_compute(
 								                                &weights_interp, true, NULL);
 
 								bke_mesh2mesh_mapping_item_define(r_map, lidx_dst,
-								                                  facs[best_island_idx][plidx_dst][1], best_island_idx,
+								                                  isld_res->hit_distance, best_island_idx,
 								                                  nbr_sources, indices_interp, weights_interp);
 							}
 						}
@@ -2025,11 +2038,9 @@ void BKE_dm2mesh_mapping_loops_compute(
 		}
 
 		for (tidx = 0; tidx < num_trees; tidx++) {
-			MEM_freeN(facs[tidx]);
+			MEM_freeN(islands_res[tidx]);
 		}
-		MEM_freeN(facs);
-		}
-
+		MEM_freeN(islands_res);
 		if (verts_allocated_src) {
 			MEM_freeN(verts_src);
 		}
