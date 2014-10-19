@@ -300,7 +300,7 @@ static void data_transfer_interp_char(const DataTransferLayerMapping *UNUSED(lay
 	*data_dst = (char)(weight_dst * 255.0f);
 }
 
-static void data_transfer_mesh_mapping_filter(Object *ob_dst, Mesh2MeshMapping *geom_map, const int data_type,
+static void data_transfer_mesh_mapping_filter(Mesh *me_dst, Mesh2MeshMapping *geom_map, const int data_type,
                                               const int replace_mode, const float replace_threshold)
 {
 	/* TODO!
@@ -686,8 +686,7 @@ bool ED_data_transfer(
         Scene *scene, Object *ob_src, Object *ob_dst, const int data_type, const bool use_create,
         const int map_vert_mode, const int map_edge_mode, const int map_poly_mode, const int map_loop_mode,
         SpaceTransform *space_transform, const float max_distance, const float ray_radius,
-        const int UNUSED(replace_mode), const float UNUSED(replace_threshold),
-        const int fromlayers_select, const int tolayers_select)
+        const int replace_mode, const float replace_threshold, const int fromlayers_select, const int tolayers_select)
 {
 	DerivedMesh *dm_src;
 	Mesh *me_dst;
