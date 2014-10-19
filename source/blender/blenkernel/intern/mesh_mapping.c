@@ -759,6 +759,11 @@ static void bke_mesh2mesh_mapping_item_define(
 	mapit->island = island;
 }
 
+void BKE_mesh2mesh_mapping_item_define_invalid(Mesh2MeshMapping *map, const int idx)
+{
+	bke_mesh2mesh_mapping_item_define(map, idx, FLT_MAX, 0, 0, NULL, NULL);
+}
+
 static int bke_mesh2mesh_mapping_get_interp_poly_data(
         const MPoly *mp, MLoop *mloops, const float (*vcos_src)[3], const float point[3],
         size_t *buff_size, float (**vcos)[3], const bool use_loops, int **indices, float **weights,
@@ -896,7 +901,7 @@ void BKE_dm2mesh_mapping_verts_compute(
 				}
 				else {
 					/* No source for this dest vertex! */
-					bke_mesh2mesh_mapping_item_define(r_map, i, FLT_MAX, 0, 0, NULL, NULL);
+					BKE_mesh2mesh_mapping_item_define_invalid(r_map, i);
 				}
 			}
 		}
@@ -944,7 +949,7 @@ void BKE_dm2mesh_mapping_verts_compute(
 				}
 				else {
 					/* No source for this dest vertex! */
-					bke_mesh2mesh_mapping_item_define(r_map, i, FLT_MAX, 0, 0, NULL, NULL);
+					BKE_mesh2mesh_mapping_item_define_invalid(r_map, i);
 				}
 			}
 
@@ -988,7 +993,7 @@ void BKE_dm2mesh_mapping_verts_compute(
 					}
 					else {
 						/* No source for this dest vertex! */
-						bke_mesh2mesh_mapping_item_define(r_map, i, FLT_MAX, 0, 0, NULL, NULL);
+						BKE_mesh2mesh_mapping_item_define_invalid(r_map, i);
 					}
 				}
 			}
@@ -1027,7 +1032,7 @@ void BKE_dm2mesh_mapping_verts_compute(
 					}
 					else {
 						/* No source for this dest vertex! */
-						bke_mesh2mesh_mapping_item_define(r_map, i, FLT_MAX, 0, 0, NULL, NULL);
+						BKE_mesh2mesh_mapping_item_define_invalid(r_map, i);
 					}
 				}
 			}
@@ -1179,7 +1184,7 @@ void BKE_dm2mesh_mapping_edges_compute(
 				}
 				else {
 					/* No source for this dest edge! */
-					bke_mesh2mesh_mapping_item_define(r_map, i, FLT_MAX, 0, 0, NULL, NULL);
+					BKE_mesh2mesh_mapping_item_define_invalid(r_map, i);
 				}
 			}
 
@@ -1205,7 +1210,7 @@ void BKE_dm2mesh_mapping_edges_compute(
 				}
 				else {
 					/* No source for this dest edge! */
-					bke_mesh2mesh_mapping_item_define(r_map, i, FLT_MAX, 0, 0, NULL, NULL);
+					BKE_mesh2mesh_mapping_item_define_invalid(r_map, i);
 				}
 			}
 		}
@@ -1256,7 +1261,7 @@ void BKE_dm2mesh_mapping_edges_compute(
 				}
 				else {
 					/* No source for this dest edge! */
-					bke_mesh2mesh_mapping_item_define(r_map, i, FLT_MAX, 0, 0, NULL, NULL);
+					BKE_mesh2mesh_mapping_item_define_invalid(r_map, i);
 				}
 			}
 
@@ -1348,7 +1353,7 @@ void BKE_dm2mesh_mapping_edges_compute(
 				}
 				else {
 					/* No source for this dest edge! */
-					bke_mesh2mesh_mapping_item_define(r_map, i, FLT_MAX, 0, 0, NULL, NULL);
+					BKE_mesh2mesh_mapping_item_define_invalid(r_map, i);
 				}
 			}
 
@@ -1426,7 +1431,7 @@ void BKE_dm2mesh_mapping_polys_compute(
 				}
 				else {
 					/* No source for this dest poly! */
-					bke_mesh2mesh_mapping_item_define(r_map, i, FLT_MAX, 0, 0, NULL, NULL);
+					BKE_mesh2mesh_mapping_item_define_invalid(r_map, i);
 				}
 			}
 		}
@@ -1449,7 +1454,7 @@ void BKE_dm2mesh_mapping_polys_compute(
 				}
 				else {
 					/* No source for this dest vertex! */
-					bke_mesh2mesh_mapping_item_define(r_map, i, FLT_MAX, 0, 0, NULL, NULL);
+					BKE_mesh2mesh_mapping_item_define_invalid(r_map, i);
 				}
 			}
 		}
@@ -1578,7 +1583,7 @@ void BKE_dm2mesh_mapping_polys_compute(
 				}
 				else {
 					/* No source for this dest poly! */
-					bke_mesh2mesh_mapping_item_define(r_map, i, FLT_MAX, 0, 0, NULL, NULL);
+					BKE_mesh2mesh_mapping_item_define_invalid(r_map, i);
 				}
 			}
 
@@ -1981,7 +1986,7 @@ void BKE_dm2mesh_mapping_loops_compute(
 
 					if (best_island_idx < 0) {
 						/* No source for any loops of our dest poly in any source islands. */
-						bke_mesh2mesh_mapping_item_define(r_map, lidx_dst, FLT_MAX, 0, 0, NULL, NULL);
+						BKE_mesh2mesh_mapping_item_define_invalid(r_map, lidx_dst);
 						continue;
 					}
 

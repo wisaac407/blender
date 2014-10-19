@@ -191,6 +191,8 @@ typedef struct Mesh2MeshMapping {
 void BKE_mesh2mesh_mapping_init(Mesh2MeshMapping *map, const int num_items);
 void BKE_mesh2mesh_mapping_free(Mesh2MeshMapping *map);
 
+void BKE_mesh2mesh_mapping_item_define_invalid(Mesh2MeshMapping *map, const int idx);
+
 /* TODO:
  * Add other 'from/to' mapping sources, like e.g. using an UVMap, etc.
  *     http://blenderartists.org/forum/showthread.php?346458-Move-Vertices-to-the-location-of-the-Reference-Mesh-based-on-the-UV-Position
