@@ -747,8 +747,8 @@ static void vgroup_copy_active_to_sel(Object *ob, eVGroupSelect subset_type)
 
 /***********************Start weight transfer (WT)*********************************/
 
-static void vgroups_datatransfer_interp(const DataTransferLayerMapping *laymap,
-                                        void **sources, const float *weights, int count, void *dest)
+static void vgroups_datatransfer_interp(const DataTransferLayerMapping *laymap, void *dest,
+                                        void **sources, const float *weights, int count)
 {
 	MDeformVert **data_src = (MDeformVert **)sources;
 	MDeformVert *data_dst = (MDeformVert *)dest;
@@ -778,7 +778,7 @@ static void vgroups_datatransfer_interp(const DataTransferLayerMapping *laymap,
 }
 
 static bool data_transfer_layersmapping_vgroups_multisrc_to_dst(
-        ListBase *r_map, const int num_create,
+        ListBase *r_map, const int mix_mode, const float mix_factor, const int num_create,
         Object *ob_src, Object *ob_dst, MDeformVert *data_dst, MDeformVert *data_src,
         const int tolayers_select, bool *use_layers_src, const int num_layers_src)
 {
@@ -809,7 +809,8 @@ static bool data_transfer_layersmapping_vgroups_multisrc_to_dst(
 					if (!use_layers_src[idx_src]) {
 						continue;
 					}
-					data_transfer_layersmapping_add_item(r_map, CD_FAKE_MDEFORMVERT, data_src, data_dst, idx_src, idx_src,
+					data_transfer_layersmapping_add_item(r_map, CD_FAKE_MDEFORMVERT, mix_mode, mix_factor,
+					                                     data_src, data_dst, idx_src, idx_src,
 					                                     elem_size, 0, 0, 0, vgroups_datatransfer_interp);
 				}
 			}
@@ -831,7 +832,8 @@ static bool data_transfer_layersmapping_vgroups_multisrc_to_dst(
 					ED_vgroup_add_name(ob_dst, dg_src->name);
 					idx_dst = ob_dst->actdef - 1;
 				}
-				data_transfer_layersmapping_add_item(r_map, CD_FAKE_MDEFORMVERT, data_src, data_dst, idx_src, idx_dst,
+				data_transfer_layersmapping_add_item(r_map, CD_FAKE_MDEFORMVERT, mix_mode, mix_factor,
+				                                     data_src, data_dst, idx_src, idx_dst,
 				                                     elem_size, 0, 0, 0, vgroups_datatransfer_interp);
 			}
 			break;
@@ -843,7 +845,8 @@ static bool data_transfer_layersmapping_vgroups_multisrc_to_dst(
 }
 
 bool data_transfer_layersmapping_vgroups(
-        struct ListBase *r_map, const int num_create, struct Object *ob_src, struct Object *ob_dst,
+        struct ListBase *r_map, const int mix_mode, const float mix_factor,
+        const int num_create, struct Object *ob_src, struct Object *ob_dst,
         struct CustomData *cd_src, struct CustomData *cd_dst, const int fromlayers_select, const int tolayers_select)
 {
 	int idx_src, idx_dst;
@@ -909,7 +912,8 @@ bool data_transfer_layersmapping_vgroups(
 				return false;
 		}
 
-		data_transfer_layersmapping_add_item(r_map, CD_FAKE_MDEFORMVERT, data_src, data_dst, idx_src, idx_dst,
+		data_transfer_layersmapping_add_item(r_map, CD_FAKE_MDEFORMVERT, mix_mode, mix_factor,
+		                                     data_src, data_dst, idx_src, idx_dst,
 		                                     elem_size, 0, 0, 0, vgroups_datatransfer_interp);
 	}
 	else if (fromlayers_select == MDT_FROMLAYERS_ALL) {
@@ -919,7 +923,8 @@ bool data_transfer_layersmapping_vgroups(
 
 		memset(use_layers_src, true, sizeof(*use_layers_src) * num_src);
 
-		ret = data_transfer_layersmapping_vgroups_multisrc_to_dst(r_map, num_create, ob_src, ob_dst, data_src, data_dst,
+		ret = data_transfer_layersmapping_vgroups_multisrc_to_dst(r_map, mix_mode, mix_factor, num_create,
+		                                                          ob_src, ob_dst, data_src, data_dst,
 		                                                          tolayers_select, use_layers_src, num_src);
 
 		MEM_freeN(use_layers_src);

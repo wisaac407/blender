@@ -232,14 +232,15 @@ void ED_object_check_force_modifiers(struct Main *bmain, struct Scene *scene, st
  * Note those options are highly dependent on type of transferred data! */
 /* TODO: only MDT_REPLACE is implemented currently! */
 enum {
-	MDT_REPLACE           = 0,
-	MDT_REPLACE_THRESHOLD = 1,
+	MDT_MIX_REPLACE_ALL             = 0,
+	MDT_MIX_REPLACE_ABOVE_THRESHOLD = 1,
+	MDT_MIX_REPLACE_BELOW_THRESHOLD = 2,
 #if 0
-	MDT_REPLACE_MIX       = 2,
-	MDT_REPLACE_ADD       = 3,
-	MDT_REPLACE_SUB       = 4,
-	MDT_REPLACE_MUL       = 5,
-	MDT_REPLACE_DIV       = 6,
+	MDT_MIX_MIX                     = 16,
+	MDT_MIX_ADD                     = 17,
+	MDT_MIX_SUB                     = 18,
+	MDT_MIX_MUL                     = 19,
+	MDT_MIX_DIV                     = 20,
 	/* etc. etc. */
 #endif
 };
@@ -268,16 +269,15 @@ enum {
 };
 
 bool ED_data_transfer_layersmapping_cdlayers(
-        struct ListBase *r_map, const int data_type, const int num_create,
-        struct CustomData *data_src, struct CustomData *data_dst,
+        struct ListBase *r_map, const int data_type, const int mix_mode, const float mix_factor,
+        const int num_create, struct CustomData *data_src, struct CustomData *data_dst,
         const int fromlayers_select, const int tolayers_select);
 
 bool ED_data_transfer(
         struct Scene *scene, struct Object *ob_src, struct Object *ob_dst, const int data_type, const bool use_create,
         const int map_vert_mode, const int map_edge_mode, const int map_poly_mode, const int map_loop_mode,
         struct SpaceTransform *space_transform, const float max_distance, const float precision,
-        const int replace_mode, const float replace_threshold,
-        const int fromlayers_select, const int tolayers_select);
+        const int fromlayers_select, const int tolayers_select, const int mix_mode, const float mix_factor);
 
 
 

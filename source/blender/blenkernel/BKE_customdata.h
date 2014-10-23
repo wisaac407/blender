@@ -371,10 +371,11 @@ void CustomData_external_reload(struct CustomData *data,
 struct Mesh2MeshMapping;
 typedef struct DataTransferLayerMapping DataTransferLayerMapping;
 
-typedef void (*cd_datatransfer_interp)(const DataTransferLayerMapping *laymap,
-                                       void **sources, const float *weights, int count, void *dest);
+typedef void (*cd_datatransfer_interp)(const DataTransferLayerMapping *laymap, void *dest,
+                                       void **sources, const float *weights, const int count);
 
-/* Fake CD_LAYERS (those are actually 'real' data stored directly into elements' structs). */
+/* Fake CD_LAYERS (those are actually 'real' data stored directly into elements' structs, or otherwise not (directly)
+ * accessible to usual CDLayer system). */
 enum {
 	CD_FAKE             = 1 << 8,
 
@@ -404,6 +405,9 @@ typedef struct DataTransferLayerMapping {
 	DataTransferLayerMapping *next, *prev;
 
 	int data_type;
+	int mix_mode;
+	float mix_factor;
+	/* TODO: we may want to add more mixing features, eg based on vgroups? */
 
 	void *data_src;      /* Data source array (can be regular CD data, vertices/edges/etc., keyblocks...). */
 	void *data_dst;      /* Data dest array (same type as dat_src). */

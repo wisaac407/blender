@@ -172,10 +172,25 @@ static EnumPropertyItem MDT_method_loop_items[] = {
 
 /* How to filter out some elements (to leave untouched).
  * Note those options are highly dependent on type of transferred data! */
-static EnumPropertyItem MDT_replace_mode_items[] = {
-	{MDT_REPLACE, "REPLACE", 0, "All", "Overwrite all elements' data"},
-	{MDT_REPLACE_THRESHOLD, "REPLACE_THRESHOLD", 0, "Below Threshold",
-			"Only affect dest elements where data is below given threshold (exact behavior depends on data type)"},
+static EnumPropertyItem MDT_mix_mode_items[] = {
+	{MDT_MIX_REPLACE_ALL, "REPLACE", 0, "All", "Overwrite all elements' data"},
+	{MDT_MIX_REPLACE_ABOVE_THRESHOLD, "ABOVE_THRESHOLD", 0, "Above Threshold",
+			"Only replace dest elements where data is above given threshold (exact behavior depends on data type)"},
+	{MDT_MIX_REPLACE_BELOW_THRESHOLD, "BELOW_THRESHOLD", 0, "Below Threshold",
+			"Only replace dest elements where data is below given threshold (exact behavior depends on data type)"},
+#if 0
+	{MDT_MIX_MIX, "MIX", 0, "Mix",
+			"Mix source value into destination one, using given threshold as factor"},
+	{MDT_MIX_ADD, "ADD", 0, "Add",
+			"Add source value to destination one, using given threshold as factor"},
+	{MDT_MIX_SUB, "SUB", 0, "Subtract",
+			"Subtract source value to destination one, using given threshold as factor"},
+	{MDT_MIX_MUL, "MUL", 0, "Multiply",
+			"Multiply source value to destination one, using given threshold as factor"},
+	{MDT_MIX_DIV, "DIV", 0, "Divide",
+			"Divide destination value by source one, using given threshold as factor"},
+	/* etc. etc. */
+#endif
 	{0, NULL, 0, NULL, NULL}
 };
 
@@ -190,6 +205,43 @@ static EnumPropertyItem MDT_fromlayers_select_items[] = {
 			"Transfer all vertex groups used by deform bones"},
 	{0, NULL, 0, NULL, NULL}
 };
+
+static bool mdt_get_layertype_capacity(const int type, bool *r_advanced_mixing)
+{
+	*r_advanced_mixing = false;
+	/* Note: for now we are cool and allow non-fake-like types as well. */
+	switch (type) {
+	/* Vertex data */
+		case CD_MDEFORMVERT:
+		case CD_FAKE_MDEFORMVERT:
+			*r_advanced_mixing = true;
+			return true;
+		case CD_MVERT_SKIN:
+			return true;
+		case CD_FAKE_BWEIGHT:
+			return true;
+	/* Edge data */
+		case CD_FAKE_SHARP:
+			return true;
+		case CD_FAKE_SEAM:
+			return true;
+		case CD_FAKE_CREASE:
+			return true;
+#if 0  /* Already handled with vertices data. */
+		case CD_FAKE_BWEIGHT:
+			return true;
+#endif
+	/* Loop/Poly data */
+		case CD_FAKE_UV:
+			return true;
+#if 0  /* Already handled with vertices data. */
+		case CD_FAKE_SHARP:
+			return true;
+#endif
+	}
+
+	return false;
+}
 
 static EnumPropertyItem *mdt_fromlayers_select_itemf(
         bContext *C, PointerRNA *ptr, PropertyRNA *UNUSED(prop), bool *r_free)
@@ -284,8 +336,8 @@ static loop_island_compute data_transfer_get_loop_islands_generator(const int da
 	return NULL;
 }
 
-static void data_transfer_interp_char(const DataTransferLayerMapping *UNUSED(laymap), void **sources,
-                                      const float *weights, int count, void *dest)
+static void data_transfer_interp_char(const DataTransferLayerMapping *UNUSED(laymap), void *dest,
+                                      void **sources, const float *weights, int count)
 {
 	char **data_src = (char **)sources;
 	char *data_dst = (char *)dest;
@@ -300,24 +352,21 @@ static void data_transfer_interp_char(const DataTransferLayerMapping *UNUSED(lay
 	*data_dst = (char)(weight_dst * 255.0f);
 }
 
-static void data_transfer_mesh_mapping_filter(Mesh *me_dst, Mesh2MeshMapping *geom_map, const int data_type,
-                                              const int replace_mode, const float replace_threshold)
+static void data_transfer_mesh_mapping_postprocess(Mesh *UNUSED(me_dst), Mesh2MeshMapping *UNUSED(geom_map),
+                                                   const int UNUSED(data_type))
 {
 	/* TODO!
-	 * geometry mapping filtering/post-process.
-	 * In addition to using threshold value (for things like vgroups, colors, creases, etc.) to exclude some
-	 * elements (by making them map to nothing), we may also want to:
-	 * * add more exclude ways (maybe a vgroup-based one?).
-	 * * add further postprocess on mapping in some cases (thinking about loop UVs here, especially in case of normal
-	 *   mapping and with islands, many dest loops may end with no source, while others of the same poly have some.
-	 *   this might be better tackled in mapping computation itself, though.
+	 * geometry mapping filtering/post-process in some cases (thinking about loop UVs here, especially in case of normal
+	 * mapping and with islands, many dest loops may end with no source, while others of the same poly have some.
+	 * this might be better tackled in mapping computation itself, though).
 	 */
 }
 
 /* Helpers to match sources and destinations data layers (also handles 'conversions' in CD_FAKE cases). */
 
 void data_transfer_layersmapping_add_item(
-        ListBase *r_map, const int data_type, void *data_src, void *data_dst, const int data_n_src, const int data_n_dst,
+        ListBase *r_map, const int data_type, const int mix_mode, const float mix_factor,
+        void *data_src, void *data_dst, const int data_n_src, const int data_n_dst,
         const size_t elem_size, const size_t data_size, const size_t data_offset, const uint64_t data_flag,
         cd_datatransfer_interp interp)
 {
@@ -326,6 +375,8 @@ void data_transfer_layersmapping_add_item(
 	BLI_assert(data_dst != NULL);
 
 	item->data_type = data_type;
+	item->mix_mode = mix_mode;
+	item->mix_factor = mix_factor;
 
 	item->data_src = data_src;
 	item->data_dst = data_dst;
@@ -342,13 +393,16 @@ void data_transfer_layersmapping_add_item(
 	BLI_addtail(r_map, item);
 }
 
-static void data_transfer_layersmapping_add_item_cd(ListBase *r_map, const int data_type, void *data_src, void *data_dst)
+static void data_transfer_layersmapping_add_item_cd(ListBase *r_map, const int data_type,
+        const int mix_mode, const float mix_factor, void *data_src, void *data_dst)
 {
-	data_transfer_layersmapping_add_item(r_map, data_type, data_src, data_dst, 0, 0, 0, 0, 0, 0, NULL);
+	data_transfer_layersmapping_add_item(r_map, data_type, mix_mode, mix_factor, data_src, data_dst,
+	                                     0, 0, 0, 0, 0, 0, NULL);
 }
 
 static bool data_transfer_layersmapping_cdlayers_multisrc_to_dst(
-        ListBase *r_map, const int data_type, const int num_create, CustomData *cd_src, CustomData *cd_dst,
+        ListBase *r_map, const int data_type, const int mix_mode, const float mix_factor,
+        const int num_create, CustomData *cd_src, CustomData *cd_dst,
         const int tolayers_select, bool *use_layers_src, const int num_layers_src)
 {
 	void *data_src, *data_dst = NULL;
@@ -379,7 +433,7 @@ static bool data_transfer_layersmapping_cdlayers_multisrc_to_dst(
 					}
 					data_src = CustomData_get_layer_n(cd_src, data_type, idx_src);
 					data_dst = CustomData_get_layer_n(cd_dst, data_type, idx_src);
-					data_transfer_layersmapping_add_item_cd(r_map, data_type, data_src, data_dst);
+					data_transfer_layersmapping_add_item_cd(r_map, data_type, mix_mode, mix_factor, data_src, data_dst);
 				}
 			}
 			break;
@@ -402,7 +456,7 @@ static bool data_transfer_layersmapping_cdlayers_multisrc_to_dst(
 				}
 				data_src = CustomData_get_layer_n(cd_src, data_type, idx_src);
 				data_dst = CustomData_get_layer_n(cd_dst, data_type, idx_dst);
-				data_transfer_layersmapping_add_item_cd(r_map, data_type, data_src, data_dst);
+				data_transfer_layersmapping_add_item_cd(r_map, data_type, mix_mode, mix_factor, data_src, data_dst);
 			}
 			break;
 		default:
@@ -413,7 +467,8 @@ static bool data_transfer_layersmapping_cdlayers_multisrc_to_dst(
 }
 
 bool ED_data_transfer_layersmapping_cdlayers(
-        ListBase *r_map, const int data_type, const int num_create, CustomData *cd_src, CustomData *cd_dst,
+        ListBase *r_map, const int data_type, const int mix_mode, const float mix_factor,
+        const int num_create, CustomData *cd_src, CustomData *cd_dst,
         const int fromlayers_select, const int tolayers_select)
 {
 	int idx_src, idx_dst;
@@ -430,7 +485,7 @@ bool ED_data_transfer_layersmapping_cdlayers(
 			data_dst = CustomData_add_layer(cd_dst, data_type, CD_CALLOC, NULL, num_create);
 		}
 
-		data_transfer_layersmapping_add_item_cd(r_map, data_type, data_src, data_dst);
+		data_transfer_layersmapping_add_item_cd(r_map, data_type, mix_mode, mix_factor, data_src, data_dst);
 	}
 	else if (fromlayers_select == MDT_FROMLAYERS_ACTIVE) {
 		if ((idx_src = CustomData_get_active_layer(cd_src, data_type)) == -1) {
@@ -482,7 +537,7 @@ bool ED_data_transfer_layersmapping_cdlayers(
 				return false;
 		}
 
-		data_transfer_layersmapping_add_item_cd(r_map, data_type, data_src, data_dst);
+		data_transfer_layersmapping_add_item_cd(r_map, data_type, mix_mode, mix_factor, data_src, data_dst);
 	}
 	else if (fromlayers_select == MDT_FROMLAYERS_ALL) {
 		int num_src = CustomData_number_of_layers(cd_src, data_type);
@@ -491,7 +546,8 @@ bool ED_data_transfer_layersmapping_cdlayers(
 
 		memset(use_layers_src, true, sizeof(*use_layers_src) * num_src);
 
-		ret = data_transfer_layersmapping_cdlayers_multisrc_to_dst(r_map, data_type, num_create, cd_src, cd_dst,
+		ret = data_transfer_layersmapping_cdlayers_multisrc_to_dst(r_map, data_type, mix_mode, mix_factor,
+		                                                           num_create, cd_src, cd_dst,
 		                                                           tolayers_select, use_layers_src, num_src);
 
 		MEM_freeN(use_layers_src);
@@ -506,7 +562,8 @@ bool ED_data_transfer_layersmapping_cdlayers(
 
 static bool data_transfer_layersmapping_generate(
         ListBase *r_map, Object *ob_src, Object *ob_dst, DerivedMesh *dm_src, Mesh *me_dst, const int elem_type,
-        int data_type, const int num_create, const int fromlayers_select, const int tolayers_select)
+        int data_type, int mix_mode, float mix_factor,
+        const int num_create, const int fromlayers_select, const int tolayers_select)
 {
 	CustomData *cd_src, *cd_dst;
 
@@ -519,7 +576,8 @@ static bool data_transfer_layersmapping_generate(
 				return false;
 			}
 
-			if (!ED_data_transfer_layersmapping_cdlayers(r_map, data_type, num_create, cd_src, cd_dst,
+			if (!ED_data_transfer_layersmapping_cdlayers(r_map, data_type, mix_mode, mix_factor,
+			                                             num_create, cd_src, cd_dst,
 			                                             fromlayers_select, tolayers_select))
 			{
 				/* We handle specific source selection cases here. */
@@ -537,7 +595,8 @@ static bool data_transfer_layersmapping_generate(
 				return false;
 			}
 			me_dst->cd_flag |= ME_CDFLAG_VERT_BWEIGHT;
-			data_transfer_layersmapping_add_item(r_map, data_type, dm_src->getVertArray(dm_src), me_dst->mvert,
+			data_transfer_layersmapping_add_item(r_map, data_type, mix_mode, mix_factor,
+			                                     dm_src->getVertArray(dm_src), me_dst->mvert,
 			                                     dm_src->getNumVerts(dm_src), me_dst->totvert,
 			                                     elem_size, data_size, data_offset, data_flag,
 			                                     data_transfer_interp_char);
@@ -547,7 +606,8 @@ static bool data_transfer_layersmapping_generate(
 			cd_src = dm_src->getVertDataLayout(dm_src);
 			cd_dst = &me_dst->vdata;
 
-			return data_transfer_layersmapping_vgroups(r_map, num_create, ob_src, ob_dst, cd_src, cd_dst,
+			return data_transfer_layersmapping_vgroups(r_map, mix_mode, mix_factor, num_create,
+			                                           ob_src, ob_dst, cd_src, cd_dst,
 			                                           fromlayers_select, tolayers_select);
 		}
 		else if (data_type == CD_FAKE_SHAPEKEY) {
@@ -564,7 +624,8 @@ static bool data_transfer_layersmapping_generate(
 				return false;
 			}
 
-			if (!ED_data_transfer_layersmapping_cdlayers(r_map, data_type, num_create, cd_src, cd_dst,
+			if (!ED_data_transfer_layersmapping_cdlayers(r_map, data_type, mix_mode, mix_factor,
+			                                             num_create, cd_src, cd_dst,
 			                                             fromlayers_select, tolayers_select))
 			{
 				/* We handle specific source selection cases here. */
@@ -582,7 +643,8 @@ static bool data_transfer_layersmapping_generate(
 				return false;
 			}
 			me_dst->cd_flag |= ME_CDFLAG_EDGE_CREASE;
-			data_transfer_layersmapping_add_item(r_map, data_type, dm_src->getEdgeArray(dm_src), me_dst->medge,
+			data_transfer_layersmapping_add_item(r_map, data_type, mix_mode, mix_factor,
+			                                     dm_src->getEdgeArray(dm_src), me_dst->medge,
 			                                     dm_src->getNumEdges(dm_src), me_dst->totedge,
 			                                     elem_size, data_size, data_offset, data_flag,
 			                                     data_transfer_interp_char);
@@ -598,7 +660,8 @@ static bool data_transfer_layersmapping_generate(
 				return false;
 			}
 			me_dst->cd_flag |= ME_CDFLAG_EDGE_BWEIGHT;
-			data_transfer_layersmapping_add_item(r_map, data_type, dm_src->getEdgeArray(dm_src), me_dst->medge,
+			data_transfer_layersmapping_add_item(r_map, data_type, mix_mode, mix_factor,
+			                                     dm_src->getEdgeArray(dm_src), me_dst->medge,
 			                                     dm_src->getNumEdges(dm_src), me_dst->totedge,
 			                                     elem_size, data_size, data_offset, data_flag,
 			                                     data_transfer_interp_char);
@@ -609,7 +672,8 @@ static bool data_transfer_layersmapping_generate(
 			const size_t data_size = sizeof(((MEdge *)NULL)->flag);
 			const size_t data_offset = offsetof(MEdge, flag);
 			const uint64_t data_flag = (data_type == CD_FAKE_SHARP) ? ME_SHARP : ME_SEAM;
-			data_transfer_layersmapping_add_item(r_map, data_type, dm_src->getEdgeArray(dm_src), me_dst->medge,
+			data_transfer_layersmapping_add_item(r_map, data_type, mix_mode, mix_factor,
+			                                     dm_src->getEdgeArray(dm_src), me_dst->medge,
 			                                     dm_src->getNumEdges(dm_src), me_dst->totedge,
 			                                     elem_size, data_size, data_offset, data_flag, NULL);
 			return true;
@@ -631,7 +695,8 @@ static bool data_transfer_layersmapping_generate(
 				return false;
 			}
 
-			if (!ED_data_transfer_layersmapping_cdlayers(r_map, data_type, num_create, cd_src, cd_dst,
+			if (!ED_data_transfer_layersmapping_cdlayers(r_map, data_type, mix_mode, mix_factor,
+			                                             num_create, cd_src, cd_dst,
 			                                             fromlayers_select, tolayers_select))
 			{
 				/* We handle specific source selection cases here. */
@@ -644,7 +709,8 @@ static bool data_transfer_layersmapping_generate(
 			const size_t data_size = sizeof(((MPoly *)NULL)->flag);
 			const size_t data_offset = offsetof(MPoly, flag);
 			const uint64_t data_flag = ME_SMOOTH;
-			data_transfer_layersmapping_add_item(r_map, data_type, dm_src->getPolyArray(dm_src), me_dst->mpoly,
+			data_transfer_layersmapping_add_item(r_map, data_type, mix_mode, mix_factor,
+			                                     dm_src->getPolyArray(dm_src), me_dst->mpoly,
 			                                     dm_src->getNumPolys(dm_src), me_dst->totpoly,
 			                                     elem_size, data_size, data_offset, data_flag, NULL);
 			return true;
@@ -666,7 +732,8 @@ static bool data_transfer_layersmapping_generate(
 				return false;
 			}
 
-			if (!ED_data_transfer_layersmapping_cdlayers(r_map, data_type, num_create, cd_src, cd_dst,
+			if (!ED_data_transfer_layersmapping_cdlayers(r_map, data_type, mix_mode, mix_factor,
+			                                             num_create, cd_src, cd_dst,
 			                                             fromlayers_select, tolayers_select))
 			{
 				/* We handle specific source selection cases here. */
@@ -686,7 +753,7 @@ bool ED_data_transfer(
         Scene *scene, Object *ob_src, Object *ob_dst, const int data_type, const bool use_create,
         const int map_vert_mode, const int map_edge_mode, const int map_poly_mode, const int map_loop_mode,
         SpaceTransform *space_transform, const float max_distance, const float ray_radius,
-        const int replace_mode, const float replace_threshold, const int fromlayers_select, const int tolayers_select)
+        const int fromlayers_select, const int tolayers_select, const int mix_mode, const float mix_factor)
 {
 	DerivedMesh *dm_src;
 	Mesh *me_dst;
@@ -717,9 +784,10 @@ bool ED_data_transfer(
 		BKE_dm2mesh_mapping_verts_compute(map_vert_mode, space_transform, max_distance, ray_radius,
 		                                  me_dst->mvert, me_dst->totvert, dm_src, &geom_map);
 
-		data_transfer_mesh_mapping_filter(me_dst, &geom_map, data_type, replace_mode, replace_threshold);
+		data_transfer_mesh_mapping_postprocess(me_dst, &geom_map, data_type);
 
-		if (data_transfer_layersmapping_generate(&lay_map, ob_src, ob_dst, dm_src, me_dst, ME_VERT, data_type,
+		if (data_transfer_layersmapping_generate(&lay_map, ob_src, ob_dst, dm_src, me_dst, ME_VERT,
+		                                         data_type, mix_mode, mix_factor,
 		                                         num_create, fromlayers_select, tolayers_select))
 		{
 			DataTransferLayerMapping *lay_mapit;
@@ -740,9 +808,10 @@ bool ED_data_transfer(
 		                                  me_dst->mvert, me_dst->totvert, me_dst->medge, me_dst->totedge,
 		                                  dm_src, &geom_map);
 
-		data_transfer_mesh_mapping_filter(me_dst, &geom_map, data_type, replace_mode, replace_threshold);
+		data_transfer_mesh_mapping_postprocess(me_dst, &geom_map, data_type);
 
-		if (data_transfer_layersmapping_generate(&lay_map, ob_src, ob_dst, dm_src, me_dst, ME_EDGE, data_type,
+		if (data_transfer_layersmapping_generate(&lay_map, ob_src, ob_dst, dm_src, me_dst, ME_EDGE,
+		                                         data_type, mix_mode, mix_factor,
 		                                         num_create, fromlayers_select, tolayers_select))
 		{
 			DataTransferLayerMapping *lay_mapit;
@@ -763,9 +832,10 @@ bool ED_data_transfer(
 		                                  me_dst->mvert, me_dst->totvert, me_dst->mpoly, me_dst->totpoly,
 		                                  me_dst->mloop, me_dst->totloop, &me_dst->pdata, dm_src, &geom_map);
 
-		data_transfer_mesh_mapping_filter(me_dst, &geom_map, data_type, replace_mode, replace_threshold);
+		data_transfer_mesh_mapping_postprocess(me_dst, &geom_map, data_type);
 
-		if (data_transfer_layersmapping_generate(&lay_map, ob_src, ob_dst, dm_src, me_dst, ME_POLY, data_type,
+		if (data_transfer_layersmapping_generate(&lay_map, ob_src, ob_dst, dm_src, me_dst, ME_POLY,
+		                                         data_type, mix_mode, mix_factor,
 		                                         num_create, fromlayers_select, tolayers_select))
 		{
 			DataTransferLayerMapping *lay_mapit;
@@ -790,9 +860,10 @@ bool ED_data_transfer(
 		                                  &me_dst->pdata, &me_dst->ldata, me_dst->smoothresh, dm_src,
 		                                  island_callback, &geom_map);
 
-		data_transfer_mesh_mapping_filter(me_dst, &geom_map, data_type, replace_mode, replace_threshold);
+		data_transfer_mesh_mapping_postprocess(me_dst, &geom_map, data_type);
 
-		if (data_transfer_layersmapping_generate(&lay_map, ob_src, ob_dst, dm_src, me_dst, ME_LOOP, data_type,
+		if (data_transfer_layersmapping_generate(&lay_map, ob_src, ob_dst, dm_src, me_dst, ME_LOOP,
+		                                         data_type, mix_mode, mix_factor,
 		                                         num_create, fromlayers_select, tolayers_select))
 		{
 			DataTransferLayerMapping *lay_mapit;
@@ -831,11 +902,11 @@ static int data_transfer_exec(bContext *C, wmOperator *op)
 	const float max_distance = use_max_distance ? RNA_float_get(op->ptr, "max_distance") : FLT_MAX;
 	const float ray_radius = RNA_float_get(op->ptr, "ray_radius");
 
-	const int replace_mode = RNA_enum_get(op->ptr, "replace_mode");
-	const float replace_threshold = RNA_float_get(op->ptr, "replace_threshold");
-
 	const int fromlayers_select = RNA_enum_get(op->ptr, "fromlayers_select");
 	const int tolayers_select = RNA_enum_get(op->ptr, "tolayers_select");
+
+	const int mix_mode = RNA_enum_get(op->ptr, "mix_mode");
+	const float mix_factor = RNA_float_get(op->ptr, "mix_factor");
 
 	SpaceTransform space_transform_data;
 	SpaceTransform *space_transform = use_object_transform ? &space_transform_data : NULL;
@@ -852,8 +923,8 @@ static int data_transfer_exec(bContext *C, wmOperator *op)
 
 		if (ED_data_transfer(scene, ob_src, ob_dst, data_type, use_create,
 		                     map_vert_mode, map_edge_mode, map_poly_mode, map_loop_mode,
-		                     space_transform, max_distance, ray_radius, replace_mode, replace_threshold,
-		                     fromlayers_select, tolayers_select))
+		                     space_transform, max_distance, ray_radius, fromlayers_select, tolayers_select,
+		                     mix_mode, mix_factor))
 		{
 			changed = true;
 		}
@@ -861,6 +932,7 @@ static int data_transfer_exec(bContext *C, wmOperator *op)
 	CTX_DATA_END;
 
 #if 0  /* TODO */
+	/* Note: issue with that is that if canceled, operator cannot be redone... Nasty in our case. */
 	return changed ? OPERATOR_FINISHED : OPERATOR_CANCELLED;
 #else
 	return OPERATOR_FINISHED;
@@ -898,7 +970,7 @@ static bool data_transfer_draw_check_prop(PointerRNA *ptr, PropertyRNA *prop)
 		return false;
 	}
 
-	if (STREQ(prop_id, "replace_threshold") && (replace_mode != MDT_REPLACE_THRESHOLD)) {
+	if (STREQ(prop_id, "mix_factor") && (replace_mode == MDT_MIX_REPLACE_ALL)) {
 		return false;
 	}
 
@@ -972,11 +1044,6 @@ void OBJECT_OT_data_transfer(wmOperatorType *ot)
 	                     "'Width' of rays (especially useful when raycasting against vertices or edges)",
 	                     0.0f, 10.0f);
 	RNA_def_property_subtype(prop, PROP_DISTANCE);
-	RNA_def_enum(ot->srna, "replace_mode", MDT_replace_mode_items, MDT_REPLACE, "Replace Mode",
-	             "How to decide which destination elements to replace with source values, and which to leave as is");
-	prop = RNA_def_float(ot->srna, "replace_threshold", 0.1f, 0.0f, 1.0f, "Replace Threshold",
-	                     "Threshold to filter out destination data (exact behavior depends on data type)",
-	                     0.0f, 1.0f);
 
 	/* How to handle multi-layers types of data. */
 	prop = RNA_def_enum(ot->srna, "fromlayers_select", MDT_fromlayers_select_items, MDT_FROMLAYERS_ACTIVE,
@@ -987,5 +1054,9 @@ void OBJECT_OT_data_transfer(wmOperatorType *ot)
 	                    "Destination Layers Matching", "How to match source and destination layers");
 	RNA_def_property_enum_funcs_runtime(prop, NULL, NULL, mdt_tolayers_select_itemf);
 
-	/* TODO: add some advanced mixing features too, for some layers like weights or vcol? */
+	RNA_def_enum(ot->srna, "mix_mode", MDT_mix_mode_items, MDT_MIX_REPLACE_ALL, "Mix Mode",
+	             "How to affect destination elements with source values");
+	prop = RNA_def_float(ot->srna, "mix_factor", 0.1f, 0.0f, 1.0f, "Mix Factor",
+	                     "Factor to use when applying data to destination (exact behavior depends on mix mode)",
+	                     0.0f, 1.0f);
 }

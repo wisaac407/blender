@@ -3559,8 +3559,8 @@ static bool check_bit_flag(const size_t data_size, void *data, const uint64_t fl
 	}
 }
 
-static void customdata_data_transfer_interp_generic(const DataTransferLayerMapping *laymap, void **sources,
-                                                    const float *weights, int count, void *data_dst)
+static void customdata_data_transfer_interp_generic(const DataTransferLayerMapping *laymap, void *data_dst,
+                                                    void **sources, const float *weights, const int count)
 {
 	/* Fake interpolation, we actually copy highest weighted source to dest.
 	 * Note we also handle bitflags here, in which case we rather choose to transfer value of elements totalizing
@@ -3655,8 +3655,13 @@ void CustomData_data_transfer(const Mesh2MeshMapping *m2mmap, const DataTransfer
 		data_size = (size_t)type_info->size;
 		data_step = laymap->elem_size ? laymap->elem_size : data_size;
 		data_offset = laymap->data_offset;
-		interp_cd = type_info->interp;
-		copy_cd = type_info->copy;
+		if (laymap->interp) {
+			interp = laymap->interp;
+		}
+		else {
+			interp_cd = type_info->interp;
+			copy_cd = type_info->copy;
+		}
 	}
 
 	for (i = 0; i < totelem; i++, data_dst = (char *)data_dst + data_step, mapit++) {
@@ -3686,7 +3691,7 @@ void CustomData_data_transfer(const Mesh2MeshMapping *m2mmap, const DataTransfer
 		}
 
 		if (interp) {
-			interp(laymap, tmp_data_src, mapit->weights_src, nbr_sources, (char *)data_dst + data_offset);
+			interp(laymap, (char *)data_dst + data_offset, tmp_data_src, mapit->weights_src, nbr_sources);
 		}
 		else if (nbr_sources > 1 && interp_cd) {
 			interp_cd(tmp_data_src, mapit->weights_src, NULL, nbr_sources, (char *)data_dst + data_offset);
