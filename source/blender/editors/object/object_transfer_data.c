@@ -29,50 +29,26 @@
  *  \ingroup edobj
  */
 
-#include <string.h>
-#include <stddef.h>
-#include <math.h>
-#include <assert.h>
-
 #include "MEM_guardedalloc.h"
 
-#include "DNA_cloth_types.h"
-#include "DNA_curve_types.h"
-#include "DNA_lattice_types.h"
 #include "DNA_meshdata_types.h"
 #include "DNA_mesh_types.h"
-#include "DNA_modifier_types.h"
 #include "DNA_object_types.h"
-#include "DNA_object_force.h"
 #include "DNA_scene_types.h"
-#include "DNA_particle_types.h"
 
-#include "BLI_alloca.h"
 #include "BLI_array.h"
 #include "BLI_math.h"
 #include "BLI_blenlib.h"
 #include "BLI_utildefines.h"
-#include "BLI_linklist_stack.h"
-
-#include "BLF_translation.h"
 
 #include "BKE_context.h"
 #include "BKE_customdata.h"
-#include "BKE_deform.h"
-#include "BKE_depsgraph.h"
 #include "BKE_mesh_mapping.h"
-#include "BKE_editmesh.h"
-#include "BKE_modifier.h"
-#include "BKE_report.h"
 #include "BKE_DerivedMesh.h"
-#include "BKE_object_deform.h"
 #include "BKE_object.h"
-#include "BKE_lattice.h"
 
-#include "DNA_armature_types.h"
 #include "RNA_access.h"
 #include "RNA_define.h"
-#include "RNA_enum_types.h"
 
 #include "WM_api.h"
 #include "WM_types.h"
