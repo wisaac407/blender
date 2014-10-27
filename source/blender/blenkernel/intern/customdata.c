@@ -48,6 +48,7 @@
 #include "BLI_string.h"
 #include "BLI_path_util.h"
 #include "BLI_math.h"
+#include "BLI_math_color_blend.h"
 #include "BLI_mempool.h"
 
 #include "BLF_translation.h"
@@ -664,26 +665,36 @@ static void layerCopyValue_mloopcol(const void *source, void *dest, const int mi
 {
 	const MLoopCol *m1 = source;
 	MLoopCol *m2 = dest;
+	unsigned char tmp_col[4];
 
 	switch (mixmode) {
-#if 0
 		case CDT_MIX_MIX:
+			blend_color_interpolate_byte((unsigned char *)&m2->r, (unsigned char *)&m2->r,
+			                             (unsigned char *)&m1->r, mixfactor);
+			break;
 		case CDT_MIX_ADD:
+			blend_color_add_byte(tmp_col, (unsigned char *)&m2->r, (unsigned char *)&m1->r);
+			blend_color_interpolate_byte((unsigned char *)&m2->r, (unsigned char *)&m2->r, tmp_col, mixfactor);
+			break;
 		case CDT_MIX_SUB:
+			blend_color_sub_byte(tmp_col, (unsigned char *)&m2->r, (unsigned char *)&m1->r);
+			blend_color_interpolate_byte((unsigned char *)&m2->r, (unsigned char *)&m2->r, tmp_col, mixfactor);
+			break;
 		case CDT_MIX_MUL:
-		case CDT_MIX_DIV:
+			blend_color_mul_byte(tmp_col, (unsigned char *)&m2->r, (unsigned char *)&m1->r);
+			blend_color_interpolate_byte((unsigned char *)&m2->r, (unsigned char *)&m2->r, tmp_col, mixfactor);
+			break;
 		/* etc. etc. */
-#endif
 		case CDT_MIX_REPLACE_ABOVE_THRESHOLD:
 		case CDT_MIX_REPLACE_BELOW_THRESHOLD:
 			{
 				/* TODO: Check for a real valid way to get 'factor' value of our dest color? */
 				const float f = ((float)m2->r + (float)m2->g + (float)m2->b) / 3.0f;
 				if (mixmode == CDT_MIX_REPLACE_ABOVE_THRESHOLD && f < mixfactor) {
-					return;
+					break;
 				}
 				else if (mixmode == CDT_MIX_REPLACE_BELOW_THRESHOLD && f > mixfactor) {
-					return;
+					break;
 				}
 			}
 			/* Fall through. */
@@ -3624,6 +3635,7 @@ static void customdata_data_transfer_interp_generic(const DataTransferLayerMappi
 	cd_copy copy_cd = NULL;
 
 	void *tmp_dst = data_dst;
+	bool free_tmp_dst = false;
 
 	if (data_type & CD_FAKE) {
 		data_size = laymap->data_size;
@@ -3638,6 +3650,7 @@ static void customdata_data_transfer_interp_generic(const DataTransferLayerMappi
 
 	if (laymap->mix_mode != CDT_MIX_REPLACE_ALL) {
 		tmp_dst = MEM_mallocN(data_size, __func__);
+		free_tmp_dst = true;
 	}
 
 	if (count > 1 && !interp_cd) {
@@ -3702,6 +3715,10 @@ static void customdata_data_transfer_interp_generic(const DataTransferLayerMappi
 			CustomData_data_mix_value(data_type, tmp_dst, data_dst, mix_mode, mix_factor);
 		}
 		/* Else we can do nothing by default, needs custom interp func! */
+	}
+
+	if (free_tmp_dst) {
+		MEM_freeN(tmp_dst);
 	}
 }
 

@@ -154,7 +154,6 @@ static EnumPropertyItem MDT_mix_mode_items[] = {
 			"Only replace dest elements where data is above given threshold (exact behavior depends on data type)"},
 	{CDT_MIX_REPLACE_BELOW_THRESHOLD, "BELOW_THRESHOLD", 0, "Below Threshold",
 			"Only replace dest elements where data is below given threshold (exact behavior depends on data type)"},
-#if 0
 	{CDT_MIX_MIX, "MIX", 0, "Mix",
 			"Mix source value into destination one, using given threshold as factor"},
 	{CDT_MIX_ADD, "ADD", 0, "Add",
@@ -163,10 +162,7 @@ static EnumPropertyItem MDT_mix_mode_items[] = {
 			"Subtract source value to destination one, using given threshold as factor"},
 	{CDT_MIX_MUL, "MUL", 0, "Multiply",
 			"Multiply source value to destination one, using given threshold as factor"},
-	{CDT_MIX_DIV, "DIV", 0, "Divide",
-			"Divide destination value by source one, using given threshold as factor"},
 	/* etc. etc. */
-#endif
 	{0, NULL, 0, NULL, NULL}
 };
 

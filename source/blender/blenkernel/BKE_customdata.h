@@ -411,14 +411,11 @@ enum {
 	CDT_MIX_REPLACE_ALL             = 0,
 	CDT_MIX_REPLACE_ABOVE_THRESHOLD = 1,
 	CDT_MIX_REPLACE_BELOW_THRESHOLD = 2,
-#if 0
 	CDT_MIX_MIX                     = 16,
 	CDT_MIX_ADD                     = 17,
 	CDT_MIX_SUB                     = 18,
 	CDT_MIX_MUL                     = 19,
-	CDT_MIX_DIV                     = 20,
 	/* etc. etc. */
-#endif
 };
 
 typedef struct DataTransferLayerMapping {
