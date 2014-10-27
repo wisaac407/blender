@@ -927,7 +927,7 @@ static bool data_transfer_draw_check_prop(PointerRNA *ptr, PropertyRNA *prop)
 	const char *prop_id = RNA_property_identifier(prop);
 	const int data_type = RNA_enum_get(ptr, "data_type");
 	const bool use_max_distance = RNA_boolean_get(ptr, "use_max_distance");
-	const int replace_mode = RNA_enum_get(ptr, "replace_mode");
+	const int mix_mode = RNA_enum_get(ptr, "mix_mode");
 
 	if (STREQ(prop_id, "max_distance") && !use_max_distance) {
 		return false;
@@ -946,7 +946,7 @@ static bool data_transfer_draw_check_prop(PointerRNA *ptr, PropertyRNA *prop)
 		return false;
 	}
 
-	if (STREQ(prop_id, "mix_factor") && (replace_mode == MDT_MIX_REPLACE_ALL)) {
+	if (STREQ(prop_id, "mix_factor") && (mix_mode == MDT_MIX_REPLACE_ALL)) {
 		return false;
 	}
 

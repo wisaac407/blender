@@ -3568,13 +3568,28 @@ static void customdata_data_transfer_interp_generic(const DataTransferLayerMappi
 
 	int best_src_idx = 0;
 
+	const int data_type = laymap->data_type;
+
 	const size_t data_size = laymap->data_size;
 	const uint64_t data_flag = laymap->data_flag;
+
+	cd_interp interp_cd = NULL;
+	cd_copy copy_cd = NULL;
+
+	if (!(data_type & CD_FAKE)) {
+		const LayerTypeInfo *type_info = layerType_getInfo(data_type);
+
+		interp_cd = type_info->interp;
+		copy_cd = type_info->copy;
+	}
 
 	if (count > 1) {
 		int i;
 
-		if (data_flag) {
+		if (interp_cd) {
+			interp_cd(sources, weights, NULL, count, (char *)data_dst);
+		}
+		else if (data_flag) {
 			/* Boolean case, we can 'interpolate' in two groups, and choose value from highest weighted group. */
 			float tot_weight_true = 0.0f, tot_weight_false = 0.0f;
 			int item_true_idx = -1, item_false_idx = -1;
@@ -3609,6 +3624,10 @@ static void customdata_data_transfer_interp_generic(const DataTransferLayerMappi
 	if (data_flag) {
 		copy_bit_flag(data_size, data_dst, sources[best_src_idx], data_flag);
 	}
+	/* No interpolation, just copy highest weight source element's data. */
+	else if (copy_cd) {
+		copy_cd((char *)sources[best_src_idx], (char *)data_dst, 1);
+	}
 	else {
 		memcpy(data_dst, sources[best_src_idx], data_size);
 	}
@@ -3629,8 +3648,6 @@ void CustomData_data_transfer(const Mesh2MeshMapping *m2mmap, const DataTransfer
 	size_t data_offset;
 
 	cd_datatransfer_interp interp = NULL;
-	cd_interp interp_cd = NULL;
-	cd_copy copy_cd = NULL;
 
 	size_t tmp_buff_size = 32;
 	void **tmp_data_src;
@@ -3645,8 +3662,6 @@ void CustomData_data_transfer(const Mesh2MeshMapping *m2mmap, const DataTransfer
 		data_step = laymap->elem_size;
 		data_size = laymap->data_size;
 		data_offset = laymap->data_offset;
-
-		interp = laymap->interp ? laymap->interp : customdata_data_transfer_interp_generic;
 	}
 	else {
 		const LayerTypeInfo *type_info = layerType_getInfo(data_type);
@@ -3655,14 +3670,9 @@ void CustomData_data_transfer(const Mesh2MeshMapping *m2mmap, const DataTransfer
 		data_size = (size_t)type_info->size;
 		data_step = laymap->elem_size ? laymap->elem_size : data_size;
 		data_offset = laymap->data_offset;
-		if (laymap->interp) {
-			interp = laymap->interp;
-		}
-		else {
-			interp_cd = type_info->interp;
-			copy_cd = type_info->copy;
-		}
 	}
+
+	interp = laymap->interp ? laymap->interp : customdata_data_transfer_interp_generic;
 
 	for (i = 0; i < totelem; i++, data_dst = (char *)data_dst + data_step, mapit++) {
 		const int nbr_sources = mapit->nbr_sources;
@@ -3690,21 +3700,7 @@ void CustomData_data_transfer(const Mesh2MeshMapping *m2mmap, const DataTransfer
 			}
 		}
 
-		if (interp) {
-			interp(laymap, (char *)data_dst + data_offset, tmp_data_src, mapit->weights_src, nbr_sources);
-		}
-		else if (nbr_sources > 1 && interp_cd) {
-			interp_cd(tmp_data_src, mapit->weights_src, NULL, nbr_sources, (char *)data_dst + data_offset);
-		}
-		else {
-			/* No interpolation, just copy highest weight source element's data. */
-			if (copy_cd) {
-				copy_cd(tmp_data_src[max_weight_idx], (char *)data_dst + data_offset, 1);
-			}
-			else {
-				memcpy((char *)data_dst + data_offset, tmp_data_src[max_weight_idx], data_size);
-			}
-		}
+		interp(laymap, (char *)data_dst + data_offset, tmp_data_src, mapit->weights_src, nbr_sources);
 	}
 
 	MEM_freeN(tmp_data_src);
