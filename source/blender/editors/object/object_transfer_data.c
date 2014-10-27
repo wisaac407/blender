@@ -149,21 +149,21 @@ static EnumPropertyItem MDT_method_loop_items[] = {
 /* How to filter out some elements (to leave untouched).
  * Note those options are highly dependent on type of transferred data! */
 static EnumPropertyItem MDT_mix_mode_items[] = {
-	{MDT_MIX_REPLACE_ALL, "REPLACE", 0, "All", "Overwrite all elements' data"},
-	{MDT_MIX_REPLACE_ABOVE_THRESHOLD, "ABOVE_THRESHOLD", 0, "Above Threshold",
+	{CDT_MIX_REPLACE_ALL, "REPLACE", 0, "All", "Overwrite all elements' data"},
+	{CDT_MIX_REPLACE_ABOVE_THRESHOLD, "ABOVE_THRESHOLD", 0, "Above Threshold",
 			"Only replace dest elements where data is above given threshold (exact behavior depends on data type)"},
-	{MDT_MIX_REPLACE_BELOW_THRESHOLD, "BELOW_THRESHOLD", 0, "Below Threshold",
+	{CDT_MIX_REPLACE_BELOW_THRESHOLD, "BELOW_THRESHOLD", 0, "Below Threshold",
 			"Only replace dest elements where data is below given threshold (exact behavior depends on data type)"},
 #if 0
-	{MDT_MIX_MIX, "MIX", 0, "Mix",
+	{CDT_MIX_MIX, "MIX", 0, "Mix",
 			"Mix source value into destination one, using given threshold as factor"},
-	{MDT_MIX_ADD, "ADD", 0, "Add",
+	{CDT_MIX_ADD, "ADD", 0, "Add",
 			"Add source value to destination one, using given threshold as factor"},
-	{MDT_MIX_SUB, "SUB", 0, "Subtract",
+	{CDT_MIX_SUB, "SUB", 0, "Subtract",
 			"Subtract source value to destination one, using given threshold as factor"},
-	{MDT_MIX_MUL, "MUL", 0, "Multiply",
+	{CDT_MIX_MUL, "MUL", 0, "Multiply",
 			"Multiply source value to destination one, using given threshold as factor"},
-	{MDT_MIX_DIV, "DIV", 0, "Divide",
+	{CDT_MIX_DIV, "DIV", 0, "Divide",
 			"Divide destination value by source one, using given threshold as factor"},
 	/* etc. etc. */
 #endif
@@ -946,7 +946,7 @@ static bool data_transfer_draw_check_prop(PointerRNA *ptr, PropertyRNA *prop)
 		return false;
 	}
 
-	if (STREQ(prop_id, "mix_factor") && (mix_mode == MDT_MIX_REPLACE_ALL)) {
+	if (STREQ(prop_id, "mix_factor") && (mix_mode == CDT_MIX_REPLACE_ALL)) {
 		return false;
 	}
 
@@ -1030,7 +1030,7 @@ void OBJECT_OT_data_transfer(wmOperatorType *ot)
 	                    "Destination Layers Matching", "How to match source and destination layers");
 	RNA_def_property_enum_funcs_runtime(prop, NULL, NULL, mdt_tolayers_select_itemf);
 
-	RNA_def_enum(ot->srna, "mix_mode", MDT_mix_mode_items, MDT_MIX_REPLACE_ALL, "Mix Mode",
+	RNA_def_enum(ot->srna, "mix_mode", MDT_mix_mode_items, CDT_MIX_REPLACE_ALL, "Mix Mode",
 	             "How to affect destination elements with source values");
 	prop = RNA_def_float(ot->srna, "mix_factor", 0.1f, 0.0f, 1.0f, "Mix Factor",
 	                     "Factor to use when applying data to destination (exact behavior depends on mix mode)",

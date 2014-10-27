@@ -228,23 +228,6 @@ void ED_object_check_force_modifiers(struct Main *bmain, struct Scene *scene, st
 
 /* Data transfer. */
 
-/* How to filter out some elements (to leave untouched).
- * Note those options are highly dependent on type of transferred data! */
-/* TODO: only MDT_REPLACE is implemented currently! */
-enum {
-	MDT_MIX_REPLACE_ALL             = 0,
-	MDT_MIX_REPLACE_ABOVE_THRESHOLD = 1,
-	MDT_MIX_REPLACE_BELOW_THRESHOLD = 2,
-#if 0
-	MDT_MIX_MIX                     = 16,
-	MDT_MIX_ADD                     = 17,
-	MDT_MIX_SUB                     = 18,
-	MDT_MIX_MUL                     = 19,
-	MDT_MIX_DIV                     = 20,
-	/* etc. etc. */
-#endif
-};
-
 /* How to select data layers, for types supporting multi-layers.
  * Here too, some options are highly dependent on type of transferred data! */
 enum {

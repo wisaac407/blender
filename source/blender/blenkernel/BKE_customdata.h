@@ -101,6 +101,9 @@ bool CustomData_bmesh_has_free(const struct CustomData *data);
  * implemented for mloopuv/mloopcol, for now.*/
 void CustomData_data_copy_value(int type, const void *source, void *dest);
 
+/* Same as above, but doing advanced mixing. Only available for a few types of data (like colors...). */
+void CustomData_data_mix_value(int type, const void *source, void *dest, const int mixmode, const float mixfactor);
+
 /* compares if data1 is equal to data2.  type is a valid CustomData type
  * enum (e.g. CD_MLOOPUV). the layer type's equal function is used to compare
  * the data, if it exists, otherwise memcmp is used.*/
@@ -399,6 +402,23 @@ enum {
 	ME_EDGE = 2,
 	ME_POLY = 3,
 	ME_LOOP = 4,
+};
+
+/* How to filter out some elements (to leave untouched).
+ * Note those options are highly dependent on type of transferred data! */
+/* TODO: only MDT_REPLACE is implemented currently! */
+enum {
+	CDT_MIX_REPLACE_ALL             = 0,
+	CDT_MIX_REPLACE_ABOVE_THRESHOLD = 1,
+	CDT_MIX_REPLACE_BELOW_THRESHOLD = 2,
+#if 0
+	CDT_MIX_MIX                     = 16,
+	CDT_MIX_ADD                     = 17,
+	CDT_MIX_SUB                     = 18,
+	CDT_MIX_MUL                     = 19,
+	CDT_MIX_DIV                     = 20,
+	/* etc. etc. */
+#endif
 };
 
 typedef struct DataTransferLayerMapping {

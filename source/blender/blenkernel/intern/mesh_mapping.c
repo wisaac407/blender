@@ -1508,7 +1508,6 @@ void BKE_dm2mesh_mapping_polys_compute(
 
 				mul_m3_v3(to_pnor_2d_mat, pcent_dst);
 				poly_dst_2d_z = pcent_dst[2];
-				printf("%f\n", pcent_dst[2]);
 
 				/* Get (2D) bounding square of our poly. */
 				poly_dst_2d_min_x = poly_dst_2d_min_y = FLT_MAX;
@@ -1522,7 +1521,6 @@ void BKE_dm2mesh_mapping_polys_compute(
 					}
 					mul_m3_v3(to_pnor_2d_mat, tmp_co);
 					copy_v2_v2(poly_vcos_2d[j], tmp_co);
-					printf("%f\n", tmp_co[2]);
 					if (tmp_co[0] > poly_dst_2d_max_x) poly_dst_2d_max_x = tmp_co[0];
 					if (tmp_co[0] < poly_dst_2d_min_x) poly_dst_2d_min_x = tmp_co[0];
 					if (tmp_co[1] > poly_dst_2d_max_y) poly_dst_2d_max_y = tmp_co[1];
