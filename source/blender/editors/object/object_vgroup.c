@@ -754,6 +754,10 @@ static void vgroups_datatransfer_interp(const DataTransferLayerMapping *laymap, 
 	MDeformVert *data_dst = (MDeformVert *)dest;
 	const int idx_src = laymap->data_n_src;
 	const int idx_dst = laymap->data_n_dst;
+
+	const int mix_mode = laymap->mix_mode;
+	const int mix_factor = laymap->mix_factor;
+
 	int i, j;
 
 	MDeformWeight *dw_src;
@@ -766,6 +770,37 @@ static void vgroups_datatransfer_interp(const DataTransferLayerMapping *laymap, 
 				weight_dst += dw_src->weight * weights[i];
 				break;
 			}
+		}
+	}
+
+	if (mix_mode != CDT_MIX_REPLACE_ALL) {
+		if (!dw_dst && (mix_mode == CDT_MIX_REPLACE_ABOVE_THRESHOLD)) {
+			return;  /* Do not affect destination. */
+		}
+		if (dw_dst &&
+		    ((mix_mode == CDT_MIX_REPLACE_ABOVE_THRESHOLD && (dw_dst->weight <= mix_factor)) ||
+		     (mix_mode == CDT_MIX_REPLACE_BELOW_THRESHOLD && (dw_dst->weight >= mix_factor))))
+		{
+			return;  /* Do not affect destination. */
+		}
+		else {
+			float weight_dst_org = dw_dst ? dw_dst->weight : 0.0f;
+			switch (mix_mode) {
+				case CDT_MIX_MIX:
+					weight_dst = (weight_dst_org + weight_dst) / 2.0f;
+					break;
+				case CDT_MIX_ADD:
+					weight_dst = weight_dst_org + weight_dst;
+					break;
+				case CDT_MIX_SUB:
+					weight_dst = weight_dst_org - weight_dst;
+					break;
+				case CDT_MIX_MUL:
+					weight_dst = weight_dst_org * weight_dst;
+					break;
+			}
+			interpf(weight_dst, weight_dst_org, mix_factor);
+			CLAMP(weight_dst, 0.0f, 1.0f);
 		}
 	}
 
@@ -857,12 +892,15 @@ bool data_transfer_layersmapping_vgroups(
 	if ((data_src = CustomData_get_layer(cd_src, CD_MDEFORMVERT)) == NULL) {
 		return false;
 	}
+
 	if (!CustomData_has_layer(cd_dst, CD_MDEFORMVERT)) {
 		if (!num_create) {
 			return false;
 		}
 		ED_vgroup_data_create((ID *)ob_dst->data);
-		data_dst = CustomData_get_layer(cd_dst, CD_MDEFORMVERT);
+	}
+	if ((data_dst = CustomData_get_layer(cd_dst, CD_MDEFORMVERT)) == NULL) {
+		return false;
 	}
 
 	if (fromlayers_select == MDT_FROMLAYERS_ACTIVE) {
@@ -916,12 +954,24 @@ bool data_transfer_layersmapping_vgroups(
 		                                     data_src, data_dst, idx_src, idx_dst,
 		                                     elem_size, 0, 0, 0, vgroups_datatransfer_interp);
 	}
-	else if (fromlayers_select == MDT_FROMLAYERS_ALL) {
-		int num_src = BLI_countlist(&ob_src->defbase);
-		bool *use_layers_src = MEM_mallocN(sizeof(*use_layers_src) * (size_t)num_src, __func__);
+	else {
+		int num_src, num_sel_unused;
+		bool *use_layers_src = NULL;
 		bool ret;
 
-		memset(use_layers_src, true, sizeof(*use_layers_src) * num_src);
+		switch (fromlayers_select) {
+			case MDT_FROMLAYERS_ALL:
+				use_layers_src = ED_vgroup_subset_from_select_type(ob_src, WT_VGROUP_ALL, &num_src, &num_sel_unused);
+				break;
+			case MDT_FROMLAYERS_VGROUP_BONE_SELECTED:
+				use_layers_src = ED_vgroup_subset_from_select_type(ob_src, WT_VGROUP_BONE_SELECT,
+				                                                   &num_src, &num_sel_unused);
+				break;
+			case MDT_FROMLAYERS_VGROUP_BONE_DEFORM:
+				use_layers_src = ED_vgroup_subset_from_select_type(ob_src, WT_VGROUP_BONE_DEFORM,
+				                                                   &num_src, &num_sel_unused);
+				break;
+		}
 
 		ret = data_transfer_layersmapping_vgroups_multisrc_to_dst(r_map, mix_mode, mix_factor, num_create,
 		                                                          ob_src, ob_dst, data_src, data_dst,
@@ -929,10 +979,6 @@ bool data_transfer_layersmapping_vgroups(
 
 		MEM_freeN(use_layers_src);
 		return ret;
-	}
-	/* TODO: add vgroups-specific 'from-select' modes here! */
-	else {
-		return false;
 	}
 
 	return true;
