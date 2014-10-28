@@ -69,6 +69,53 @@
 
 #define MDT_DATATYPE_IS_MULTILAYERS(_dt) ELEM(_dt, CD_FAKE_MDEFORMVERT, CD_FAKE_SHAPEKEY, CD_FAKE_UV, CD_MLOOPCOL)
 
+/* Check what can do each layer type (if it is actually handled by transferdata, if it supports advanced mixing... */
+static bool mdt_get_layertype_capacity(const int type, bool *r_advanced_mixing, bool *r_threshold)
+{
+	*r_advanced_mixing = false;
+	*r_threshold = false;
+	/* Note: for now we are cool and allow non-fake-like types as well. */
+	switch (type) {
+	/* Vertex data */
+		case CD_MDEFORMVERT:
+		case CD_FAKE_MDEFORMVERT:
+			*r_advanced_mixing = true;
+			*r_threshold = true;
+			return true;
+		case CD_MVERT_SKIN:
+			*r_threshold = true;
+			return true;
+		case CD_FAKE_BWEIGHT:
+			return true;
+	/* Edge data */
+		case CD_FAKE_SHARP:
+			*r_threshold = true;
+			return true;
+		case CD_FAKE_SEAM:
+			*r_threshold = true;
+			return true;
+		case CD_FAKE_CREASE:
+			return true;
+#if 0  /* Already handled with vertices data. */
+		case CD_FAKE_BWEIGHT:
+			return true;
+#endif
+	/* Loop/Poly data */
+		case CD_FAKE_UV:
+			return true;
+		case CD_MLOOPCOL:
+			*r_advanced_mixing = true;
+			*r_threshold = true;
+			return true;
+#if 0  /* Already handled with vertices data. */
+		case CD_FAKE_SHARP:
+			return true;
+#endif
+	}
+
+	return false;
+}
+
 /* All possible data to transfer.
  * Note some are 'fake' ones, i.e. they are not hold by real CDLayers. */
 static EnumPropertyItem MDT_layer_items[] = {
@@ -166,6 +213,41 @@ static EnumPropertyItem MDT_mix_mode_items[] = {
 	{0, NULL, 0, NULL, NULL}
 };
 
+static EnumPropertyItem *mdt_mix_mode_itemf(bContext *C, PointerRNA *ptr, PropertyRNA *UNUSED(prop), bool *r_free)
+{
+	EnumPropertyItem *item = NULL;
+	int totitem = 0;
+
+	const int data_type = RNA_enum_get(ptr, "data_type");
+	bool support_advanced_mixing, support_threshold;
+
+	if (!C) {  /* needed for docs and i18n tools */
+		return MDT_mix_mode_items;
+	}
+
+	RNA_enum_items_add_value(&item, &totitem, MDT_mix_mode_items, CDT_MIX_REPLACE_ALL);
+
+	mdt_get_layertype_capacity(data_type, &support_advanced_mixing, &support_threshold);
+
+	if (support_advanced_mixing) {
+		RNA_enum_items_add_value(&item, &totitem, MDT_mix_mode_items, CDT_MIX_REPLACE_ABOVE_THRESHOLD);
+		RNA_enum_items_add_value(&item, &totitem, MDT_mix_mode_items, CDT_MIX_REPLACE_BELOW_THRESHOLD);
+	}
+
+	if (support_advanced_mixing) {
+		RNA_enum_item_add_separator(&item, &totitem);
+		RNA_enum_items_add_value(&item, &totitem, MDT_mix_mode_items, CDT_MIX_MIX);
+		RNA_enum_items_add_value(&item, &totitem, MDT_mix_mode_items, CDT_MIX_ADD);
+		RNA_enum_items_add_value(&item, &totitem, MDT_mix_mode_items, CDT_MIX_SUB);
+		RNA_enum_items_add_value(&item, &totitem, MDT_mix_mode_items, CDT_MIX_MUL);
+	}
+
+	RNA_enum_item_end(&item, &totitem);
+	*r_free = true;
+
+	return item;
+}
+
 /* How to select data layers, for types supporting multi-layers.
  * Here too, some options are highly dependent on type of transferred data! */
 static EnumPropertyItem MDT_fromlayers_select_items[] = {
@@ -177,46 +259,6 @@ static EnumPropertyItem MDT_fromlayers_select_items[] = {
 			"Transfer all vertex groups used by deform bones"},
 	{0, NULL, 0, NULL, NULL}
 };
-
-static bool mdt_get_layertype_capacity(const int type, bool *r_advanced_mixing)
-{
-	*r_advanced_mixing = false;
-	/* Note: for now we are cool and allow non-fake-like types as well. */
-	switch (type) {
-	/* Vertex data */
-		case CD_MDEFORMVERT:
-		case CD_FAKE_MDEFORMVERT:
-			*r_advanced_mixing = true;
-			return true;
-		case CD_MVERT_SKIN:
-			return true;
-		case CD_FAKE_BWEIGHT:
-			return true;
-	/* Edge data */
-		case CD_FAKE_SHARP:
-			return true;
-		case CD_FAKE_SEAM:
-			return true;
-		case CD_FAKE_CREASE:
-			return true;
-#if 0  /* Already handled with vertices data. */
-		case CD_FAKE_BWEIGHT:
-			return true;
-#endif
-	/* Loop/Poly data */
-		case CD_FAKE_UV:
-			return true;
-		case CD_MLOOPCOL:
-			*r_advanced_mixing = true;
-			return true;
-#if 0  /* Already handled with vertices data. */
-		case CD_FAKE_SHARP:
-			return true;
-#endif
-	}
-
-	return false;
-}
 
 static EnumPropertyItem *mdt_fromlayers_select_itemf(
         bContext *C, PointerRNA *ptr, PropertyRNA *UNUSED(prop), bool *r_free)
@@ -1029,9 +1071,9 @@ void OBJECT_OT_data_transfer(wmOperatorType *ot)
 	                    "Destination Layers Matching", "How to match source and destination layers");
 	RNA_def_property_enum_funcs_runtime(prop, NULL, NULL, mdt_tolayers_select_itemf);
 
-	RNA_def_enum(ot->srna, "mix_mode", MDT_mix_mode_items, CDT_MIX_REPLACE_ALL, "Mix Mode",
-	             "How to affect destination elements with source values");
-	prop = RNA_def_float(ot->srna, "mix_factor", 0.5f, 0.0f, 1.0f, "Mix Factor",
-	                     "Factor to use when applying data to destination (exact behavior depends on mix mode)",
-	                     0.0f, 1.0f);
+	prop = RNA_def_enum(ot->srna, "mix_mode", MDT_mix_mode_items, CDT_MIX_REPLACE_ALL, "Mix Mode",
+	                   "How to affect destination elements with source values");
+	RNA_def_property_enum_funcs_runtime(prop, NULL, NULL, mdt_mix_mode_itemf);
+	RNA_def_float(ot->srna, "mix_factor", 0.5f, 0.0f, 1.0f, "Mix Factor",
+	              "Factor to use when applying data to destination (exact behavior depends on mix mode)", 0.0f, 1.0f);
 }
