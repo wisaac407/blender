@@ -1653,7 +1653,7 @@ void BKE_dm2mesh_mapping_loops_compute(
 		bool polys_allocated_src;
 		MPoly *polys_src = DM_get_poly_array(dm_src, &polys_allocated_src);
 		const int num_polys_src = dm_src->getNumPolys(dm_src);
-		bool faces_allocated_src;
+		bool faces_allocated_src = false;
 		MFace *faces_src = NULL;
 		int num_faces_src;
 
@@ -1826,7 +1826,7 @@ void BKE_dm2mesh_mapping_loops_compute(
 				MEM_freeN(faces_active);
 			}
 			else {
-				BLI_assert(num_tress == 1);
+				BLI_assert(num_trees == 1);
 				bvhtree_from_mesh_faces(&treedata[0], dm_src, 0.0f, 2, 6);
 				orig_poly_idx_src = dm_src->getTessFaceDataArray(dm_src, CD_ORIGINDEX);
 			}

@@ -669,20 +669,20 @@ static void layerCopyValue_mloopcol(const void *source, void *dest, const int mi
 
 	switch (mixmode) {
 		case CDT_MIX_MIX:
-			blend_color_interpolate_byte((unsigned char *)&m2->r, (unsigned char *)&m2->r,
-			                             (unsigned char *)&m1->r, mixfactor);
+			blend_color_interpolate_byte_noalpha((unsigned char *)&m2->r, (unsigned char *)&m2->r,
+			                                     (unsigned char *)&m1->r, mixfactor);
 			break;
 		case CDT_MIX_ADD:
-			blend_color_add_byte(tmp_col, (unsigned char *)&m2->r, (unsigned char *)&m1->r);
-			blend_color_interpolate_byte((unsigned char *)&m2->r, (unsigned char *)&m2->r, tmp_col, mixfactor);
+			blend_color_add_byte_noalpha(tmp_col, (unsigned char *)&m2->r, (unsigned char *)&m1->r);
+			blend_color_interpolate_byte_noalpha((unsigned char *)&m2->r, (unsigned char *)&m2->r, tmp_col, mixfactor);
 			break;
 		case CDT_MIX_SUB:
-			blend_color_sub_byte(tmp_col, (unsigned char *)&m2->r, (unsigned char *)&m1->r);
-			blend_color_interpolate_byte((unsigned char *)&m2->r, (unsigned char *)&m2->r, tmp_col, mixfactor);
+			blend_color_sub_byte_noalpha(tmp_col, (unsigned char *)&m2->r, (unsigned char *)&m1->r);
+			blend_color_interpolate_byte_noalpha((unsigned char *)&m2->r, (unsigned char *)&m2->r, tmp_col, mixfactor);
 			break;
 		case CDT_MIX_MUL:
-			blend_color_mul_byte(tmp_col, (unsigned char *)&m2->r, (unsigned char *)&m1->r);
-			blend_color_interpolate_byte((unsigned char *)&m2->r, (unsigned char *)&m2->r, tmp_col, mixfactor);
+			blend_color_mul_byte_noalpha(tmp_col, (unsigned char *)&m2->r, (unsigned char *)&m1->r);
+			blend_color_interpolate_byte_noalpha((unsigned char *)&m2->r, (unsigned char *)&m2->r, tmp_col, mixfactor);
 			break;
 		/* etc. etc. */
 		case CDT_MIX_REPLACE_ABOVE_THRESHOLD:
@@ -703,9 +703,9 @@ static void layerCopyValue_mloopcol(const void *source, void *dest, const int mi
 			m2->r = m1->r;
 			m2->g = m1->g;
 			m2->b = m1->b;
-			m2->a = m1->a;
 			break;
 	}
+	m2->a = m1->a;
 }
 
 static bool layerEqual_mloopcol(const void *data1, const void *data2)
@@ -3626,7 +3626,7 @@ static void customdata_data_transfer_interp_generic(const DataTransferLayerMappi
 
 	const int data_type = laymap->data_type;
 	const int mix_mode = laymap->mix_mode;
-	const int mix_factor = laymap->mix_factor;
+	const float mix_factor = laymap->mix_factor;
 
 	size_t data_size;
 	const uint64_t data_flag = laymap->data_flag;

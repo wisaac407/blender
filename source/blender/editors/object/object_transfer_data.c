@@ -65,9 +65,9 @@
 #define MDT_DATATYPE_IS_VERT(_dt) ELEM(_dt, CD_FAKE_MDEFORMVERT, CD_FAKE_SHAPEKEY, CD_MVERT_SKIN, CD_FAKE_BWEIGHT)
 #define MDT_DATATYPE_IS_EDGE(_dt) ELEM(_dt, CD_FAKE_CREASE, CD_FAKE_SHARP, CD_FAKE_SEAM, CD_FAKE_BWEIGHT)
 #define MDT_DATATYPE_IS_POLY(_dt) ELEM(_dt, CD_FAKE_UV, CD_FAKE_SHARP)
-#define MDT_DATATYPE_IS_LOOP(_dt) (_dt == CD_FAKE_UV)
+#define MDT_DATATYPE_IS_LOOP(_dt) ELEM(_dt, CD_FAKE_UV, CD_MLOOPCOL)
 
-#define MDT_DATATYPE_IS_MULTILAYERS(_dt) ELEM(_dt, CD_FAKE_MDEFORMVERT, CD_FAKE_SHAPEKEY, CD_FAKE_UV)
+#define MDT_DATATYPE_IS_MULTILAYERS(_dt) ELEM(_dt, CD_FAKE_MDEFORMVERT, CD_FAKE_SHAPEKEY, CD_FAKE_UV, CD_MLOOPCOL)
 
 /* All possible data to transfer.
  * Note some are 'fake' ones, i.e. they are not hold by real CDLayers. */
@@ -87,7 +87,7 @@ static EnumPropertyItem MDT_layer_items[] = {
 	{CD_FAKE_UV, "UV", 0, "UVs", "Transfer UV layers"},
 	{CD_FAKE_SHARP, "SMOOTH", 0, "Smooth", "Transfer flat/smooth flag"},
 	{0, "", 0, "Face Corner Data", ""},
-	/* TODO */
+	{CD_MLOOPCOL, "VCol", 0, "VCol", "Vertex (face corners) colors"},
 	{0, NULL, 0, NULL, NULL}
 };
 
@@ -205,6 +205,9 @@ static bool mdt_get_layertype_capacity(const int type, bool *r_advanced_mixing)
 #endif
 	/* Loop/Poly data */
 		case CD_FAKE_UV:
+			return true;
+		case CD_MLOOPCOL:
+			*r_advanced_mixing = true;
 			return true;
 #if 0  /* Already handled with vertices data. */
 		case CD_FAKE_SHARP:
@@ -1028,7 +1031,7 @@ void OBJECT_OT_data_transfer(wmOperatorType *ot)
 
 	RNA_def_enum(ot->srna, "mix_mode", MDT_mix_mode_items, CDT_MIX_REPLACE_ALL, "Mix Mode",
 	             "How to affect destination elements with source values");
-	prop = RNA_def_float(ot->srna, "mix_factor", 0.1f, 0.0f, 1.0f, "Mix Factor",
+	prop = RNA_def_float(ot->srna, "mix_factor", 0.5f, 0.0f, 1.0f, "Mix Factor",
 	                     "Factor to use when applying data to destination (exact behavior depends on mix mode)",
 	                     0.0f, 1.0f);
 }
