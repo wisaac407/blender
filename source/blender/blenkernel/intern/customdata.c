@@ -669,20 +669,20 @@ static void layerCopyValue_mloopcol(const void *source, void *dest, const int mi
 
 	switch (mixmode) {
 		case CDT_MIX_MIX:
-			blend_color_interpolate_byte_noalpha((unsigned char *)&m2->r, (unsigned char *)&m2->r,
+			blend_color_interpolate_byte((unsigned char *)&m2->r, (unsigned char *)&m2->r,
 			                                     (unsigned char *)&m1->r, mixfactor);
 			break;
 		case CDT_MIX_ADD:
-			blend_color_add_byte_noalpha(tmp_col, (unsigned char *)&m2->r, (unsigned char *)&m1->r);
-			blend_color_interpolate_byte_noalpha((unsigned char *)&m2->r, (unsigned char *)&m2->r, tmp_col, mixfactor);
+			blend_color_add_byte(tmp_col, (unsigned char *)&m2->r, (unsigned char *)&m1->r);
+			blend_color_interpolate_byte((unsigned char *)&m2->r, (unsigned char *)&m2->r, tmp_col, mixfactor);
 			break;
 		case CDT_MIX_SUB:
-			blend_color_sub_byte_noalpha(tmp_col, (unsigned char *)&m2->r, (unsigned char *)&m1->r);
-			blend_color_interpolate_byte_noalpha((unsigned char *)&m2->r, (unsigned char *)&m2->r, tmp_col, mixfactor);
+			blend_color_sub_byte(tmp_col, (unsigned char *)&m2->r, (unsigned char *)&m1->r);
+			blend_color_interpolate_byte((unsigned char *)&m2->r, (unsigned char *)&m2->r, tmp_col, mixfactor);
 			break;
 		case CDT_MIX_MUL:
-			blend_color_mul_byte_noalpha(tmp_col, (unsigned char *)&m2->r, (unsigned char *)&m1->r);
-			blend_color_interpolate_byte_noalpha((unsigned char *)&m2->r, (unsigned char *)&m2->r, tmp_col, mixfactor);
+			blend_color_mul_byte(tmp_col, (unsigned char *)&m2->r, (unsigned char *)&m1->r);
+			blend_color_interpolate_byte((unsigned char *)&m2->r, (unsigned char *)&m2->r, tmp_col, mixfactor);
 			break;
 		/* etc. etc. */
 		case CDT_MIX_REPLACE_ABOVE_THRESHOLD:
