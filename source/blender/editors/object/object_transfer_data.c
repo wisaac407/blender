@@ -63,8 +63,8 @@
 
 
 #define MDT_DATATYPE_IS_VERT(_dt) ELEM(_dt, CD_FAKE_MDEFORMVERT, CD_FAKE_SHAPEKEY, CD_MVERT_SKIN, CD_FAKE_BWEIGHT)
-#define MDT_DATATYPE_IS_EDGE(_dt) ELEM(_dt, CD_FAKE_CREASE, CD_FAKE_SHARP, CD_FAKE_SEAM, CD_FAKE_BWEIGHT)
-#define MDT_DATATYPE_IS_POLY(_dt) ELEM(_dt, CD_FAKE_UV, CD_FAKE_SHARP)
+#define MDT_DATATYPE_IS_EDGE(_dt) ELEM(_dt, CD_FAKE_CREASE, CD_FAKE_SHARP, CD_FAKE_SEAM, CD_FAKE_BWEIGHT, CD_FREESTYLE_EDGE)
+#define MDT_DATATYPE_IS_POLY(_dt) ELEM(_dt, CD_FAKE_UV, CD_FAKE_SHARP, CD_FREESTYLE_FACE)
 #define MDT_DATATYPE_IS_LOOP(_dt) ELEM(_dt, CD_FAKE_UV, CD_MLOOPCOL)
 
 #define MDT_DATATYPE_IS_MULTILAYERS(_dt) ELEM(_dt, CD_FAKE_MDEFORMVERT, CD_FAKE_SHAPEKEY, CD_FAKE_UV, CD_MLOOPCOL)
@@ -131,9 +131,11 @@ static EnumPropertyItem MDT_layer_items[] = {
 	{CD_FAKE_SEAM, "SEAM", 0, "Seam", "Transfer UV seam flag"},
 	{CD_FAKE_CREASE, "CREASE", 0, "Subsurf Crease", "Transfer crease values"},
 	{CD_FAKE_BWEIGHT, "BEVEL_WEIGHT", 0, "Bevel Weight", "Transfer bevel weights"},
+	{CD_FREESTYLE_EDGE, "FREESTYLE_EDGE", 0, "Freestyle Flag", "Transfer Freestyle edge flag"},
 	{0, "", 0, "Face Data", ""},
 	{CD_FAKE_UV, "UV", 0, "UVs", "Transfer UV layers"},
 	{CD_FAKE_SHARP, "SMOOTH", 0, "Smooth", "Transfer flat/smooth flag"},
+	{CD_FREESTYLE_FACE, "FREESTYLE_FACE", 0, "Freestyle Flag", "Transfer Freestyle face flag"},
 	{0, "", 0, "Face Corner Data", ""},
 	{CD_MLOOPCOL, "VCol", 0, "VCol", "Vertex (face corners) colors"},
 	{0, NULL, 0, NULL, NULL}
