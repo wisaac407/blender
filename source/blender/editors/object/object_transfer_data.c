@@ -122,8 +122,9 @@ static EnumPropertyItem MDT_layer_items[] = {
 	{0, "", 0, "Vertex Data", ""},
 	{CD_FAKE_MDEFORMVERT, "VGROUP_WEIGHTS", 0, "Vertex Group(s)", "Transfer active or all vertex groups"},
 	{CD_FAKE_SHAPEKEY, "SHAPEKEYS", 0, "Shapekey(s)", "Transfer active or all shape keys"},
-	/* XXX When SkinModifier is enabled, it seems to erase its own CD_MVERT_SKIN layer from final DM :( */
+#if 0  /* XXX When SkinModifier is enabled, it seems to erase its own CD_MVERT_SKIN layer from final DM :( */
 	{CD_MVERT_SKIN, "SKIN", 0, "Skin Weight", "Transfer skin weights"},
+#endif
 	{CD_FAKE_BWEIGHT, "BEVEL_WEIGHT", 0, "Bevel Weight", "Transfer bevel weights"},
 	{0, "", 0, "Edge Data", ""},
 	{CD_FAKE_SHARP, "SHARP", 0, "Sharp", "Transfer sharp flag"},
