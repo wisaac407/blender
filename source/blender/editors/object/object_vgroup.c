@@ -756,7 +756,7 @@ static void vgroups_datatransfer_interp(const DataTransferLayerMapping *laymap, 
 	const int idx_dst = laymap->data_n_dst;
 
 	const int mix_mode = laymap->mix_mode;
-	const int mix_factor = laymap->mix_factor;
+	const float mix_factor = laymap->mix_factor;
 
 	int i, j;
 
@@ -787,7 +787,7 @@ static void vgroups_datatransfer_interp(const DataTransferLayerMapping *laymap, 
 			float weight_dst_org = dw_dst ? dw_dst->weight : 0.0f;
 			switch (mix_mode) {
 				case CDT_MIX_MIX:
-					weight_dst = (weight_dst_org + weight_dst) / 2.0f;
+					/* Nothing to do, mere interp is enough here. */;
 					break;
 				case CDT_MIX_ADD:
 					weight_dst = weight_dst_org + weight_dst;
