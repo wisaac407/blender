@@ -859,6 +859,26 @@ typedef struct IslandResult {
 	float hit_point[3];  /* The hit point, if relevant. */
 } IslandResult;
 
+/* Note about all bvh/raycasting stuff below:
+ *      * We must use our ray radius as BVH epsilon too, else rays not hitting anything but 'passing near' an item
+ *        would be missed (since BVH handling would not detect them, 'refining' callbacks won't be executed,
+ *        even though they would return a valid hit).
+ *      * However, in 'islands' case where each hit gets a weight, 'precise' hits should have a better weight than
+ *        'approximate' hits. To address that, we simplify things with:
+ *        ** A first raycast with default, given rayradius;
+ *        ** If first one fails, we do more raycasting with bigger radius, but if hit is found
+ *           it will get smaller weight.
+ *        This only concerns loops, currently (because of islands), and 'sampled' edges/polys norproj.
+ */
+
+/* At most n raycasts per 'real' ray. */
+#define M2MMAP_RAYCAST_APPROXIMATE_NR 3
+/* Each approximated raycasts will have n times bigger radius than previous one. */
+#define M2MMAP_RAYCAST_APPROXIMATE_FAC 5.0f
+/* BVH epsilon value we have to give to bvh 'constructor' when doing approximated raycasting. */
+#define M2MMAP_RAYCAST_APPROXIMATE_BVHEPSILON(_ray_radius) \
+	((float)M2MMAP_RAYCAST_APPROXIMATE_NR * M2MMAP_RAYCAST_APPROXIMATE_FAC * (_ray_radius))
+
 void BKE_dm2mesh_mapping_verts_compute(
         const int mode, const SpaceTransform *space_transform, const float max_dist, const float ray_radius,
         const MVert *verts_dst, const int numverts_dst, DerivedMesh *dm_src,
@@ -969,7 +989,7 @@ void BKE_dm2mesh_mapping_verts_compute(
 			float *weights = MEM_mallocN(sizeof(*weights) * tmp_buff_size, __func__);
 
 			dm_src->getVertCos(dm_src, vcos_src);
-			bvhtree_from_mesh_faces(&treedata, dm_src, 0.0f, 2, 6);
+			bvhtree_from_mesh_faces(&treedata, dm_src, (mode & M2MMAP_USE_NORPROJ) ? ray_radius : 0.0f, 2, 6);
 			/* bvhtree here uses tesselated faces... */
 			orig_poly_idx_src = dm_src->getTessFaceDataArray(dm_src, CD_ORIGINDEX);
 
@@ -1276,8 +1296,7 @@ void BKE_dm2mesh_mapping_edges_compute(
 			/* Here it's simpler to just allocate for all edges :/ */
 			float *weights = MEM_mallocN(sizeof(*weights) * (size_t)numedges_src, __func__);
 
-			/* Not sure I understand why, but this works much better if we pass ray_radius as bvhtree epsilon too :/ */
-			bvhtree_from_mesh_edges(&treedata, dm_src, ray_radius, 2, 6);
+			bvhtree_from_mesh_edges(&treedata, dm_src, M2MMAP_RAYCAST_APPROXIMATE_BVHEPSILON(ray_radius), 2, 6);
 
 			for (i = 0; i < numedges_dst; i++) {
 				/* For each dst edge, we sample some rays from it (interpolated from its vertices)
@@ -1323,17 +1342,26 @@ void BKE_dm2mesh_mapping_edges_compute(
 				/* And now we can cast all our rays, and see what we get! */
 				for (j = 0; j < grid_size; j++) {
 					const float fac = grid_step * (float)j;
+
+					int n = (ray_radius > 0.0f) ? M2MMAP_RAYCAST_APPROXIMATE_NR : 1;
+					float w = 1.0f;
+
 					interp_v3_v3v3(tmp_co, v1_co, v2_co, fac);
 					interp_v3_v3v3_slerp_safe(tmp_no, v1_no, v2_no, fac);
 
-					/* Note we handle dest to src space conversion ourself, here! */
-					hitdist = bke_mesh2mesh_bvhtree_query_raycast(&treedata, &rayhit, NULL,
-					                                              tmp_co, tmp_no, ray_radius, max_dist);
+					while (n--) {
+						/* Note we handle dest to src space conversion ourself, here! */
+						hitdist = bke_mesh2mesh_bvhtree_query_raycast(&treedata, &rayhit, NULL,
+						                                              tmp_co, tmp_no, ray_radius / w, max_dist);
 
-					if (rayhit.index >= 0 && hitdist <= max_dist) {
-						weights[rayhit.index] += 1.0f;
-						totweights += 1.0f;
-						hitdist_accum += hitdist;
+						if (rayhit.index >= 0 && hitdist <= max_dist) {
+							weights[rayhit.index] += w;
+							totweights += w;
+							hitdist_accum += hitdist;
+							break;
+						}
+						/* Next iteration will get bigger radius but smaller weight! */
+						w /= M2MMAP_RAYCAST_APPROXIMATE_FAC;
 					}
 				}
 				/* A sampling is valid (as in, its result can be considered as valid sources) only if at least
@@ -1409,7 +1437,9 @@ void BKE_dm2mesh_mapping_polys_compute(
 
 		int *orig_poly_idx_src;
 
-		bvhtree_from_mesh_faces(&treedata, dm_src, 0.0f, 2, 6);
+		bvhtree_from_mesh_faces(&treedata, dm_src,
+		                        (mode & M2MMAP_USE_NORPROJ) ? M2MMAP_RAYCAST_APPROXIMATE_BVHEPSILON(ray_radius) : 0.0f,
+		                        2, 6);
 		/* bvhtree here uses tesselated faces... */
 		orig_poly_idx_src = dm_src->getTessFaceDataArray(dm_src, CD_ORIGINDEX);
 
@@ -1453,7 +1483,7 @@ void BKE_dm2mesh_mapping_polys_compute(
 					                                  1, &orig_poly_idx_src[rayhit.index], &full_weight);
 				}
 				else {
-					/* No source for this dest vertex! */
+					/* No source for this dest poly! */
 					BKE_mesh2mesh_mapping_item_define_invalid(r_map, i);
 				}
 			}
@@ -1541,6 +1571,9 @@ void BKE_dm2mesh_mapping_polys_compute(
 				/* And now we can cast all our rays, and see what we get! */
 				for (j = 0; j < grid_size; j++) {
 					for (k = 0; k < grid_size; k++) {
+						int n = (ray_radius > 0.0f) ? M2MMAP_RAYCAST_APPROXIMATE_NR : 1;
+						float w = 1.0f;
+
 						tmp_co[0] = poly_dst_2d_min_x + grid_step_x * (float)j;
 						tmp_co[1] = poly_dst_2d_min_y + grid_step_y * (float)k;
 
@@ -1554,15 +1587,19 @@ void BKE_dm2mesh_mapping_polys_compute(
 						mul_m3_v3(from_pnor_2d_mat, tmp_co);
 
 						/* At this point, tmp_co is a point on our poly surface, in mesh_src space! */
+						while (n--) {
+							/* Note we handle dest to src space conversion ourself, here! */
+							hitdist = bke_mesh2mesh_bvhtree_query_raycast(&treedata, &rayhit, NULL,
+							                                              tmp_co, tmp_no, ray_radius / w, max_dist);
 
-						/* Note we handle dest to src space conversion ourself, here! */
-						hitdist = bke_mesh2mesh_bvhtree_query_raycast(&treedata, &rayhit, NULL,
-						                                              tmp_co, tmp_no, ray_radius, max_dist);
-
-						if (rayhit.index >= 0 && hitdist <= max_dist) {
-							weights[orig_poly_idx_src[rayhit.index]] += 1.0f;
-							totweights += 1.0f;
-							hitdist_accum += hitdist;
+							if (rayhit.index >= 0 && hitdist <= max_dist) {
+								weights[orig_poly_idx_src[rayhit.index]] += w;
+								totweights += w;
+								hitdist_accum += hitdist;
+								break;
+							}
+							/* Next iteration will get bigger radius but smaller weight! */
+							w /= M2MMAP_RAYCAST_APPROXIMATE_FAC;
 						}
 					}
 				}
@@ -1669,6 +1706,8 @@ void BKE_dm2mesh_mapping_loops_compute(
 		IslandResult **islands_res;
 		size_t islands_res_buff_size = 32;
 
+		const float bvh_epsilon = (mode & M2MMAP_USE_NORPROJ) ? M2MMAP_RAYCAST_APPROXIMATE_BVHEPSILON(ray_radius) : 0.0f;
+
 		if (!use_from_vert) {
 			vcos_src = MEM_mallocN(sizeof(*vcos_src) * (size_t)num_verts_src, __func__);
 			dm_src->getVertCos(dm_src, vcos_src);
@@ -1769,7 +1808,7 @@ void BKE_dm2mesh_mapping_loops_compute(
 					}
 					/* verts 'ownership' is transfered to treedata here, which will handle its freeing. */
 					bvhtree_from_mesh_verts_ex(&treedata[tidx], verts_src, num_verts_src, verts_allocated_src,
-					                           verts_active, num_verts_active, 0.0f, 2, 6);
+					                           verts_active, num_verts_active, bvh_epsilon, 2, 6);
 					if (verts_allocated_src) {
 						verts_allocated_src = false;  /* Only 'give' our verts once, to first tree! */
 					}
@@ -1779,7 +1818,7 @@ void BKE_dm2mesh_mapping_loops_compute(
 			}
 			else {
 				BLI_assert(num_trees == 1);
-				bvhtree_from_mesh_verts(&treedata[0], dm_src, 0.0f, 2, 6);
+				bvhtree_from_mesh_verts(&treedata[0], dm_src, bvh_epsilon, 2, 6);
 			}
 		}
 		else {  /* We use polygons. */
@@ -1814,7 +1853,7 @@ void BKE_dm2mesh_mapping_loops_compute(
 					/* verts 'ownership' is transfered to treedata here, which will handle its freeing. */
 					bvhtree_from_mesh_faces_ex(&treedata[tidx], verts_src, verts_allocated_src,
 					                           faces_src, num_faces_src, faces_allocated_src,
-					                           faces_active, num_faces_active, 0.0f, 2, 6);
+					                           faces_active, num_faces_active, bvh_epsilon, 2, 6);
 					if (verts_allocated_src) {
 						verts_allocated_src = false;  /* Only 'give' our verts once, to first tree! */
 					}
@@ -1827,7 +1866,7 @@ void BKE_dm2mesh_mapping_loops_compute(
 			}
 			else {
 				BLI_assert(num_trees == 1);
-				bvhtree_from_mesh_faces(&treedata[0], dm_src, 0.0f, 2, 6);
+				bvhtree_from_mesh_faces(&treedata[0], dm_src, bvh_epsilon, 2, 6);
 				orig_poly_idx_src = dm_src->getTessFaceDataArray(dm_src, CD_ORIGINDEX);
 			}
 		}
@@ -1915,19 +1954,28 @@ void BKE_dm2mesh_mapping_loops_compute(
 					else if (mode & M2MMAP_USE_NORPROJ) {
 						float tmp_co[3], tmp_no[3];
 
+						int n = (ray_radius > 0.0f) ? M2MMAP_RAYCAST_APPROXIMATE_NR : 1;
+						float w = 1.0f;
+
 						copy_v3_v3(tmp_co, verts_dst[ml_dst->v].co);
 						copy_v3_v3(tmp_no, loop_nors_dst[plidx_dst + mp_dst->loopstart]);
 
-						hitdist = bke_mesh2mesh_bvhtree_query_raycast(tdata, &rayhit, space_transform,
-						                                              tmp_co, tmp_no, ray_radius, max_dist);
+						while (n--) {
+							hitdist = bke_mesh2mesh_bvhtree_query_raycast(tdata, &rayhit, space_transform,
+							                                              tmp_co, tmp_no, ray_radius / w, max_dist);
 
-						if (rayhit.index >= 0 && hitdist <= max_dist) {
-							islands_res[tidx][plidx_dst].factor = hitdist ? (1.0f / hitdist) : 1e18f;
-							islands_res[tidx][plidx_dst].hit_distance = hitdist;
-							islands_res[tidx][plidx_dst].idx_src = orig_poly_idx_src[rayhit.index];
-							copy_v3_v3(islands_res[tidx][plidx_dst].hit_point, rayhit.co);
+							if (rayhit.index >= 0 && hitdist <= max_dist) {
+								islands_res[tidx][plidx_dst].factor = (hitdist ? (1.0f / hitdist) : 1e18f) * w;
+								islands_res[tidx][plidx_dst].hit_distance = hitdist;
+								islands_res[tidx][plidx_dst].idx_src = orig_poly_idx_src[rayhit.index];
+								copy_v3_v3(islands_res[tidx][plidx_dst].hit_point, rayhit.co);
+								break;
+							}
+							/* Next iteration will get bigger radius but smaller weight! */
+							w /= M2MMAP_RAYCAST_APPROXIMATE_FAC;
 						}
-						else {
+						if (n == -1) {
+							printf("foo\n");
 							/* No source for this dest loop! */
 							islands_res[tidx][plidx_dst].factor = 0.0f;
 							islands_res[tidx][plidx_dst].hit_distance = FLT_MAX;
@@ -2078,5 +2126,9 @@ void BKE_dm2mesh_mapping_loops_compute(
 		MEM_freeN(treedata);
 	}
 }
+
+#undef M2MMAP_RAYCAST_APPROXIMATE_NR
+#undef M2MMAP_RAYCAST_APPROXIMATE_FAC
+#undef M2MMAP_RAYCAST_APPROXIMATE_BVHEPSILON
 
 /** \} */
