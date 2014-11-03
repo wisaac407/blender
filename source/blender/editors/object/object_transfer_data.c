@@ -374,16 +374,6 @@ static void data_transfer_interp_char(const DataTransferLayerMapping *UNUSED(lay
 	*data_dst = (char)(weight_dst * 255.0f);
 }
 
-static void data_transfer_mesh_mapping_postprocess(Mesh *UNUSED(me_dst), Mesh2MeshMapping *UNUSED(geom_map),
-                                                   const int UNUSED(data_type))
-{
-	/* TODO!
-	 * geometry mapping filtering/post-process in some cases (thinking about loop UVs here, especially in case of normal
-	 * mapping and with islands, many dest loops may end with no source, while others of the same poly have some.
-	 * this might be better tackled in mapping computation itself, though).
-	 */
-}
-
 /* Helpers to match sources and destinations data layers (also handles 'conversions' in CD_FAKE cases). */
 
 void data_transfer_layersmapping_add_item(
@@ -806,8 +796,6 @@ bool ED_data_transfer(
 		BKE_dm2mesh_mapping_verts_compute(map_vert_mode, space_transform, max_distance, ray_radius,
 		                                  me_dst->mvert, me_dst->totvert, dm_src, &geom_map);
 
-		data_transfer_mesh_mapping_postprocess(me_dst, &geom_map, data_type);
-
 		if (data_transfer_layersmapping_generate(&lay_map, ob_src, ob_dst, dm_src, me_dst, ME_VERT,
 		                                         data_type, mix_mode, mix_factor,
 		                                         num_create, fromlayers_select, tolayers_select))
@@ -830,8 +818,6 @@ bool ED_data_transfer(
 		                                  me_dst->mvert, me_dst->totvert, me_dst->medge, me_dst->totedge,
 		                                  dm_src, &geom_map);
 
-		data_transfer_mesh_mapping_postprocess(me_dst, &geom_map, data_type);
-
 		if (data_transfer_layersmapping_generate(&lay_map, ob_src, ob_dst, dm_src, me_dst, ME_EDGE,
 		                                         data_type, mix_mode, mix_factor,
 		                                         num_create, fromlayers_select, tolayers_select))
@@ -853,8 +839,6 @@ bool ED_data_transfer(
 		BKE_dm2mesh_mapping_polys_compute(map_poly_mode, space_transform, max_distance, ray_radius,
 		                                  me_dst->mvert, me_dst->totvert, me_dst->mpoly, me_dst->totpoly,
 		                                  me_dst->mloop, me_dst->totloop, &me_dst->pdata, dm_src, &geom_map);
-
-		data_transfer_mesh_mapping_postprocess(me_dst, &geom_map, data_type);
 
 		if (data_transfer_layersmapping_generate(&lay_map, ob_src, ob_dst, dm_src, me_dst, ME_POLY,
 		                                         data_type, mix_mode, mix_factor,
@@ -881,8 +865,6 @@ bool ED_data_transfer(
 		                                  me_dst->mpoly, me_dst->totpoly, me_dst->mloop, me_dst->totloop,
 		                                  &me_dst->pdata, &me_dst->ldata, me_dst->smoothresh, dm_src,
 		                                  island_callback, &geom_map);
-
-		data_transfer_mesh_mapping_postprocess(me_dst, &geom_map, data_type);
 
 		if (data_transfer_layersmapping_generate(&lay_map, ob_src, ob_dst, dm_src, me_dst, ME_LOOP,
 		                                         data_type, mix_mode, mix_factor,
