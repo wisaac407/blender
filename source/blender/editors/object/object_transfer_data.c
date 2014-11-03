@@ -121,7 +121,9 @@ static bool mdt_get_layertype_capacity(const int type, bool *r_advanced_mixing, 
 static EnumPropertyItem MDT_layer_items[] = {
 	{0, "", 0, "Vertex Data", ""},
 	{CD_FAKE_MDEFORMVERT, "VGROUP_WEIGHTS", 0, "Vertex Group(s)", "Transfer active or all vertex groups"},
+#if 0  /* XXX For now, would like to finish/merge work from 2014 gsoc first. */
 	{CD_FAKE_SHAPEKEY, "SHAPEKEYS", 0, "Shapekey(s)", "Transfer active or all shape keys"},
+#endif
 #if 0  /* XXX When SkinModifier is enabled, it seems to erase its own CD_MVERT_SKIN layer from final DM :( */
 	{CD_MVERT_SKIN, "SKIN", 0, "Skin Weight", "Transfer skin weights"},
 #endif
