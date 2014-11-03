@@ -790,10 +790,10 @@ bool ED_data_transfer(
 		dm_src_mask |= (1LL << data_type);
 	}
 	else if (data_type == CD_FAKE_MDEFORMVERT) {
-		dm_src_mask |= (1LL << CD_MDEFORMVERT);  /* Exception for vgroups :/ */
+		dm_src_mask |= CD_MASK_MDEFORMVERT;  /* Exception for vgroups :/ */
 	}
 	else if (data_type == CD_FAKE_UV) {
-		dm_src_mask |= (1LL << CD_MTEXPOLY) | (1LL << CD_MLOOPUV);
+		dm_src_mask |= CD_MASK_MTEXPOLY | CD_MASK_MLOOPUV;
 	}
 	dm_src = mesh_get_derived_final(scene, ob_src, dm_src_mask);
 	me_dst = ob_dst->data;
