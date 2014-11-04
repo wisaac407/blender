@@ -213,11 +213,6 @@ bool ED_object_multires_update_totlevels_cb(struct Object *ob, void *totlevel_v)
 void ED_object_select_linked_by_id(struct bContext *C, struct ID *id);
 
 
-bool *ED_vgroup_subset_from_select_type(struct Object *ob, enum eVGroupSelect subset_type,
-                                        int *r_vgroup_tot, int *r_subset_count);
-void ED_vgroup_subset_to_index_array(const bool *vgroup_validmap, const int vgroup_tot,
-                                     int *r_vgroup_subset_map);
-
 struct EnumPropertyItem *ED_object_vgroup_selection_itemf_helper(
         const struct bContext *C,
         struct PointerRNA *ptr,
@@ -226,69 +221,6 @@ struct EnumPropertyItem *ED_object_vgroup_selection_itemf_helper(
         const unsigned int selection_mask);
 
 void ED_object_check_force_modifiers(struct Main *bmain, struct Scene *scene, struct Object *object);
-
-/* Data transfer. */
-
-/* Warning, those def are stored in files (TransferData modifier), *DO NOT* modify those values. */
-enum {
-	MDT_DATA_MDEFORMVERT                 = 1 << 0,
-	MDT_DATA_SHAPEKEY                    = 1 << 1,
-	MDT_DATA_SKIN                        = 1 << 2,
-	MDT_DATA_BWEIGHT_VERT                = 1 << 3,
-
-	MDT_DATA_SHARP_EDGE                  = 1 << 8,
-	MDT_DATA_SEAM                        = 1 << 9,
-	MDT_DATA_CREASE                      = 1 << 10,
-	MDT_DATA_BWEIGHT_EDGE                = 1 << 11,
-	MDT_DATA_FREESTYLE_EDGE              = 1 << 12,
-
-	MDT_DATA_UV                          = 1 << 16,
-	MDT_DATA_SHARP_FACE                  = 1 << 17,
-	MDT_DATA_FREESTYLE_FACE              = 1 << 18,
-
-	MDT_DATA_VCOL                        = 1 << 24,
-};
-
-int ED_data_transfer_mdtdata_to_cdtype(const int mdtdata);
-
-/* How to select data layers, for types supporting multi-layers.
- * Here too, some options are highly dependent on type of transferred data! */
-enum {
-	MDT_FROMLAYERS_ACTIVE                 = 0,
-	MDT_FROMLAYERS_ALL                    = 1,
-	/* Datatype-specific. */
-	MDT_FROMLAYERS_VGROUP                 = 1 << 8,
-	MDT_FROMLAYERS_VGROUP_BONE_SELECTED   = MDT_FROMLAYERS_VGROUP | 1,
-	MDT_FROMLAYERS_VGROUP_BONE_DEFORM     = MDT_FROMLAYERS_VGROUP | 2,
-	/* Other types-related modes... */
-};
-
-/* How to map a source layer to a destination layer, for types supporting multi-layers.
- * Note: if no matching layer can be found, it will be created. */
-enum {
-	MDT_TOLAYERS_ACTIVE                   = 0,  /* Only for MDT_LAYERS_FROMSEL_ACTIVE. */
-	MDT_TOLAYERS_NAME                     = 1,
-	MDT_TOLAYERS_INDEX                    = 2,
-#if 0  /* TODO */
-	MDT_TOLAYERS_CREATE                   = 3,  /* Never replace existing data in dst, always create new layers. */
-#endif
-};
-
-bool ED_data_transfer(
-        struct Scene *scene, struct Object *ob_src, struct Object *ob_dst, const int data_types, const bool use_create,
-        const int map_vert_mode, const int map_edge_mode, const int map_poly_mode, const int map_loop_mode,
-        struct SpaceTransform *space_transform, const float max_distance, const float precision,
-        const int fromlayers_select, const int tolayers_select,
-        const int mix_mode, const float mix_factor, const char *vgroup_name);
-bool ED_data_transfer_dm(
-        struct Scene *scene, struct Object *ob_src, struct Object *ob_dst, struct DerivedMesh *dm_dst,
-        const int data_types, const bool use_create,
-        const int map_vert_mode, const int map_edge_mode, const int map_poly_mode, const int map_loop_mode,
-        struct SpaceTransform *space_transform, const float max_distance, const float ray_radius,
-        const int fromlayers_select, const int tolayers_select,
-        const int mix_mode, const float mix_factor, const char *vgroup_name);
-
-
 
 #ifdef __cplusplus
 }

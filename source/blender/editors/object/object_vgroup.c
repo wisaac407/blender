@@ -682,7 +682,7 @@ static void vgroup_normalize_active(Object *ob, eVGroupSelect subset_type)
 		return;
 	}
 
-	vgroup_validmap = ED_vgroup_subset_from_select_type(ob, subset_type, &vgroup_tot, &subset_count);
+	vgroup_validmap = BKE_objdef_vgroup_subset_from_select_type(ob, subset_type, &vgroup_tot, &subset_count);
 	defvert_normalize_subset(dvert_act, vgroup_validmap, vgroup_tot);
 	MEM_freeN((void *)vgroup_validmap);
 
@@ -703,7 +703,7 @@ static void vgroup_copy_active_to_sel(Object *ob, eVGroupSelect subset_type)
 	BMEditMesh *em = me->edit_btmesh;
 	MDeformVert *dvert_act;
 	int i, vgroup_tot, subset_count;
-	const bool *vgroup_validmap = ED_vgroup_subset_from_select_type(ob, subset_type, &vgroup_tot, &subset_count);
+	const bool *vgroup_validmap = BKE_objdef_vgroup_subset_from_select_type(ob, subset_type, &vgroup_tot, &subset_count);
 
 
 	if (em) {
@@ -746,256 +746,6 @@ static void vgroup_copy_active_to_sel(Object *ob, eVGroupSelect subset_type)
 }
 
 /***********************Start weight transfer (WT)*********************************/
-
-static void vgroups_datatransfer_interp(const DataTransferLayerMapping *laymap, void *dest,
-                                        void **sources, const float *weights, const int count, const float mix_factor)
-{
-	MDeformVert **data_src = (MDeformVert **)sources;
-	MDeformVert *data_dst = (MDeformVert *)dest;
-	const int idx_src = laymap->data_n_src;
-	const int idx_dst = laymap->data_n_dst;
-
-	const int mix_mode = laymap->mix_mode;
-
-	int i, j;
-
-	MDeformWeight *dw_src;
-	MDeformWeight *dw_dst = defvert_find_index(data_dst, idx_dst);
-	float weight_dst = 0.0f;
-
-	for (i = count; i--;) {
-		for (j = data_src[i]->totweight; j--;) {
-			if ((dw_src = &data_src[i]->dw[j])->def_nr == idx_src) {
-				weight_dst += dw_src->weight * weights[i];
-				break;
-			}
-		}
-	}
-
-	if (mix_mode != CDT_MIX_REPLACE_ALL) {
-		if (!dw_dst && (mix_mode == CDT_MIX_REPLACE_ABOVE_THRESHOLD)) {
-			return;  /* Do not affect destination. */
-		}
-		if (dw_dst &&
-		    ((mix_mode == CDT_MIX_REPLACE_ABOVE_THRESHOLD && (dw_dst->weight <= mix_factor)) ||
-		     (mix_mode == CDT_MIX_REPLACE_BELOW_THRESHOLD && (dw_dst->weight >= mix_factor))))
-		{
-			return;  /* Do not affect destination. */
-		}
-		else {
-			float weight_dst_org = dw_dst ? dw_dst->weight : 0.0f;
-			switch (mix_mode) {
-				case CDT_MIX_MIX:
-					/* Nothing to do, mere interp is enough here. */;
-					break;
-				case CDT_MIX_ADD:
-					weight_dst = weight_dst_org + weight_dst;
-					break;
-				case CDT_MIX_SUB:
-					weight_dst = weight_dst_org - weight_dst;
-					break;
-				case CDT_MIX_MUL:
-					weight_dst = weight_dst_org * weight_dst;
-					break;
-			}
-			interpf(weight_dst, weight_dst_org, mix_factor);
-			CLAMP(weight_dst, 0.0f, 1.0f);
-		}
-	}
-
-	if (!dw_dst) {
-		defvert_add_index_notest(data_dst, idx_dst, weight_dst);
-	}
-	else {
-		dw_dst->weight = weight_dst;
-	}
-}
-
-static bool data_transfer_layersmapping_vgroups_multisrc_to_dst(
-        ListBase *r_map, const int mix_mode, const float mix_factor, const float *mix_weights, const int num_create,
-        Object *ob_src, Object *ob_dst, MDeformVert *data_dst, MDeformVert *data_src,
-        const int tolayers_select, bool *use_layers_src, const int num_layers_src)
-{
-	int idx_src = num_layers_src;
-	int idx_dst;
-
-	const size_t elem_size = sizeof(*((MDeformVert *)NULL));
-
-	switch (tolayers_select) {
-		case MDT_TOLAYERS_INDEX:
-			{
-				idx_dst = BLI_countlist(&ob_dst->defbase);
-
-				/* Find last source actually used! */
-				while (idx_src-- && !use_layers_src[idx_src]);
-				idx_src++;
-
-				if (idx_dst < idx_src) {
-					if (!num_create) {
-						return false;
-					}
-					/* Create as much vgroups as necessary! */
-					for (; idx_dst < idx_src; idx_dst++) {
-						ED_vgroup_add(ob_dst);
-					}
-				}
-				while (idx_src--) {
-					if (!use_layers_src[idx_src]) {
-						continue;
-					}
-					data_transfer_layersmapping_add_item(r_map, CD_FAKE_MDEFORMVERT, mix_mode, mix_factor, mix_weights,
-					                                     data_src, data_dst, idx_src, idx_src,
-					                                     elem_size, 0, 0, 0, vgroups_datatransfer_interp);
-				}
-			}
-			break;
-		case MDT_TOLAYERS_NAME:
-			while (idx_src--) {
-				bDeformGroup *dg_src;
-
-				if (!use_layers_src[idx_src]) {
-					continue;
-				}
-
-				dg_src = BLI_findlink(&ob_src->defbase, idx_src);
-				if ((idx_dst = defgroup_name_index(ob_dst, dg_src->name)) == -1) {
-					if (!num_create) {
-						BLI_freelistN(r_map);
-						return false;
-					}
-					ED_vgroup_add_name(ob_dst, dg_src->name);
-					idx_dst = ob_dst->actdef - 1;
-				}
-				data_transfer_layersmapping_add_item(r_map, CD_FAKE_MDEFORMVERT, mix_mode, mix_factor, mix_weights,
-				                                     data_src, data_dst, idx_src, idx_dst,
-				                                     elem_size, 0, 0, 0, vgroups_datatransfer_interp);
-			}
-			break;
-		default:
-			return false;
-	}
-
-	return true;
-}
-
-bool data_transfer_layersmapping_vgroups(
-        ListBase *r_map, const int mix_mode, const float mix_factor, const float *mix_weights,
-        const int num_create, Object *ob_src, Object *ob_dst, CustomData *cd_src, CustomData *cd_dst,
-        const bool dup_dst, const int fromlayers_select, const int tolayers_select)
-{
-	int idx_src, idx_dst;
-	MDeformVert *data_src, *data_dst = NULL;
-
-	const size_t elem_size = sizeof(*((MDeformVert *)NULL));
-
-	if (!(data_src = CustomData_get_layer(cd_src, CD_MDEFORMVERT))) {
-		return false;
-	}
-
-	if (!CustomData_has_layer(cd_dst, CD_MDEFORMVERT)) {
-		if (!num_create) {
-			return false;
-		}
-		if (dup_dst) {
-			data_dst = CustomData_add_layer(cd_dst, CD_MDEFORMVERT, CD_CALLOC, NULL, num_create);
-		}
-		else {
-			ED_vgroup_data_create((ID *)ob_dst->data);
-			data_dst = CustomData_get_layer(cd_dst, CD_MDEFORMVERT);
-		}
-	}
-	else {
-		/* If dest is a derivedmesh, we do not want to overwrite cdlayers of org mesh! */
-		data_dst = dup_dst ? CustomData_duplicate_referenced_layer(cd_dst, CD_MDEFORMVERT, num_create) :
-		                     CustomData_get_layer(cd_dst, CD_MDEFORMVERT);
-	}
-
-	if (!data_dst) {
-		return false;
-	}
-
-	if (fromlayers_select == MDT_FROMLAYERS_ACTIVE) {
-		if ((idx_src = ob_src->actdef - 1) == -1){
-			return false;
-		}
-		switch (tolayers_select) {
-			case MDT_TOLAYERS_ACTIVE:
-				if ((idx_dst = ob_dst->actdef - 1) == -1) {
-					bDeformGroup *dg_src;
-					if (!num_create) {
-						return false;
-					}
-					dg_src = BLI_findlink(&ob_src->defbase, idx_src);
-					ED_vgroup_add_name(ob_dst, dg_src->name);
-					idx_dst = ob_dst->actdef - 1;
-				}
-				break;
-			case MDT_TOLAYERS_INDEX:
-				{
-					int num = BLI_countlist(&ob_src->defbase);
-					idx_dst = idx_src;
-					if (num <= idx_dst) {
-						if (!num_create) {
-							return false;
-						}
-						/* Create as much vgroups as necessary! */
-						for (; num <= idx_dst; num++) {
-							ED_vgroup_add(ob_dst);
-						}
-					}
-				}
-				break;
-			case MDT_TOLAYERS_NAME:
-				{
-					bDeformGroup *dg_src = BLI_findlink(&ob_src->defbase, idx_src);
-					if ((idx_dst = defgroup_name_index(ob_dst, dg_src->name)) == -1) {
-						if (!num_create) {
-							return false;
-						}
-						ED_vgroup_add_name(ob_dst, dg_src->name);
-						idx_dst = ob_dst->actdef - 1;
-					}
-				}
-				break;
-			default:
-				return false;
-		}
-
-		data_transfer_layersmapping_add_item(r_map, CD_FAKE_MDEFORMVERT, mix_mode, mix_factor, mix_weights,
-		                                     data_src, data_dst, idx_src, idx_dst,
-		                                     elem_size, 0, 0, 0, vgroups_datatransfer_interp);
-	}
-	else {
-		int num_src, num_sel_unused;
-		bool *use_layers_src = NULL;
-		bool ret;
-
-		switch (fromlayers_select) {
-			case MDT_FROMLAYERS_ALL:
-				use_layers_src = ED_vgroup_subset_from_select_type(ob_src, WT_VGROUP_ALL, &num_src, &num_sel_unused);
-				break;
-			case MDT_FROMLAYERS_VGROUP_BONE_SELECTED:
-				use_layers_src = ED_vgroup_subset_from_select_type(ob_src, WT_VGROUP_BONE_SELECT,
-				                                                   &num_src, &num_sel_unused);
-				break;
-			case MDT_FROMLAYERS_VGROUP_BONE_DEFORM:
-				use_layers_src = ED_vgroup_subset_from_select_type(ob_src, WT_VGROUP_BONE_DEFORM,
-				                                                   &num_src, &num_sel_unused);
-				break;
-		}
-
-		ret = data_transfer_layersmapping_vgroups_multisrc_to_dst(r_map, mix_mode, mix_factor, mix_weights, num_create,
-		                                                          ob_src, ob_dst, data_src, data_dst,
-		                                                          tolayers_select, use_layers_src, num_src);
-
-		MEM_freeN(use_layers_src);
-		return ret;
-	}
-
-	return true;
-}
-
-
 
 typedef enum WT_VertexGroupMode {
 	WT_REPLACE_ACTIVE_VERTEX_GROUP = 1,
@@ -1748,86 +1498,6 @@ static void vgroup_duplicate(Object *ob)
 	}
 }
 
-/**
- * Return the subset type of the Vertex Group Selection
- */
-bool *ED_vgroup_subset_from_select_type(Object *ob, eVGroupSelect subset_type, int *r_vgroup_tot, int *r_subset_count)
-{
-	bool *vgroup_validmap = NULL;
-	*r_vgroup_tot = BLI_countlist(&ob->defbase);
-
-	switch (subset_type) {
-		case WT_VGROUP_ACTIVE:
-		{
-			const int def_nr_active = ob->actdef - 1;
-			vgroup_validmap = MEM_mallocN(*r_vgroup_tot * sizeof(*vgroup_validmap), __func__);
-			memset(vgroup_validmap, false, *r_vgroup_tot * sizeof(*vgroup_validmap));
-			if ((def_nr_active >= 0) && (def_nr_active < *r_vgroup_tot)) {
-				*r_subset_count = 1;
-				vgroup_validmap[def_nr_active] = true;
-			}
-			else {
-				*r_subset_count = 0;
-			}
-			break;
-		}
-		case WT_VGROUP_BONE_SELECT:
-		{
-			vgroup_validmap = BKE_objdef_selected_get(ob, *r_vgroup_tot, r_subset_count);
-			break;
-		}
-		case WT_VGROUP_BONE_DEFORM:
-		{
-			int i;
-			vgroup_validmap = BKE_objdef_validmap_get(ob, *r_vgroup_tot);
-			*r_subset_count = 0;
-			for (i = 0; i < *r_vgroup_tot; i++) {
-				if (vgroup_validmap[i] == true) {
-					*r_subset_count += 1;
-				}
-			}
-			break;
-		}
-		case WT_VGROUP_BONE_DEFORM_OFF:
-		{
-			int i;
-			vgroup_validmap = BKE_objdef_validmap_get(ob, *r_vgroup_tot);
-			*r_subset_count = 0;
-			for (i = 0; i < *r_vgroup_tot; i++) {
-				vgroup_validmap[i] = !vgroup_validmap[i];
-				if (vgroup_validmap[i] == true) {
-					*r_subset_count += 1;
-				}
-			}
-			break;
-		}
-		case WT_VGROUP_ALL:
-		default:
-		{
-			vgroup_validmap = MEM_mallocN(*r_vgroup_tot * sizeof(*vgroup_validmap), __func__);
-			memset(vgroup_validmap, true, *r_vgroup_tot * sizeof(*vgroup_validmap));
-			*r_subset_count = *r_vgroup_tot;
-			break;
-		}
-	}
-
-	return vgroup_validmap;
-}
-
-/**
- * store indices from the vgroup_validmap (faster lookups in some cases)
- */
-void ED_vgroup_subset_to_index_array(const bool *vgroup_validmap, const int vgroup_tot,
-                                     int *r_vgroup_subset_map)
-{
-	int i, j = 0;
-	for (i = 0; i < vgroup_tot; i++) {
-		if (vgroup_validmap[i]) {
-			r_vgroup_subset_map[j++] = i;
-		}
-	}
-}
-
 static void vgroup_normalize(Object *ob)
 {
 	MDeformWeight *dw;
@@ -2455,7 +2125,7 @@ static void vgroup_blend_subset(Object *ob, const bool *vgroup_validmap, const i
 
 	BLI_SMALLSTACK_DECLARE(dv_stack, MDeformVert *);
 
-	ED_vgroup_subset_to_index_array(vgroup_validmap, vgroup_tot, vgroup_subset_map);
+	BKE_objdef_vgroup_subset_to_index_array(vgroup_validmap, vgroup_tot, vgroup_subset_map);
 	ED_vgroup_parray_alloc(ob->data, &dvert_array, &dvert_tot, false);
 	memset(vgroup_subset_weights, 0, sizeof(*vgroup_subset_weights) * subset_count);
 
@@ -3736,7 +3406,7 @@ static int vertex_group_levels_exec(bContext *C, wmOperator *op)
 
 	int subset_count, vgroup_tot;
 
-	const bool *vgroup_validmap = ED_vgroup_subset_from_select_type(ob, subset_type, &vgroup_tot, &subset_count);
+	const bool *vgroup_validmap = BKE_objdef_vgroup_subset_from_select_type(ob, subset_type, &vgroup_tot, &subset_count);
 	vgroup_levels_subset(ob, vgroup_validmap, vgroup_tot, subset_count, offset, gain);
 	MEM_freeN((void *)vgroup_validmap);
 	
@@ -3802,7 +3472,7 @@ static int vertex_group_normalize_all_exec(bContext *C, wmOperator *op)
 
 	int subset_count, vgroup_tot;
 
-	const bool *vgroup_validmap = ED_vgroup_subset_from_select_type(ob, subset_type, &vgroup_tot, &subset_count);
+	const bool *vgroup_validmap = BKE_objdef_vgroup_subset_from_select_type(ob, subset_type, &vgroup_tot, &subset_count);
 	vgroup_normalize_all(ob, vgroup_validmap, vgroup_tot, subset_count, lock_active);
 	MEM_freeN((void *)vgroup_validmap);
 
@@ -3924,7 +3594,7 @@ static int vertex_group_invert_exec(bContext *C, wmOperator *op)
 
 	int subset_count, vgroup_tot;
 
-	const bool *vgroup_validmap = ED_vgroup_subset_from_select_type(ob, subset_type, &vgroup_tot, &subset_count);
+	const bool *vgroup_validmap = BKE_objdef_vgroup_subset_from_select_type(ob, subset_type, &vgroup_tot, &subset_count);
 	vgroup_invert_subset(ob, vgroup_validmap, vgroup_tot, subset_count, auto_assign, auto_remove);
 	MEM_freeN((void *)vgroup_validmap);
 
@@ -3965,7 +3635,7 @@ static int vertex_group_blend_exec(bContext *C, wmOperator *op)
 
 	int subset_count, vgroup_tot;
 
-	const bool *vgroup_validmap = ED_vgroup_subset_from_select_type(ob, subset_type, &vgroup_tot, &subset_count);
+	const bool *vgroup_validmap = BKE_objdef_vgroup_subset_from_select_type(ob, subset_type, &vgroup_tot, &subset_count);
 	vgroup_blend_subset(ob, vgroup_validmap, vgroup_tot, subset_count, fac);
 	MEM_freeN((void *)vgroup_validmap);
 
@@ -4041,7 +3711,7 @@ static int vertex_group_clean_exec(bContext *C, wmOperator *op)
 
 	int subset_count, vgroup_tot;
 
-	const bool *vgroup_validmap = ED_vgroup_subset_from_select_type(ob, subset_type, &vgroup_tot, &subset_count);
+	const bool *vgroup_validmap = BKE_objdef_vgroup_subset_from_select_type(ob, subset_type, &vgroup_tot, &subset_count);
 	vgroup_clean_subset(ob, vgroup_validmap, vgroup_tot, subset_count, limit, keep_single);
 	MEM_freeN((void *)vgroup_validmap);
 
@@ -4082,7 +3752,7 @@ static int vertex_group_quantize_exec(bContext *C, wmOperator *op)
 
 	int subset_count, vgroup_tot;
 
-	const bool *vgroup_validmap = ED_vgroup_subset_from_select_type(ob, subset_type, &vgroup_tot, &subset_count);
+	const bool *vgroup_validmap = BKE_objdef_vgroup_subset_from_select_type(ob, subset_type, &vgroup_tot, &subset_count);
 	vgroup_quantize_subset(ob, vgroup_validmap, vgroup_tot, subset_count, steps);
 	MEM_freeN((void *)vgroup_validmap);
 
@@ -4120,7 +3790,7 @@ static int vertex_group_limit_total_exec(bContext *C, wmOperator *op)
 
 	int subset_count, vgroup_tot;
 
-	const bool *vgroup_validmap = ED_vgroup_subset_from_select_type(ob, subset_type, &vgroup_tot, &subset_count);
+	const bool *vgroup_validmap = BKE_objdef_vgroup_subset_from_select_type(ob, subset_type, &vgroup_tot, &subset_count);
 	int remove_tot = vgroup_limit_total_subset(ob, vgroup_validmap, vgroup_tot, subset_count, limit);
 	MEM_freeN((void *)vgroup_validmap);
 
