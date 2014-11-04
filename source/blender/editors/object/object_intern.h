@@ -35,8 +35,6 @@ struct wmOperatorType;
 struct KeyBlock;
 struct Lattice;
 struct Curve;
-struct CustomData;
-struct DataTransferLayerMapping;
 struct Object;
 struct Mesh;
 struct HookModifierData;

@@ -36,6 +36,10 @@
 extern "C" {
 #endif
 
+struct Object;
+struct Scene;
+struct SpaceTransform;
+
 /* Warning, those def are stored in files (TransferData modifier), *DO NOT* modify those values. */
 enum {
 	DT_DATA_MDEFORMVERT                 = 1 << 0,
