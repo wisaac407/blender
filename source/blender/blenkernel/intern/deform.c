@@ -960,3 +960,96 @@ void BKE_defvert_array_free(MDeformVert *dvert, int totvert)
 
 	MEM_freeN(dvert);
 }
+
+void BKE_defvert_extract_vgroup_to_vertweights(
+        MDeformVert *dvert, const int defgroup, const int num_verts, float *r_weights)
+{
+	if (dvert && defgroup != -1) {
+		int i = num_verts;
+
+		while (i--) {
+			r_weights[i] = defvert_find_weight(&dvert[i], defgroup);
+		}
+	}
+	else {
+		fill_vn_fl(r_weights, 0.0f, num_verts);
+	}
+}
+
+/* The following three make basic interpolation, using temp vert_weights array to avoid looking up same weight
+ * several times. */
+
+void BKE_defvert_extract_vgroup_to_edgeweights(
+        MDeformVert *dvert, const int defgroup, const int num_verts, MEdge *edges, const int num_edges,
+        float *r_weights)
+{
+	if (dvert && defgroup != -1) {
+		int i = num_edges;
+		float *tmp_weights = MEM_mallocN(sizeof(*tmp_weights) * (size_t)num_verts, __func__);
+
+		BKE_defvert_extract_vgroup_to_vertweights(dvert, defgroup, num_verts, tmp_weights);
+
+		while (i--) {
+			MEdge *me = &edges[i];
+
+			r_weights[i] = (tmp_weights[me->v1] + tmp_weights[me->v2]) * 0.5f;
+		}
+
+		MEM_freeN(tmp_weights);
+	}
+	else {
+		fill_vn_fl(r_weights, 0.0f, num_edges);
+	}
+}
+
+void BKE_defvert_extract_vgroup_to_loopweights(
+        MDeformVert *dvert, const int defgroup, const int num_verts, MLoop *loops, const int num_loops,
+        float *r_weights)
+{
+	if (dvert && defgroup != -1) {
+		int i = num_loops;
+		float *tmp_weights = MEM_mallocN(sizeof(*tmp_weights) * (size_t)num_verts, __func__);
+
+		BKE_defvert_extract_vgroup_to_vertweights(dvert, defgroup, num_verts, tmp_weights);
+
+		while (i--) {
+			MLoop *ml = &loops[i];
+
+			r_weights[i] = tmp_weights[ml->v];
+		}
+
+		MEM_freeN(tmp_weights);
+	}
+	else {
+		fill_vn_fl(r_weights, 0.0f, num_loops);
+	}
+}
+
+void BKE_defvert_extract_vgroup_to_polyweights(
+        MDeformVert *dvert, const int defgroup, const int num_verts, MLoop *loops, const int UNUSED(num_loops),
+        MPoly *polys, const int num_polys, float *r_weights)
+{
+	if (dvert && defgroup != -1) {
+		int i = num_polys;
+		float *tmp_weights = MEM_mallocN(sizeof(*tmp_weights) * (size_t)num_verts, __func__);
+
+		BKE_defvert_extract_vgroup_to_vertweights(dvert, defgroup, num_verts, tmp_weights);
+
+		while (i--) {
+			MPoly *mp = &polys[i];
+			MLoop *ml = &loops[mp->loopstart];
+			int j = mp->totloop;
+			float w = 0.0f;
+
+			for (; j--; ml++) {
+				w += tmp_weights[ml->v];
+			}
+			r_weights[i] = w / (float)mp->totloop;
+		}
+
+		MEM_freeN(tmp_weights);
+	}
+	else {
+		fill_vn_fl(r_weights, 0.0f, num_polys);
+	}
+}
