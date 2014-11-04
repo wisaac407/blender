@@ -229,6 +229,28 @@ void ED_object_check_force_modifiers(struct Main *bmain, struct Scene *scene, st
 
 /* Data transfer. */
 
+/* Warning, those def are stored in files (TransferData modifier), *DO NOT* modify those values. */
+enum {
+	MDT_DATA_MDEFORMVERT                 = 1 << 0,
+	MDT_DATA_SHAPEKEY                    = 1 << 1,
+	MDT_DATA_SKIN                        = 1 << 2,
+	MDT_DATA_BWEIGHT_VERT                = 1 << 3,
+
+	MDT_DATA_SHARP_EDGE                  = 1 << 8,
+	MDT_DATA_SEAM                        = 1 << 9,
+	MDT_DATA_CREASE                      = 1 << 10,
+	MDT_DATA_BWEIGHT_EDGE                = 1 << 11,
+	MDT_DATA_FREESTYLE_EDGE              = 1 << 12,
+
+	MDT_DATA_UV                          = 1 << 16,
+	MDT_DATA_SHARP_FACE                  = 1 << 17,
+	MDT_DATA_FREESTYLE_FACE              = 1 << 18,
+
+	MDT_DATA_VCOL                        = 1 << 24,
+};
+
+int ED_data_transfer_mdtdata_to_cdtype(const int mdtdata);
+
 /* How to select data layers, for types supporting multi-layers.
  * Here too, some options are highly dependent on type of transferred data! */
 enum {
@@ -253,14 +275,14 @@ enum {
 };
 
 bool ED_data_transfer(
-        struct Scene *scene, struct Object *ob_src, struct Object *ob_dst, const int data_type, const bool use_create,
+        struct Scene *scene, struct Object *ob_src, struct Object *ob_dst, const int data_types, const bool use_create,
         const int map_vert_mode, const int map_edge_mode, const int map_poly_mode, const int map_loop_mode,
         struct SpaceTransform *space_transform, const float max_distance, const float precision,
         const int fromlayers_select, const int tolayers_select,
         const int mix_mode, const float mix_factor, const char *vgroup_name);
 bool ED_data_transfer_dm(
         struct Scene *scene, struct Object *ob_src, struct Object *ob_dst, struct DerivedMesh *dm_dst,
-        const int data_type, const bool use_create,
+        const int data_types, const bool use_create,
         const int map_vert_mode, const int map_edge_mode, const int map_poly_mode, const int map_loop_mode,
         struct SpaceTransform *space_transform, const float max_distance, const float ray_radius,
         const int fromlayers_select, const int tolayers_select,
