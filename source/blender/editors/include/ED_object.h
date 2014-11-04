@@ -256,13 +256,15 @@ bool ED_data_transfer(
         struct Scene *scene, struct Object *ob_src, struct Object *ob_dst, const int data_type, const bool use_create,
         const int map_vert_mode, const int map_edge_mode, const int map_poly_mode, const int map_loop_mode,
         struct SpaceTransform *space_transform, const float max_distance, const float precision,
-        const int fromlayers_select, const int tolayers_select, const int mix_mode, const float mix_factor);
+        const int fromlayers_select, const int tolayers_select,
+        const int mix_mode, const float mix_factor, const char *vgroup_name);
 bool ED_data_transfer_dm(
         struct Scene *scene, struct Object *ob_src, struct Object *ob_dst, struct DerivedMesh *dm_dst,
         const int data_type, const bool use_create,
         const int map_vert_mode, const int map_edge_mode, const int map_poly_mode, const int map_loop_mode,
         struct SpaceTransform *space_transform, const float max_distance, const float ray_radius,
-        const int fromlayers_select, const int tolayers_select, const int mix_mode, const float mix_factor);
+        const int fromlayers_select, const int tolayers_select,
+        const int mix_mode, const float mix_factor, const char *vgroup_name);
 
 
 

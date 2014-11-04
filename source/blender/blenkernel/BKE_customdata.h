@@ -376,7 +376,7 @@ struct Mesh2MeshMapping;
 typedef struct DataTransferLayerMapping DataTransferLayerMapping;
 
 typedef void (*cd_datatransfer_interp)(const DataTransferLayerMapping *laymap, void *dest,
-                                       void **sources, const float *weights, const int count);
+                                       void **sources, const float *weights, const int count, const float mix_factor);
 
 /* Fake CD_LAYERS (those are actually 'real' data stored directly into elements' structs, or otherwise not (directly)
  * accessible to usual CDLayer system). */
@@ -425,7 +425,7 @@ typedef struct DataTransferLayerMapping {
 	int data_type;
 	int mix_mode;
 	float mix_factor;
-	/* TODO: we may want to add more mixing features, eg based on vgroups? */
+	const float *mix_weights;  /* If non-NULL, array of weights, one for each dest item, replaces mix_factor. */
 
 	void *data_src;      /* Data source array (can be regular CD data, vertices/edges/etc., keyblocks...). */
 	void *data_dst;      /* Data dest array (same type as dat_src). */

@@ -748,7 +748,7 @@ static void vgroup_copy_active_to_sel(Object *ob, eVGroupSelect subset_type)
 /***********************Start weight transfer (WT)*********************************/
 
 static void vgroups_datatransfer_interp(const DataTransferLayerMapping *laymap, void *dest,
-                                        void **sources, const float *weights, int count)
+                                        void **sources, const float *weights, const int count, const float mix_factor)
 {
 	MDeformVert **data_src = (MDeformVert **)sources;
 	MDeformVert *data_dst = (MDeformVert *)dest;
@@ -756,7 +756,6 @@ static void vgroups_datatransfer_interp(const DataTransferLayerMapping *laymap, 
 	const int idx_dst = laymap->data_n_dst;
 
 	const int mix_mode = laymap->mix_mode;
-	const float mix_factor = laymap->mix_factor;
 
 	int i, j;
 
@@ -813,7 +812,7 @@ static void vgroups_datatransfer_interp(const DataTransferLayerMapping *laymap, 
 }
 
 static bool data_transfer_layersmapping_vgroups_multisrc_to_dst(
-        ListBase *r_map, const int mix_mode, const float mix_factor, const int num_create,
+        ListBase *r_map, const int mix_mode, const float mix_factor, const float *mix_weights, const int num_create,
         Object *ob_src, Object *ob_dst, MDeformVert *data_dst, MDeformVert *data_src,
         const int tolayers_select, bool *use_layers_src, const int num_layers_src)
 {
@@ -844,7 +843,7 @@ static bool data_transfer_layersmapping_vgroups_multisrc_to_dst(
 					if (!use_layers_src[idx_src]) {
 						continue;
 					}
-					data_transfer_layersmapping_add_item(r_map, CD_FAKE_MDEFORMVERT, mix_mode, mix_factor,
+					data_transfer_layersmapping_add_item(r_map, CD_FAKE_MDEFORMVERT, mix_mode, mix_factor, mix_weights,
 					                                     data_src, data_dst, idx_src, idx_src,
 					                                     elem_size, 0, 0, 0, vgroups_datatransfer_interp);
 				}
@@ -867,7 +866,7 @@ static bool data_transfer_layersmapping_vgroups_multisrc_to_dst(
 					ED_vgroup_add_name(ob_dst, dg_src->name);
 					idx_dst = ob_dst->actdef - 1;
 				}
-				data_transfer_layersmapping_add_item(r_map, CD_FAKE_MDEFORMVERT, mix_mode, mix_factor,
+				data_transfer_layersmapping_add_item(r_map, CD_FAKE_MDEFORMVERT, mix_mode, mix_factor, mix_weights,
 				                                     data_src, data_dst, idx_src, idx_dst,
 				                                     elem_size, 0, 0, 0, vgroups_datatransfer_interp);
 			}
@@ -880,9 +879,9 @@ static bool data_transfer_layersmapping_vgroups_multisrc_to_dst(
 }
 
 bool data_transfer_layersmapping_vgroups(
-        struct ListBase *r_map, const int mix_mode, const float mix_factor,
-        const int num_create, struct Object *ob_src, struct Object *ob_dst, const bool dup_dst,
-        struct CustomData *cd_src, struct CustomData *cd_dst, const int fromlayers_select, const int tolayers_select)
+        ListBase *r_map, const int mix_mode, const float mix_factor, const float *mix_weights,
+        const int num_create, Object *ob_src, Object *ob_dst, CustomData *cd_src, CustomData *cd_dst,
+        const bool dup_dst, const int fromlayers_select, const int tolayers_select)
 {
 	int idx_src, idx_dst;
 	MDeformVert *data_src, *data_dst = NULL;
@@ -962,7 +961,7 @@ bool data_transfer_layersmapping_vgroups(
 				return false;
 		}
 
-		data_transfer_layersmapping_add_item(r_map, CD_FAKE_MDEFORMVERT, mix_mode, mix_factor,
+		data_transfer_layersmapping_add_item(r_map, CD_FAKE_MDEFORMVERT, mix_mode, mix_factor, mix_weights,
 		                                     data_src, data_dst, idx_src, idx_dst,
 		                                     elem_size, 0, 0, 0, vgroups_datatransfer_interp);
 	}
@@ -985,7 +984,7 @@ bool data_transfer_layersmapping_vgroups(
 				break;
 		}
 
-		ret = data_transfer_layersmapping_vgroups_multisrc_to_dst(r_map, mix_mode, mix_factor, num_create,
+		ret = data_transfer_layersmapping_vgroups_multisrc_to_dst(r_map, mix_mode, mix_factor, mix_weights, num_create,
 		                                                          ob_src, ob_dst, data_src, data_dst,
 		                                                          tolayers_select, use_layers_src, num_src);
 
