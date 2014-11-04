@@ -1975,7 +1975,6 @@ void BKE_dm2mesh_mapping_loops_compute(
 							w /= M2MMAP_RAYCAST_APPROXIMATE_FAC;
 						}
 						if (n == -1) {
-							printf("foo\n");
 							/* No source for this dest loop! */
 							islands_res[tidx][plidx_dst].factor = 0.0f;
 							islands_res[tidx][plidx_dst].hit_distance = FLT_MAX;

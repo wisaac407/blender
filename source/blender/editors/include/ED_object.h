@@ -43,6 +43,7 @@ struct Base;
 struct BezTriple;
 struct Curve;
 struct CustomData;
+struct DerivedMesh;
 struct EditBone;
 struct EnumPropertyItem;
 struct ID;
@@ -251,15 +252,16 @@ enum {
 #endif
 };
 
-bool ED_data_transfer_layersmapping_cdlayers(
-        struct ListBase *r_map, const int data_type, const int mix_mode, const float mix_factor,
-        const int num_create, struct CustomData *data_src, struct CustomData *data_dst,
-        const int fromlayers_select, const int tolayers_select);
-
 bool ED_data_transfer(
         struct Scene *scene, struct Object *ob_src, struct Object *ob_dst, const int data_type, const bool use_create,
         const int map_vert_mode, const int map_edge_mode, const int map_poly_mode, const int map_loop_mode,
         struct SpaceTransform *space_transform, const float max_distance, const float precision,
+        const int fromlayers_select, const int tolayers_select, const int mix_mode, const float mix_factor);
+bool ED_data_transfer_dm(
+        struct Scene *scene, struct Object *ob_src, struct Object *ob_dst, struct DerivedMesh *dm_dst,
+        const int data_type, const bool use_create,
+        const int map_vert_mode, const int map_edge_mode, const int map_poly_mode, const int map_loop_mode,
+        struct SpaceTransform *space_transform, const float max_distance, const float ray_radius,
         const int fromlayers_select, const int tolayers_select, const int mix_mode, const float mix_factor);
 
 

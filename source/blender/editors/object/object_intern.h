@@ -241,7 +241,7 @@ void OBJECT_OT_vertex_weight_copy(struct wmOperatorType *ot);
 
 bool data_transfer_layersmapping_vgroups(
         struct ListBase *r_map, const int mix_mode, const float mix_factor, const int num_create,
-        struct Object *ob_src, struct Object *ob_dst,
+        struct Object *ob_src, struct Object *ob_dst, const bool dup_dst,
         struct CustomData *cd_src, struct CustomData *cd_dst, const int fromlayers_select, const int tolayers_select);
 
 /* object_warp.c */

@@ -881,7 +881,7 @@ static bool data_transfer_layersmapping_vgroups_multisrc_to_dst(
 
 bool data_transfer_layersmapping_vgroups(
         struct ListBase *r_map, const int mix_mode, const float mix_factor,
-        const int num_create, struct Object *ob_src, struct Object *ob_dst,
+        const int num_create, struct Object *ob_src, struct Object *ob_dst, const bool dup_dst,
         struct CustomData *cd_src, struct CustomData *cd_dst, const int fromlayers_select, const int tolayers_select)
 {
 	int idx_src, idx_dst;
@@ -889,7 +889,7 @@ bool data_transfer_layersmapping_vgroups(
 
 	const size_t elem_size = sizeof(*((MDeformVert *)NULL));
 
-	if ((data_src = CustomData_get_layer(cd_src, CD_MDEFORMVERT)) == NULL) {
+	if (!(data_src = CustomData_get_layer(cd_src, CD_MDEFORMVERT))) {
 		return false;
 	}
 
@@ -897,9 +897,21 @@ bool data_transfer_layersmapping_vgroups(
 		if (!num_create) {
 			return false;
 		}
-		ED_vgroup_data_create((ID *)ob_dst->data);
+		if (dup_dst) {
+			data_dst = CustomData_add_layer(cd_dst, CD_MDEFORMVERT, CD_CALLOC, NULL, num_create);
+		}
+		else {
+			ED_vgroup_data_create((ID *)ob_dst->data);
+			data_dst = CustomData_get_layer(cd_dst, CD_MDEFORMVERT);
+		}
 	}
-	if ((data_dst = CustomData_get_layer(cd_dst, CD_MDEFORMVERT)) == NULL) {
+	else {
+		/* If dest is a derivedmesh, we do not want to overwrite cdlayers of org mesh! */
+		data_dst = dup_dst ? CustomData_duplicate_referenced_layer(cd_dst, CD_MDEFORMVERT, num_create) :
+		                     CustomData_get_layer(cd_dst, CD_MDEFORMVERT);
+	}
+
+	if (!data_dst) {
 		return false;
 	}
 
