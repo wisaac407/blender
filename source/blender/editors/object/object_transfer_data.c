@@ -55,7 +55,6 @@
 #include "WM_types.h"
 
 #include "ED_object.h"
-#include "ED_mesh.h"
 
 #include "UI_interface.h"
 #include "UI_resources.h"
