@@ -36,6 +36,8 @@
 extern "C" {
 #endif
 
+#include "BKE_customdata.h"
+
 struct Object;
 struct Scene;
 struct SpaceTransform;
@@ -60,9 +62,11 @@ enum {
 	DT_DATA_VCOL                        = 1 << 24,
 };
 
+CustomDataMask BKE_data_transfer_dttypes_to_cdmask(const int dtdata_types);
+bool BKE_data_transfer_get_dttypes_capacity(
+        const int dtdata_types, bool *r_advanced_mixing, bool *r_threshold);
+
 int BKE_data_transfer_dttype_to_cdtype(const int dtdata_type);
-bool BKE_data_transfer_get_dttype_capacity(
-        const int dtdata_type, bool *r_advanced_mixing, bool *r_threshold);
 
 #define DT_DATATYPE_IS_VERT(_dt) ELEM(_dt, DT_DATA_MDEFORMVERT, DT_DATA_SHAPEKEY, DT_DATA_SKIN,  \
                                            DT_DATA_BWEIGHT_VERT)
@@ -102,14 +106,14 @@ bool BKE_data_transfer_mesh(
         const int map_vert_mode, const int map_edge_mode, const int map_poly_mode, const int map_loop_mode,
         struct SpaceTransform *space_transform, const float max_distance, const float precision,
         const int fromlayers_select, const int tolayers_select,
-        const int mix_mode, const float mix_factor, const char *vgroup_name);
+        const int mix_mode, const float mix_factor, const char *vgroup_name, const bool invert_vgroup);
 bool BKE_data_transfer_dm(
         struct Scene *scene, struct Object *ob_src, struct Object *ob_dst, struct DerivedMesh *dm_dst,
         const int data_types, const bool use_create,
         const int map_vert_mode, const int map_edge_mode, const int map_poly_mode, const int map_loop_mode,
         struct SpaceTransform *space_transform, const float max_distance, const float ray_radius,
         const int fromlayers_select, const int tolayers_select,
-        const int mix_mode, const float mix_factor, const char *vgroup_name);
+        const int mix_mode, const float mix_factor, const char *vgroup_name, const bool invert_vgroup);
 
 #ifdef __cplusplus
 }

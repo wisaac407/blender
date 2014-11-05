@@ -1225,6 +1225,65 @@ class DATA_PT_modifiers(ModifierButtonsPanel, Panel):
 
         col.prop(md, "material_offset", text="Material Offset")
 
+    def DATA_TRANSFER(self, layout, ob, md):
+        row = layout.row(align=True)
+        row.prop(md, "ob_source")
+        sub = row.row(align=True)
+        sub.active = bool(md.ob_source)
+        sub.prop(md, "use_object_transform", text="", icon='GROUP')
+
+        layout.separator()
+
+        col = layout.column()
+        split = col.split(0.66)
+        subcol = split.column()
+        subcol.label("Vertex Mapping:")
+        subcol.prop(md, "vert_mapping", text="")
+        subcol = split.column()
+        subcol.prop(md, "data_types_verts")
+
+        layout.separator()
+
+        col = layout.column()
+        split = col.split(0.66)
+        subcol = split.column()
+        subcol.label("Edge Mapping:")
+        subcol.prop(md, "edge_mapping", text="")
+        subcol = split.column()
+        subcol.prop(md, "data_types_edges")
+
+        layout.separator()
+        col = layout.column()
+        split = col.split(0.66)
+        subcol = split.column()
+        subcol.label("Face Corner Mapping:")
+        subcol.prop(md, "loop_mapping", text="")
+        subcol = split.column()
+        subcol.prop(md, "data_types_loops")
+
+        layout.separator()
+        col = layout.column()
+        split = col.split(0.66)
+        subcol = split.column()
+        subcol.label("Face Mapping:")
+        subcol.prop(md, "poly_mapping", text="")
+        subcol = split.column()
+        subcol.prop(md, "data_types_polys")
+
+        layout.separator()
+
+        split = layout.split()
+        col = split.column()
+        col.prop(md, "mix_mode")
+        col.prop(md, "mix_factor")
+        col = split.column()
+        col.prop(md, "use_create")
+        row = col.row(align=True)
+        row.prop_search(md, "vertex_group", ob, "vertex_groups", text="")
+        sub = row.row(align=True)
+        sub.active = bool(md.vertex_group)
+        sub.prop(md, "invert_vertex_group", text="", icon='ARROW_LEFTRIGHT')
+
 
 if __name__ == "__main__":  # only for live edit.
     bpy.utils.register_module(__name__)

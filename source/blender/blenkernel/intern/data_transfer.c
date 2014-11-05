@@ -31,6 +31,7 @@
 
 #include "MEM_guardedalloc.h"
 
+#include "DNA_customdata_types.h"
 #include "DNA_meshdata_types.h"
 #include "DNA_mesh_types.h"
 #include "DNA_object_types.h"
@@ -52,6 +53,104 @@
 
 #include "data_transfer_intern.h"
 
+
+CustomDataMask BKE_data_transfer_dttypes_to_cdmask(const int dtdata_types)
+{
+	CustomDataMask cddata_mask = 0;
+	int i;
+
+	for (i = 0; i < 32; i++) {
+		const int dtdata_type = 1 << i;
+		int cddata_type;
+
+		if (!(dtdata_types & dtdata_type)) {
+			continue;
+		}
+
+		cddata_type = BKE_data_transfer_dttype_to_cdtype(dtdata_type);
+		if (!(cddata_type & CD_FAKE)) {
+			cddata_mask |= 1LL << cddata_type;
+		}
+		else if (cddata_type == CD_FAKE_MDEFORMVERT) {
+			cddata_mask |= CD_MASK_MDEFORMVERT;  /* Exception for vgroups :/ */
+		}
+		else if (cddata_type == CD_FAKE_UV) {
+			cddata_mask |= CD_MASK_MTEXPOLY | CD_MASK_MLOOPUV;
+		}
+	}
+
+	return cddata_mask;
+}
+
+/* Check what can do each layer type (if it is actually handled by transferdata, if it supports advanced mixing... */
+bool BKE_data_transfer_get_dttypes_capacity(
+        const int dtdata_types, bool *r_advanced_mixing, bool *r_threshold)
+{
+	int i;
+	bool ret = false;
+
+	*r_advanced_mixing = false;
+	*r_threshold = false;
+
+	for (i = 0; (i < 32) && !(ret && *r_advanced_mixing && *r_threshold); i++) {
+		const int dtdata_type = 1 << i;
+
+		if (!(dtdata_types & dtdata_type)) {
+			continue;
+		}
+
+		switch (dtdata_type) {
+		/* Vertex data */
+			case DT_DATA_MDEFORMVERT:
+				*r_advanced_mixing = true;
+				*r_threshold = true;
+				ret = true;
+				break;
+			case DT_DATA_SKIN:
+				*r_threshold = true;
+				ret = true;
+				break;
+			case DT_DATA_BWEIGHT_VERT:
+				ret = true;
+				break;
+		/* Edge data */
+			case DT_DATA_SHARP_EDGE:
+				*r_threshold = true;
+				ret = true;
+				break;
+			case DT_DATA_SEAM:
+				*r_threshold = true;
+				ret = true;
+				break;
+			case DT_DATA_CREASE:
+				ret = true;
+				break;
+			case DT_DATA_BWEIGHT_EDGE:
+				ret = true;
+				break;
+			case DT_DATA_FREESTYLE_EDGE:
+				ret = true;
+				break;
+		/* Loop/Poly data */
+			case DT_DATA_UV:
+				ret = true;
+				break;
+			case DT_DATA_VCOL:
+				*r_advanced_mixing = true;
+				*r_threshold = true;
+				ret = true;
+				break;
+			case DT_DATA_SHARP_FACE:
+				ret = true;
+				break;
+			case DT_DATA_FREESTYLE_FACE:
+				ret = true;
+				break;
+		}
+	}
+
+	return ret;
+}
 
 int BKE_data_transfer_dttype_to_cdtype(const int dtdata_type)
 {
@@ -90,52 +189,6 @@ int BKE_data_transfer_dttype_to_cdtype(const int dtdata_type)
 			BLI_assert(0);
 	}
 	return 0;  /* Should never be reached! */
-}
-
-/* Check what can do each layer type (if it is actually handled by transferdata, if it supports advanced mixing... */
-bool BKE_data_transfer_get_dttype_capacity(
-        const int dtdata_type, bool *r_advanced_mixing, bool *r_threshold)
-{
-	*r_advanced_mixing = false;
-	*r_threshold = false;
-	switch (dtdata_type) {
-	/* Vertex data */
-		case DT_DATA_MDEFORMVERT:
-			*r_advanced_mixing = true;
-			*r_threshold = true;
-			return true;
-		case DT_DATA_SKIN:
-			*r_threshold = true;
-			return true;
-		case DT_DATA_BWEIGHT_VERT:
-			return true;
-	/* Edge data */
-		case DT_DATA_SHARP_EDGE:
-			*r_threshold = true;
-			return true;
-		case DT_DATA_SEAM:
-			*r_threshold = true;
-			return true;
-		case DT_DATA_CREASE:
-			return true;
-		case DT_DATA_BWEIGHT_EDGE:
-			return true;
-		case DT_DATA_FREESTYLE_EDGE:
-			return true;
-	/* Loop/Poly data */
-		case DT_DATA_UV:
-			return true;
-		case DT_DATA_VCOL:
-			*r_advanced_mixing = true;
-			*r_threshold = true;
-			return true;
-		case DT_DATA_SHARP_FACE:
-			return true;
-		case DT_DATA_FREESTYLE_FACE:
-			return true;
-	}
-
-	return false;
 }
 
 /* ********** */
@@ -629,7 +682,7 @@ bool BKE_data_transfer_dm(
         const int map_vert_mode, const int map_edge_mode, const int map_poly_mode, const int map_loop_mode,
         SpaceTransform *space_transform, const float max_distance, const float ray_radius,
         const int fromlayers_select, const int tolayers_select,
-        const int mix_mode, const float mix_factor, const char *vgroup_name)
+        const int mix_mode, const float mix_factor, const char *vgroup_name, const bool invert_vgroup)
 {
 	DerivedMesh *dm_src;
 	Mesh *me_dst;
@@ -643,6 +696,8 @@ bool BKE_data_transfer_dm(
 	bool geom_map_init[4] = {0};
 	ListBase lay_map = {0};
 	bool changed = false;
+
+	CustomDataMask dm_src_mask = CD_MASK_BAREMESH;
 
 	BLI_assert((ob_src != ob_dst) && (ob_src->type == OB_MESH) && (ob_dst->type == OB_MESH));
 
@@ -660,10 +715,13 @@ bool BKE_data_transfer_dm(
 		}
 	}
 
+	/* Get source DM.*/
+	dm_src_mask |= BKE_data_transfer_dttypes_to_cdmask(data_types);
+	dm_src = mesh_get_derived_final(scene, ob_src, dm_src_mask);
+
 	/* Check all possible data types.
 	 * Note item mappings and dest mix weights are cached. */
 	for (i = 0; i < 32; i++) {
-		CustomDataMask dm_src_mask = CD_MASK_BAREMESH;
 		int dtdata_type = 1 << i;
 		int cddata_type;
 
@@ -672,18 +730,6 @@ bool BKE_data_transfer_dm(
 		}
 
 		cddata_type = BKE_data_transfer_dttype_to_cdtype(dtdata_type);
-
-		/* Get source DM.*/
-		if (!(cddata_type & CD_FAKE)) {
-			dm_src_mask |= (1LL << cddata_type);
-		}
-		else if (cddata_type == CD_FAKE_MDEFORMVERT) {
-			dm_src_mask |= CD_MASK_MDEFORMVERT;  /* Exception for vgroups :/ */
-		}
-		else if (cddata_type == CD_FAKE_UV) {
-			dm_src_mask |= CD_MASK_MTEXPOLY | CD_MASK_MLOOPUV;
-		}
-		dm_src = mesh_get_derived_final(scene, ob_src, dm_src_mask);
 
 		if (DT_DATATYPE_IS_VERT(dtdata_type)) {
 			MVert *verts_dst = dm_dst ? dm_dst->getVertArray(dm_dst) : me_dst->mvert;
@@ -698,7 +744,7 @@ bool BKE_data_transfer_dm(
 
 			if (mdef && vg_idx != -1 && !weights[0]) {
 				weights[0] = MEM_mallocN(sizeof(*(weights[0])) * (size_t)num_verts_dst, __func__);
-				BKE_defvert_extract_vgroup_to_vertweights(mdef, vg_idx, num_verts_dst, weights[0]);
+				BKE_defvert_extract_vgroup_to_vertweights(mdef, vg_idx, num_verts_dst, weights[0], invert_vgroup);
 			}
 
 			if (data_transfer_layersmapping_generate(&lay_map, ob_src, ob_dst, dm_src, dm_dst, me_dst, ME_VERT,
@@ -733,7 +779,7 @@ bool BKE_data_transfer_dm(
 			if (mdef && vg_idx != -1 && !weights[1]) {
 				weights[1] = MEM_mallocN(sizeof(*weights[1]) * (size_t)num_edges_dst, __func__);
 				BKE_defvert_extract_vgroup_to_edgeweights(mdef, vg_idx, num_verts_dst, edges_dst, num_edges_dst,
-				                                          weights[1]);
+				                                          weights[1], invert_vgroup);
 			}
 
 			if (data_transfer_layersmapping_generate(&lay_map, ob_src, ob_dst, dm_src, dm_dst, me_dst, ME_EDGE,
@@ -771,7 +817,7 @@ bool BKE_data_transfer_dm(
 			if (mdef && vg_idx != -1 && !weights[2]) {
 				weights[2] = MEM_mallocN(sizeof(*weights[2]) * (size_t)num_polys_dst, __func__);
 				BKE_defvert_extract_vgroup_to_polyweights(mdef, vg_idx, num_verts_dst, loops_dst, num_loops_dst,
-				                                          polys_dst, num_polys_dst, weights[2]);
+				                                          polys_dst, num_polys_dst, weights[2], invert_vgroup);
 			}
 
 			if (data_transfer_layersmapping_generate(&lay_map, ob_src, ob_dst, dm_src, dm_dst, me_dst, ME_POLY,
@@ -815,7 +861,7 @@ bool BKE_data_transfer_dm(
 			if (mdef && vg_idx != -1 && !weights[3]) {
 				weights[3] = MEM_mallocN(sizeof(*weights[3]) * (size_t)num_loops_dst, __func__);
 				BKE_defvert_extract_vgroup_to_loopweights(mdef, vg_idx, num_verts_dst, loops_dst, num_loops_dst,
-				                                          weights[3]);
+				                                          weights[3], invert_vgroup);
 			}
 
 			if (data_transfer_layersmapping_generate(&lay_map, ob_src, ob_dst, dm_src, dm_dst, me_dst, ME_LOOP,
@@ -848,10 +894,10 @@ bool BKE_data_transfer_mesh(
         const int map_vert_mode, const int map_edge_mode, const int map_poly_mode, const int map_loop_mode,
         SpaceTransform *space_transform, const float max_distance, const float ray_radius,
         const int fromlayers_select, const int tolayers_select,
-        const int mix_mode, const float mix_factor, const char *vgroup_name)
+        const int mix_mode, const float mix_factor, const char *vgroup_name, const bool invert_vgroup)
 {
 	return BKE_data_transfer_dm(scene, ob_src, ob_dst, NULL, data_types, use_create,
 	                            map_vert_mode, map_edge_mode, map_poly_mode, map_loop_mode, space_transform,
 	                            max_distance, ray_radius, fromlayers_select, tolayers_select,
-	                            mix_mode, mix_factor, vgroup_name);
+	                            mix_mode, mix_factor, vgroup_name, invert_vgroup);
 }

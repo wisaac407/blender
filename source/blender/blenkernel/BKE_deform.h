@@ -91,16 +91,16 @@ void defvert_normalize_lock_map(struct MDeformVert *dvert,
 
 /* Utilities to 'extract' a given vgroup into a simple float array, for verts, but also edges/polys/loops. */
 void BKE_defvert_extract_vgroup_to_vertweights(
-        struct MDeformVert *dvert, const int defgroup, const int num_verts, float *r_weights);
+        struct MDeformVert *dvert, const int defgroup, const int num_verts, float *r_weights, const bool invert_vgroup);
 void BKE_defvert_extract_vgroup_to_edgeweights(
         struct MDeformVert *dvert, const int defgroup, const int num_verts, struct MEdge *edges, const int num_edges,
-        float *r_weights);
+        float *r_weights, const bool invert_vgroup);
 void BKE_defvert_extract_vgroup_to_loopweights(
         struct MDeformVert *dvert, const int defgroup, const int num_verts, struct MLoop *loops, const int num_loops,
-        float *r_weights);
+        float *r_weights, const bool invert_vgroup);
 void BKE_defvert_extract_vgroup_to_polyweights(
         struct MDeformVert *dvert, const int defgroup, const int num_verts, struct MLoop *loops, const int num_loops,
-        struct MPoly *polys, const int num_polys, float *r_weights);
+        struct MPoly *polys, const int num_polys, float *r_weights, const bool invert_vgroup);
 
 /* utility function, note that MAX_VGROUP_NAME chars is the maximum string length since its only
  * used with defgroups currently */
