@@ -54,6 +54,7 @@
 static void initData(ModifierData *md)
 {
 	DataTransferModifierData *dtmd = (DataTransferModifierData *) md;
+	int i;
 
 	dtmd->ob_source          = NULL;
 	dtmd->data_types         = 0;
@@ -66,8 +67,10 @@ static void initData(ModifierData *md)
 	dtmd->map_max_distance   = 1.0f;
 	dtmd->map_ray_radius     = 0.0f;
 
-	dtmd->fromlayers_selmode = DT_FROMLAYERS_ACTIVE;
-	dtmd->tolayers_selmode   = DT_TOLAYERS_ACTIVE;
+	for (i = 0; i < DT_MULTILAYER_IDX_MAX; i++) {
+		dtmd->fromlayers_selmode[i] = DT_FROMLAYERS_ALL;
+		dtmd->tolayers_selmode[i]   = DT_TOLAYERS_NAME;
+	}
 
 	dtmd->mix_mode           = CDT_MIX_REPLACE_ALL;
 	dtmd->mix_factor         = 1.0f;

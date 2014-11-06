@@ -212,14 +212,22 @@ static int data_transfer_exec(bContext *C, wmOperator *op)
 	const float max_distance = use_max_distance ? RNA_float_get(op->ptr, "max_distance") : FLT_MAX;
 	const float ray_radius = RNA_float_get(op->ptr, "ray_radius");
 
-	const int fromlayers_select = RNA_enum_get(op->ptr, "fromlayers_select");
-	const int tolayers_select = RNA_enum_get(op->ptr, "tolayers_select");
+	const int fromlayers = RNA_enum_get(op->ptr, "fromlayers_select");
+	const int tolayers = RNA_enum_get(op->ptr, "tolayers_select");
+	int fromlayers_select[DT_MULTILAYER_IDX_MAX] = {0};
+	int tolayers_select[DT_MULTILAYER_IDX_MAX] = {0};
+	const int fromto_idx = BKE_data_transfer_dttype_to_fromto_idx(data_type);
 
 	const int mix_mode = RNA_enum_get(op->ptr, "mix_mode");
 	const float mix_factor = RNA_float_get(op->ptr, "mix_factor");
 
 	SpaceTransform space_transform_data;
 	SpaceTransform *space_transform = use_object_transform ? &space_transform_data : NULL;
+
+	if (fromto_idx != DT_MULTILAYER_IDX_INVALID) {
+		fromlayers_select[fromto_idx] = fromlayers;
+		tolayers_select[fromto_idx] = tolayers;
+	}
 
 	CTX_DATA_BEGIN (C, Object *, ob_dst, selected_editable_objects)
 	{

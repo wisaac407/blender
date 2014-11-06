@@ -67,6 +67,7 @@ bool BKE_data_transfer_get_dttypes_capacity(
         const int dtdata_types, bool *r_advanced_mixing, bool *r_threshold);
 
 int BKE_data_transfer_dttype_to_cdtype(const int dtdata_type);
+int BKE_data_transfer_dttype_to_fromto_idx(const int dtdata_type);
 
 #define DT_DATATYPE_IS_VERT(_dt) ELEM(_dt, DT_DATA_MDEFORMVERT, DT_DATA_SHAPEKEY, DT_DATA_SKIN,  \
                                            DT_DATA_BWEIGHT_VERT)
@@ -78,26 +79,36 @@ int BKE_data_transfer_dttype_to_cdtype(const int dtdata_type);
 #define DT_DATATYPE_IS_MULTILAYERS(_dt) ELEM(_dt, DT_DATA_MDEFORMVERT, DT_DATA_SHAPEKEY, DT_DATA_UV, DT_DATA_VCOL)
 
 
+enum {
+	DT_MULTILAYER_IDX_INVALID           = -1,
+	DT_MULTILAYER_IDX_MDEFORMVERT       = 0,
+	DT_MULTILAYER_IDX_SHAPEKEY          = 1,
+	DT_MULTILAYER_IDX_UV                = 2,
+	DT_MULTILAYER_IDX_VCOL              = 3,
+	DT_MULTILAYER_IDX_MAX               = 4,
+};
+
+/* Below we keep positive values for real layers idx (generated dynamically). */
 /* How to select data layers, for types supporting multi-layers.
  * Here too, some options are highly dependent on type of transferred data! */
 enum {
-	DT_FROMLAYERS_ACTIVE                 = 0,
-	DT_FROMLAYERS_ALL                    = 1,
+	DT_FROMLAYERS_ACTIVE                 = -1,
+	DT_FROMLAYERS_ALL                    = -2,
 	/* Datatype-specific. */
 	DT_FROMLAYERS_VGROUP                 = 1 << 8,
-	DT_FROMLAYERS_VGROUP_BONE_SELECTED   = DT_FROMLAYERS_VGROUP | 1,
-	DT_FROMLAYERS_VGROUP_BONE_DEFORM     = DT_FROMLAYERS_VGROUP | 2,
+	DT_FROMLAYERS_VGROUP_BONE_SELECTED   = -(DT_FROMLAYERS_VGROUP | 1),
+	DT_FROMLAYERS_VGROUP_BONE_DEFORM     = -(DT_FROMLAYERS_VGROUP | 2),
 	/* Other types-related modes... */
 };
 
 /* How to map a source layer to a destination layer, for types supporting multi-layers.
  * Note: if no matching layer can be found, it will be created. */
 enum {
-	DT_TOLAYERS_ACTIVE                   = 0,  /* Only for DT_LAYERS_FROMSEL_ACTIVE. */
-	DT_TOLAYERS_NAME                     = 1,
-	DT_TOLAYERS_INDEX                    = 2,
+	DT_TOLAYERS_ACTIVE                   = -1,  /* Only for DT_LAYERS_FROMSEL_ACTIVE. */
+	DT_TOLAYERS_NAME                     = -2,
+	DT_TOLAYERS_INDEX                    = -3,
 #if 0  /* TODO */
-	DT_TOLAYERS_CREATE                   = 3,  /* Never replace existing data in dst, always create new layers. */
+	DT_TOLAYERS_CREATE                   = -4,  /* Never replace existing data in dst, always create new layers. */
 #endif
 };
 
@@ -105,14 +116,14 @@ bool BKE_data_transfer_mesh(
         struct Scene *scene, struct Object *ob_src, struct Object *ob_dst, const int data_types, const bool use_create,
         const int map_vert_mode, const int map_edge_mode, const int map_poly_mode, const int map_loop_mode,
         struct SpaceTransform *space_transform, const float max_distance, const float precision,
-        const int fromlayers_select, const int tolayers_select,
+        const int fromlayers_select[DT_MULTILAYER_IDX_MAX], const int tolayers_select[DT_MULTILAYER_IDX_MAX],
         const int mix_mode, const float mix_factor, const char *vgroup_name, const bool invert_vgroup);
 bool BKE_data_transfer_dm(
         struct Scene *scene, struct Object *ob_src, struct Object *ob_dst, struct DerivedMesh *dm_dst,
         const int data_types, const bool use_create,
         const int map_vert_mode, const int map_edge_mode, const int map_poly_mode, const int map_loop_mode,
         struct SpaceTransform *space_transform, const float max_distance, const float ray_radius,
-        const int fromlayers_select, const int tolayers_select,
+        const int fromlayers_select[DT_MULTILAYER_IDX_MAX], const int tolayers_select[DT_MULTILAYER_IDX_MAX],
         const int mix_mode, const float mix_factor, const char *vgroup_name, const bool invert_vgroup);
 
 #ifdef __cplusplus

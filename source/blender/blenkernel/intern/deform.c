@@ -1133,41 +1133,39 @@ static void vgroups_datatransfer_interp(const DataTransferLayerMapping *laymap, 
 static bool data_transfer_layersmapping_vgroups_multisrc_to_dst(
         ListBase *r_map, const int mix_mode, const float mix_factor, const float *mix_weights, const int num_create,
         Object *ob_src, Object *ob_dst, MDeformVert *data_dst, MDeformVert *data_src, const bool dup_dst,
-        const int tolayers_select, bool *use_layers_src, const int num_layers_src)
+        const int tolayers, bool *use_layers_src, const int num_layers_src)
 {
 	int idx_src = num_layers_src;
 	int idx_dst;
 
 	const size_t elem_size = sizeof(*((MDeformVert *)NULL));
 
-	switch (tolayers_select) {
+	switch (tolayers) {
 		case DT_TOLAYERS_INDEX:
-			{
-				idx_dst = BLI_countlist(&ob_dst->defbase);
+			idx_dst = BLI_countlist(&ob_dst->defbase);
 
-				/* Find last source actually used! */
-				while (idx_src-- && !use_layers_src[idx_src]);
-				idx_src++;
+			/* Find last source actually used! */
+			while (idx_src-- && !use_layers_src[idx_src]);
+			idx_src++;
 
-				if (idx_dst < idx_src) {
-					/* XXX In DM case (modifier), we **cannot create new vgroups!** */
-					if (!(num_create && !dup_dst)) {
-						return false;
-					}
-					/* Create as much vgroups as necessary! */
-					for (; idx_dst < idx_src; idx_dst++) {
-						BKE_defgroup_new(ob_dst, DATA_("Group"));
-						ob_dst->actdef = BLI_countlist(&ob_dst->defbase);
-					}
+			if (idx_dst < idx_src) {
+				/* XXX In DM case (modifier), we **cannot create new vgroups!** */
+				if (!num_create || dup_dst) {
+					return false;
 				}
-				while (idx_src--) {
-					if (!use_layers_src[idx_src]) {
-						continue;
-					}
-					data_transfer_layersmapping_add_item(r_map, CD_FAKE_MDEFORMVERT, mix_mode, mix_factor, mix_weights,
-					                                     data_src, data_dst, idx_src, idx_src,
-					                                     elem_size, 0, 0, 0, vgroups_datatransfer_interp);
+				/* Create as much vgroups as necessary! */
+				for (; idx_dst < idx_src; idx_dst++) {
+					BKE_defgroup_new(ob_dst, DATA_("Group"));
+					ob_dst->actdef = BLI_countlist(&ob_dst->defbase);
 				}
+			}
+			while (idx_src--) {
+				if (!use_layers_src[idx_src]) {
+					continue;
+				}
+				data_transfer_layersmapping_add_item(r_map, CD_FAKE_MDEFORMVERT, mix_mode, mix_factor, mix_weights,
+				                                     data_src, data_dst, idx_src, idx_src,
+				                                     elem_size, 0, 0, 0, vgroups_datatransfer_interp);
 			}
 			break;
 		case DT_TOLAYERS_NAME:
@@ -1181,7 +1179,7 @@ static bool data_transfer_layersmapping_vgroups_multisrc_to_dst(
 				dg_src = BLI_findlink(&ob_src->defbase, idx_src);
 				if ((idx_dst = defgroup_name_index(ob_dst, dg_src->name)) == -1) {
 					/* XXX In DM case (modifier), we **cannot create new vgroups!** */
-					if (!(num_create && !dup_dst)) {
+					if (!num_create || dup_dst) {
 						BLI_freelistN(r_map);
 						return false;
 					}
@@ -1204,7 +1202,7 @@ static bool data_transfer_layersmapping_vgroups_multisrc_to_dst(
 bool data_transfer_layersmapping_vgroups(
         ListBase *r_map, const int mix_mode, const float mix_factor, const float *mix_weights,
         const int num_create, Object *ob_src, Object *ob_dst, CustomData *cd_src, CustomData *cd_dst,
-        const bool dup_dst, const int fromlayers_select, const int tolayers_select)
+        const bool dup_dst, const int fromlayers, const int tolayers)
 {
 	int idx_src, idx_dst;
 	MDeformVert *data_src, *data_dst = NULL;
@@ -1229,63 +1227,75 @@ bool data_transfer_layersmapping_vgroups(
 	}
 	else {
 		/* If dest is a derivedmesh, we do not want to overwrite cdlayers of org mesh! */
-		data_dst = dup_dst ? CustomData_duplicate_referenced_layer(cd_dst, CD_MDEFORMVERT, num_create) :
-		                     CustomData_get_layer(cd_dst, CD_MDEFORMVERT);
+		if (dup_dst) {
+			data_dst = CustomData_duplicate_referenced_layer(cd_dst, CD_MDEFORMVERT, num_create);
+		}
+		else {
+			data_dst = CustomData_get_layer(cd_dst, CD_MDEFORMVERT);
+		}
 	}
 
 	if (!data_dst) {
 		return false;
 	}
 
-	if (fromlayers_select == DT_FROMLAYERS_ACTIVE) {
-		if ((idx_src = ob_src->actdef - 1) == -1){
-			return false;
+	if (fromlayers == DT_FROMLAYERS_ACTIVE || fromlayers >= 0) {
+		if (fromlayers >= 0) {
+			idx_src = fromlayers;
+			BLI_assert(idx_src < BLI_countlist(&ob_src->defbase));
 		}
-		switch (tolayers_select) {
-			case DT_TOLAYERS_ACTIVE:
-				if ((idx_dst = ob_dst->actdef - 1) == -1) {
-					bDeformGroup *dg_src;
-					if (!num_create) {
-						return false;
-					}
-					dg_src = BLI_findlink(&ob_src->defbase, idx_src);
-					BKE_defgroup_new(ob_dst, dg_src->name);
-					ob_dst->actdef = BLI_countlist(&ob_dst->defbase);
-					idx_dst = ob_dst->actdef - 1;
-				}
-				break;
-			case DT_TOLAYERS_INDEX:
-				{
-					int num = BLI_countlist(&ob_src->defbase);
-					idx_dst = idx_src;
-					if (num <= idx_dst) {
-						if (!num_create) {
-							return false;
-						}
-						/* Create as much vgroups as necessary! */
-						for (; num <= idx_dst; num++) {
-							BKE_defgroup_new(ob_dst, DATA_("Group"));
-							ob_dst->actdef = BLI_countlist(&ob_dst->defbase);
-						}
-					}
-				}
-				break;
-			case DT_TOLAYERS_NAME:
-				{
-					bDeformGroup *dg_src = BLI_findlink(&ob_src->defbase, idx_src);
-					if ((idx_dst = defgroup_name_index(ob_dst, dg_src->name)) == -1) {
-						/* XXX In DM case (modifier), we **cannot create new vgroups!** */
-						if (!(num_create && !dup_dst)) {
-							return false;
-						}
-						BKE_defgroup_new(ob_dst, dg_src->name);
-						ob_dst->actdef = BLI_countlist(&ob_dst->defbase);
-						idx_dst = ob_dst->actdef - 1;
-					}
-				}
-				break;
-			default:
+		else {
+			if ((idx_src = ob_src->actdef - 1) == -1){
 				return false;
+			}
+		}
+
+		if (tolayers >= 0) {
+			idx_dst = tolayers;
+			BLI_assert(idx_dst < BLI_countlist(&ob_dst->defbase));
+		}
+		else if (tolayers == DT_TOLAYERS_ACTIVE) {
+			if ((idx_dst = ob_dst->actdef - 1) == -1) {
+				bDeformGroup *dg_src;
+				/* XXX In DM case (modifier), we **cannot create new vgroups!** */
+				if (!num_create || dup_dst) {
+					return false;
+				}
+				dg_src = BLI_findlink(&ob_src->defbase, idx_src);
+				BKE_defgroup_new(ob_dst, dg_src->name);
+				ob_dst->actdef = BLI_countlist(&ob_dst->defbase);
+				idx_dst = ob_dst->actdef - 1;
+			}
+		}
+		else if (tolayers == DT_TOLAYERS_INDEX) {
+			int num = BLI_countlist(&ob_src->defbase);
+			idx_dst = idx_src;
+			if (num <= idx_dst) {
+				/* XXX In DM case (modifier), we **cannot create new vgroups!** */
+				if (!num_create || dup_dst) {
+					return false;
+				}
+				/* Create as much vgroups as necessary! */
+				for (; num <= idx_dst; num++) {
+					BKE_defgroup_new(ob_dst, DATA_("Group"));
+					ob_dst->actdef = BLI_countlist(&ob_dst->defbase);
+				}
+			}
+		}
+		else if (tolayers == DT_TOLAYERS_NAME) {
+			bDeformGroup *dg_src = BLI_findlink(&ob_src->defbase, idx_src);
+			if ((idx_dst = defgroup_name_index(ob_dst, dg_src->name)) == -1) {
+				/* XXX In DM case (modifier), we **cannot create new vgroups!** */
+				if (!num_create || dup_dst) {
+					return false;
+				}
+				BKE_defgroup_new(ob_dst, dg_src->name);
+				ob_dst->actdef = BLI_countlist(&ob_dst->defbase);
+				idx_dst = ob_dst->actdef - 1;
+			}
+		}
+		else {
+			return false;
 		}
 
 		data_transfer_layersmapping_add_item(r_map, CD_FAKE_MDEFORMVERT, mix_mode, mix_factor, mix_weights,
@@ -1297,7 +1307,7 @@ bool data_transfer_layersmapping_vgroups(
 		bool *use_layers_src = NULL;
 		bool ret;
 
-		switch (fromlayers_select) {
+		switch (fromlayers) {
 			case DT_FROMLAYERS_ALL:
 				use_layers_src = BKE_objdef_vgroup_subset_from_select_type(ob_src, WT_VGROUP_ALL,
 				                                                           &num_src, &num_sel_unused);
@@ -1314,7 +1324,7 @@ bool data_transfer_layersmapping_vgroups(
 
 		ret = data_transfer_layersmapping_vgroups_multisrc_to_dst(r_map, mix_mode, mix_factor, mix_weights, num_create,
 		                                                          ob_src, ob_dst, data_src, data_dst, dup_dst,
-		                                                          tolayers_select, use_layers_src, num_src);
+		                                                          tolayers, use_layers_src, num_src);
 
 		MEM_freeN(use_layers_src);
 		return ret;
