@@ -1272,10 +1272,36 @@ class DATA_PT_modifiers(ModifierButtonsPanel, Panel):
 
         layout.separator()
 
+        # First col.
+        split = layout.split()
+        col = split.column()
+        row = col.row(align=True)
+        sub = row.row(align=True)
+        sub.active = md.use_max_distance
+        sub.prop(md, "max_distance")
+        row.prop(md, "use_max_distance", text="", icon='STYLUS_PRESSURE')
+
+        col = split.column()
+        col.prop(md, "ray_radius")
+
+        layout.separator()
+
+        split = layout.split()
+        col = split.column()
+        col.label("Source Layers Select Mode:")
+        col.prop(md, "fromlayers_select", text="")
+
+        col = split.column()
+        col.label("Destination Layers Select Mode:")
+        col.prop(md, "tolayers_select", text="")
+
+        layout.separator()
+
         split = layout.split()
         col = split.column()
         col.prop(md, "mix_mode")
         col.prop(md, "mix_factor")
+
         col = split.column()
         col.prop(md, "use_create")
         row = col.row(align=True)
