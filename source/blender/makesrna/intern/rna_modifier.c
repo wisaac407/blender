@@ -730,12 +730,9 @@ static EnumPropertyItem *dt_fromlayers_select_itemf(bContext *C, PointerRNA *ptr
 		Object *ob_src = dtmd->ob_source;
 
 #if 0  /* XXX Don't think we want this in modifier version... */
-		{ 
-			Object *ob = CTX_data_active_object(C); /* XXX Is this OK? */
-			if (BKE_object_pose_armature_get(ob)) {
-				RNA_enum_items_add_value(&item, &totitem, DT_fromlayers_select_items, DT_FROMLAYERS_VGROUP_BONE_SELECTED);
-				RNA_enum_items_add_value(&item, &totitem, DT_fromlayers_select_items, DT_FROMLAYERS_VGROUP_BONE_DEFORM);
-			}
+		if (BKE_object_pose_armature_get(ob_src)) {
+			RNA_enum_items_add_value(&item, &totitem, DT_fromlayers_select_items, DT_FROMLAYERS_VGROUP_BONE_SELECTED);
+			RNA_enum_items_add_value(&item, &totitem, DT_fromlayers_select_items, DT_FROMLAYERS_VGROUP_BONE_DEFORM);
 		}
 #endif
 

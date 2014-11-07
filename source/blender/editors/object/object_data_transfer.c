@@ -90,7 +90,7 @@ static EnumPropertyItem DT_layer_items[] = {
 static EnumPropertyItem *dt_fromlayers_select_itemf(
         bContext *C, PointerRNA *ptr, PropertyRNA *UNUSED(prop), bool *r_free)
 {
-	EnumPropertyItem *item = NULL;
+	EnumPropertyItem *item = NULL, tmp_item = {0};
 	int totitem = 0;
 
 	const int data_type = RNA_enum_get(ptr, "data_type");
@@ -103,10 +103,73 @@ static EnumPropertyItem *dt_fromlayers_select_itemf(
 	RNA_enum_items_add_value(&item, &totitem, DT_fromlayers_select_items, DT_FROMLAYERS_ALL);
 
 	if (data_type == DT_DATA_MDEFORMVERT) {
-		Object *ob = CTX_data_active_object(C);
-		if (BKE_object_pose_armature_get(ob)) {
+		Object *ob_src = CTX_data_active_object(C);
+
+		if (BKE_object_pose_armature_get(ob_src)) {
 			RNA_enum_items_add_value(&item, &totitem, DT_fromlayers_select_items, DT_FROMLAYERS_VGROUP_BONE_SELECTED);
 			RNA_enum_items_add_value(&item, &totitem, DT_fromlayers_select_items, DT_FROMLAYERS_VGROUP_BONE_DEFORM);
+		}
+
+		if (ob_src) {
+			bDeformGroup *dg;
+			int i;
+
+			RNA_enum_item_add_separator(&item, &totitem);
+
+			for (i = 0, dg = ob_src->defbase.first; dg; i++, dg = dg->next) {
+				tmp_item.value = i;
+				tmp_item.identifier = tmp_item.name = dg->name;
+				RNA_enum_item_add(&item, &totitem, &tmp_item);
+			}
+		}
+	}
+	else if (data_type == DT_DATA_SHAPEKEY) {
+		/* TODO */
+	}
+	else if (data_type == DT_DATA_UV) {
+		Object *ob_src = CTX_data_active_object(C);
+		Scene *scene = CTX_data_scene(C);
+
+		if (ob_src) {
+			DerivedMesh *dm_src;
+			CustomData *pdata;
+			int num_data, i;
+
+			/* XXX Is this OK? */
+			dm_src = mesh_get_derived_final(scene, ob_src, CD_MASK_BAREMESH | CD_MTEXPOLY);
+			pdata = dm_src->getPolyDataLayout(dm_src);
+			num_data = CustomData_number_of_layers(pdata, CD_MTEXPOLY);
+
+			RNA_enum_item_add_separator(&item, &totitem);
+
+			for (i = 0; i < num_data; i++) {
+				tmp_item.value = i;
+				tmp_item.identifier = tmp_item.name = CustomData_get_layer_name(pdata, CD_MTEXPOLY, i);
+				RNA_enum_item_add(&item, &totitem, &tmp_item);
+			}
+		}
+	}
+	else if (data_type == DT_DATA_VCOL) {
+		Object *ob_src = CTX_data_active_object(C);
+		Scene *scene = CTX_data_scene(C);
+
+		if (ob_src) {
+			DerivedMesh *dm_src;
+			CustomData *ldata;
+			int num_data, i;
+
+			/* XXX Is this OK? */
+			dm_src = mesh_get_derived_final(scene, ob_src, CD_MASK_BAREMESH | CD_MLOOPCOL);
+			ldata = dm_src->getLoopDataLayout(dm_src);
+			num_data = CustomData_number_of_layers(ldata, CD_MLOOPCOL);
+
+			RNA_enum_item_add_separator(&item, &totitem);
+
+			for (i = 0; i < num_data; i++) {
+				tmp_item.value = i;
+				tmp_item.identifier = tmp_item.name = CustomData_get_layer_name(ldata, CD_MLOOPCOL, i);
+				RNA_enum_item_add(&item, &totitem, &tmp_item);
+			}
 		}
 	}
 
@@ -128,11 +191,13 @@ static EnumPropertyItem *dt_tolayers_select_itemf(bContext *C, PointerRNA *ptr, 
 		return DT_tolayers_select_items;
 	}
 
-	if (fromlayers_select == DT_FROMLAYERS_ACTIVE) {
+	if (fromlayers_select == DT_FROMLAYERS_ACTIVE || fromlayers_select >= 0) {
 		RNA_enum_items_add_value(&item, &totitem, DT_tolayers_select_items, DT_TOLAYERS_ACTIVE);
 	}
 	RNA_enum_items_add_value(&item, &totitem, DT_tolayers_select_items, DT_TOLAYERS_NAME);
 	RNA_enum_items_add_value(&item, &totitem, DT_tolayers_select_items, DT_TOLAYERS_INDEX);
+
+	/* No 'specific' to-layers here, since we may transfer to several objects at once! */
 
 	RNA_enum_item_end(&item, &totitem);
 	*r_free = true;
