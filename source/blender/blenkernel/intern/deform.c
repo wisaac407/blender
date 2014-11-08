@@ -1102,7 +1102,7 @@ static void vgroups_datatransfer_interp(const DataTransferLayerMapping *laymap, 
 			return;  /* Do not affect destination. */
 		}
 		else {
-			float weight_dst_org = dw_dst ? dw_dst->weight : 0.0f;
+			const float weight_dst_org = dw_dst ? dw_dst->weight : 0.0f;
 			switch (mix_mode) {
 				case CDT_MIX_MIX:
 					/* Nothing to do, mere interp is enough here. */;
@@ -1117,7 +1117,7 @@ static void vgroups_datatransfer_interp(const DataTransferLayerMapping *laymap, 
 					weight_dst = weight_dst_org * weight_dst;
 					break;
 			}
-			interpf(weight_dst, weight_dst_org, mix_factor);
+			weight_dst = interpf(weight_dst, weight_dst_org, mix_factor);
 			CLAMP(weight_dst, 0.0f, 1.0f);
 		}
 	}
@@ -1132,10 +1132,10 @@ static void vgroups_datatransfer_interp(const DataTransferLayerMapping *laymap, 
 
 static bool data_transfer_layersmapping_vgroups_multisrc_to_dst(
         ListBase *r_map, const int mix_mode, const float mix_factor, const float *mix_weights, const int num_create,
-        Object *ob_src, Object *ob_dst, MDeformVert *data_dst, MDeformVert *data_src, const bool dup_dst,
+        Object *ob_src, Object *ob_dst, MDeformVert *data_src, MDeformVert *data_dst, const bool UNUSED(dup_dst),
         const int tolayers, bool *use_layers_src, const int num_layers_src)
 {
-	int idx_src = num_layers_src;
+	int idx_src;
 	int idx_dst;
 
 	const size_t elem_size = sizeof(*((MDeformVert *)NULL));
@@ -1145,12 +1145,12 @@ static bool data_transfer_layersmapping_vgroups_multisrc_to_dst(
 			idx_dst = BLI_countlist(&ob_dst->defbase);
 
 			/* Find last source actually used! */
+			idx_src = num_layers_src;
 			while (idx_src-- && !use_layers_src[idx_src]);
 			idx_src++;
 
 			if (idx_dst < idx_src) {
-				/* XXX In DM case (modifier), we **cannot create new vgroups!** */
-				if (!num_create || dup_dst) {
+				if (!num_create) {
 					return false;
 				}
 				/* Create as much vgroups as necessary! */
@@ -1169,29 +1169,28 @@ static bool data_transfer_layersmapping_vgroups_multisrc_to_dst(
 			}
 			break;
 		case DT_TOLAYERS_NAME:
-			while (idx_src--) {
+			{
 				bDeformGroup *dg_src;
-
-				if (!use_layers_src[idx_src]) {
-					continue;
-				}
-
-				dg_src = BLI_findlink(&ob_src->defbase, idx_src);
-				if ((idx_dst = defgroup_name_index(ob_dst, dg_src->name)) == -1) {
-					/* XXX In DM case (modifier), we **cannot create new vgroups!** */
-					if (!num_create || dup_dst) {
-						BLI_freelistN(r_map);
-						return false;
+				for (idx_src = 0, dg_src = ob_src->defbase.first; idx_src < num_layers_src; idx_src++, dg_src = dg_src->next) {
+					if (!use_layers_src[idx_src]) {
+						continue;
 					}
-					BKE_defgroup_new(ob_dst, dg_src->name);
-					ob_dst->actdef = BLI_countlist(&ob_dst->defbase);
-					idx_dst = ob_dst->actdef - 1;
+
+					if ((idx_dst = defgroup_name_index(ob_dst, dg_src->name)) == -1) {
+						if (!num_create) {
+							BLI_freelistN(r_map);
+							return false;
+						}
+						BKE_defgroup_new(ob_dst, dg_src->name);
+						ob_dst->actdef = BLI_countlist(&ob_dst->defbase);
+						idx_dst = ob_dst->actdef - 1;
+					}
+					data_transfer_layersmapping_add_item(r_map, CD_FAKE_MDEFORMVERT, mix_mode, mix_factor, mix_weights,
+					                                     data_src, data_dst, idx_src, idx_dst,
+					                                     elem_size, 0, 0, 0, vgroups_datatransfer_interp);
 				}
-				data_transfer_layersmapping_add_item(r_map, CD_FAKE_MDEFORMVERT, mix_mode, mix_factor, mix_weights,
-				                                     data_src, data_dst, idx_src, idx_dst,
-				                                     elem_size, 0, 0, 0, vgroups_datatransfer_interp);
+				break;
 			}
-			break;
 		default:
 			return false;
 	}
@@ -1257,8 +1256,7 @@ bool data_transfer_layersmapping_vgroups(
 		else if (tolayers == DT_TOLAYERS_ACTIVE) {
 			if ((idx_dst = ob_dst->actdef - 1) == -1) {
 				bDeformGroup *dg_src;
-				/* XXX In DM case (modifier), we **cannot create new vgroups!** */
-				if (!num_create || dup_dst) {
+				if (!num_create) {
 					return false;
 				}
 				dg_src = BLI_findlink(&ob_src->defbase, idx_src);
@@ -1271,8 +1269,7 @@ bool data_transfer_layersmapping_vgroups(
 			int num = BLI_countlist(&ob_src->defbase);
 			idx_dst = idx_src;
 			if (num <= idx_dst) {
-				/* XXX In DM case (modifier), we **cannot create new vgroups!** */
-				if (!num_create || dup_dst) {
+				if (!num_create) {
 					return false;
 				}
 				/* Create as much vgroups as necessary! */
@@ -1285,8 +1282,7 @@ bool data_transfer_layersmapping_vgroups(
 		else if (tolayers == DT_TOLAYERS_NAME) {
 			bDeformGroup *dg_src = BLI_findlink(&ob_src->defbase, idx_src);
 			if ((idx_dst = defgroup_name_index(ob_dst, dg_src->name)) == -1) {
-				/* XXX In DM case (modifier), we **cannot create new vgroups!** */
-				if (!num_create || dup_dst) {
+				if (!num_create) {
 					return false;
 				}
 				BKE_defgroup_new(ob_dst, dg_src->name);
@@ -1305,7 +1301,7 @@ bool data_transfer_layersmapping_vgroups(
 	else {
 		int num_src, num_sel_unused;
 		bool *use_layers_src = NULL;
-		bool ret;
+		bool ret = false;
 
 		switch (fromlayers) {
 			case DT_FROMLAYERS_ALL:
@@ -1322,11 +1318,13 @@ bool data_transfer_layersmapping_vgroups(
 				break;
 		}
 
-		ret = data_transfer_layersmapping_vgroups_multisrc_to_dst(r_map, mix_mode, mix_factor, mix_weights, num_create,
-		                                                          ob_src, ob_dst, data_src, data_dst, dup_dst,
-		                                                          tolayers, use_layers_src, num_src);
+		if (use_layers_src) {
+			ret = data_transfer_layersmapping_vgroups_multisrc_to_dst(r_map, mix_mode, mix_factor, mix_weights, num_create,
+			                                                          ob_src, ob_dst, data_src, data_dst, dup_dst,
+			                                                          tolayers, use_layers_src, num_src);
+		}
 
-		MEM_freeN(use_layers_src);
+		MEM_SAFE_FREE(use_layers_src);
 		return ret;
 	}
 

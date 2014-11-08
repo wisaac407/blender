@@ -670,7 +670,7 @@ static void layerCopyValue_mloopcol(const void *source, void *dest, const int mi
 	switch (mixmode) {
 		case CDT_MIX_MIX:
 			blend_color_interpolate_byte((unsigned char *)&m2->r, (unsigned char *)&m2->r,
-			                                     (unsigned char *)&m1->r, mixfactor);
+			                             (unsigned char *)&m1->r, mixfactor);
 			break;
 		case CDT_MIX_ADD:
 			blend_color_add_byte(tmp_col, (unsigned char *)&m2->r, (unsigned char *)&m1->r);
