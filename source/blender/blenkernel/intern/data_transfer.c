@@ -221,6 +221,41 @@ static loop_island_compute data_transfer_get_loop_islands_generator(const int cd
 	return NULL;
 }
 
+float data_transfer_interp_float_do(
+        const int mix_mode, const float val_dst, const float val_src, const float mix_factor)
+{
+	float val_ret;
+
+	if (((mix_mode == CDT_MIX_REPLACE_ABOVE_THRESHOLD && (val_dst < mix_factor)) ||
+	     (mix_mode == CDT_MIX_REPLACE_BELOW_THRESHOLD && (val_dst > mix_factor))))
+	{
+		return val_dst;  /* Do not affect destination. */
+	}
+
+	switch (mix_mode) {
+		case CDT_MIX_REPLACE_ABOVE_THRESHOLD:
+		case CDT_MIX_REPLACE_BELOW_THRESHOLD:
+			return val_src;
+		case CDT_MIX_MIX:
+			val_ret = (val_dst + val_src) * 0.5f;
+			break;
+		case CDT_MIX_ADD:
+			val_ret = val_dst + val_src;
+			break;
+		case CDT_MIX_SUB:
+			val_ret = val_dst - val_src;
+			break;
+		case CDT_MIX_MUL:
+			val_ret = val_dst * val_src;
+			break;
+		case CDT_MIX_TRANSFER:
+		default:
+			val_ret = val_src;
+			break;
+	}
+	return interpf(val_ret, val_dst, mix_factor);
+}
+
 static void data_transfer_interp_char(const DataTransferLayerMapping *laymap, void *dest,
                                       void **sources, const float *weights, const int count, const float mix_factor)
 {
@@ -228,42 +263,20 @@ static void data_transfer_interp_char(const DataTransferLayerMapping *laymap, vo
 	char *data_dst = (char *)dest;
 
 	const int mix_mode = laymap->mix_mode;
-	float val_dst = 0.0f;
-	const float val_dst_org = (float)(*data_dst) / 255.0f;
+	float val_src = 0.0f;
+	const float val_dst = (float)(*data_dst) / 255.0f;
 
 	int i;
 
 	for (i = count; i--;) {
-		val_dst += ((float)(*data_src[i]) / 255.0f) * weights[i];
+		val_src += ((float)(*data_src[i]) / 255.0f) * weights[i];
 	}
 
-	if (mix_mode != CDT_MIX_REPLACE_ALL) {
-		if (((mix_mode == CDT_MIX_REPLACE_ABOVE_THRESHOLD && (val_dst_org <= mix_factor)) ||
-		     (mix_mode == CDT_MIX_REPLACE_BELOW_THRESHOLD && (val_dst_org >= mix_factor))))
-		{
-			return;  /* Do not affect destination. */
-		}
-		else {
-			switch (mix_mode) {
-				case CDT_MIX_MIX:
-					/* Nothing to do, mere interp is enough here. */;
-					break;
-				case CDT_MIX_ADD:
-					val_dst = val_dst_org + val_dst;
-					break;
-				case CDT_MIX_SUB:
-					val_dst = val_dst_org - val_dst;
-					break;
-				case CDT_MIX_MUL:
-					val_dst = val_dst_org * val_dst;
-					break;
-			}
-			interpf(val_dst, val_dst_org, mix_factor);
-			CLAMP(val_dst, 0.0f, 1.0f);
-		}
-	}
+	val_src = data_transfer_interp_float_do(mix_mode, val_dst, val_src, mix_factor);
 
-	*data_dst = (char)(val_dst * 255.0f);
+	CLAMP(val_src, 0.0f, 1.0f);
+
+	*data_dst = (char)(val_src * 255.0f);
 }
 
 /* Helpers to match sources and destinations data layers (also handles 'conversions' in CD_FAKE cases). */

@@ -218,7 +218,7 @@ static EnumPropertyItem *dt_mix_mode_itemf(bContext *C, PointerRNA *ptr, Propert
 		return DT_mix_mode_items;
 	}
 
-	RNA_enum_items_add_value(&item, &totitem, DT_mix_mode_items, CDT_MIX_REPLACE_ALL);
+	RNA_enum_items_add_value(&item, &totitem, DT_mix_mode_items, CDT_MIX_TRANSFER);
 
 	BKE_data_transfer_get_dttypes_capacity(dtdata_type, &support_advanced_mixing, &support_threshold);
 
@@ -353,7 +353,7 @@ static bool data_transfer_draw_check_prop(PointerRNA *ptr, PropertyRNA *prop)
 		return false;
 	}
 
-	if (STREQ(prop_id, "mix_factor") && (mix_mode == CDT_MIX_REPLACE_ALL)) {
+	if (STREQ(prop_id, "mix_factor") && (mix_mode == CDT_MIX_TRANSFER)) {
 		return false;
 	}
 
@@ -437,9 +437,9 @@ void OBJECT_OT_data_transfer(wmOperatorType *ot)
 	                    "Destination Layers Matching", "How to match source and destination layers");
 	RNA_def_property_enum_funcs_runtime(prop, NULL, NULL, dt_tolayers_select_itemf);
 
-	prop = RNA_def_enum(ot->srna, "mix_mode", DT_mix_mode_items, CDT_MIX_REPLACE_ALL, "Mix Mode",
+	prop = RNA_def_enum(ot->srna, "mix_mode", DT_mix_mode_items, CDT_MIX_TRANSFER, "Mix Mode",
 	                   "How to affect destination elements with source values");
 	RNA_def_property_enum_funcs_runtime(prop, NULL, NULL, dt_mix_mode_itemf);
-	RNA_def_float(ot->srna, "mix_factor", 0.5f, 0.0f, 1.0f, "Mix Factor",
+	RNA_def_float(ot->srna, "mix_factor", 1.0f, 0.0f, 1.0f, "Mix Factor",
 	              "Factor to use when applying data to destination (exact behavior depends on mix mode)", 0.0f, 1.0f);
 }

@@ -1080,53 +1080,33 @@ static void vgroups_datatransfer_interp(const DataTransferLayerMapping *laymap, 
 
 	MDeformWeight *dw_src;
 	MDeformWeight *dw_dst = defvert_find_index(data_dst, idx_dst);
-	float weight_dst = 0.0f;
+	float weight_src = 0.0f, weight_dst = 0.0f;
 
 	for (i = count; i--;) {
 		for (j = data_src[i]->totweight; j--;) {
 			if ((dw_src = &data_src[i]->dw[j])->def_nr == idx_src) {
-				weight_dst += dw_src->weight * weights[i];
+				weight_src += dw_src->weight * weights[i];
 				break;
 			}
 		}
 	}
 
-	if (mix_mode != CDT_MIX_REPLACE_ALL) {
-		if (!dw_dst && (mix_mode == CDT_MIX_REPLACE_ABOVE_THRESHOLD)) {
-			return;  /* Do not affect destination. */
-		}
-		if (dw_dst &&
-		    ((mix_mode == CDT_MIX_REPLACE_ABOVE_THRESHOLD && (dw_dst->weight <= mix_factor)) ||
-		     (mix_mode == CDT_MIX_REPLACE_BELOW_THRESHOLD && (dw_dst->weight >= mix_factor))))
-		{
-			return;  /* Do not affect destination. */
-		}
-		else {
-			const float weight_dst_org = dw_dst ? dw_dst->weight : 0.0f;
-			switch (mix_mode) {
-				case CDT_MIX_MIX:
-					/* Nothing to do, mere interp is enough here. */;
-					break;
-				case CDT_MIX_ADD:
-					weight_dst = weight_dst_org + weight_dst;
-					break;
-				case CDT_MIX_SUB:
-					weight_dst = weight_dst_org - weight_dst;
-					break;
-				case CDT_MIX_MUL:
-					weight_dst = weight_dst_org * weight_dst;
-					break;
-			}
-			weight_dst = interpf(weight_dst, weight_dst_org, mix_factor);
-			CLAMP(weight_dst, 0.0f, 1.0f);
-		}
+	if (dw_dst) {
+		weight_dst = dw_dst->weight;
+	}
+	else if (mix_mode == CDT_MIX_REPLACE_ABOVE_THRESHOLD) {
+		return;  /* Do not affect destination. */
 	}
 
+	weight_src = data_transfer_interp_float_do(mix_mode, weight_dst, weight_src, mix_factor);
+
+	CLAMP(weight_src, 0.0f, 1.0f);
+
 	if (!dw_dst) {
-		defvert_add_index_notest(data_dst, idx_dst, weight_dst);
+		defvert_add_index_notest(data_dst, idx_dst, weight_src);
 	}
 	else {
-		dw_dst->weight = weight_dst;
+		dw_dst->weight = weight_src;
 	}
 }
 

@@ -192,7 +192,7 @@ EnumPropertyItem DT_method_loop_items[] = {
 /* How to filter out some elements (to leave untouched).
  * Note those options are highly dependent on type of transferred data! */
 EnumPropertyItem DT_mix_mode_items[] = {
-	{CDT_MIX_REPLACE_ALL, "REPLACE", 0, "All", "Overwrite all elements' data"},
+	{CDT_MIX_TRANSFER, "REPLACE", 0, "All", "Overwrite all elements' data"},
 	{CDT_MIX_REPLACE_ABOVE_THRESHOLD, "ABOVE_THRESHOLD", 0, "Above Threshold",
 			"Only replace dest elements where data is above given threshold (exact behavior depends on data type)"},
 	{CDT_MIX_REPLACE_BELOW_THRESHOLD, "BELOW_THRESHOLD", 0, "Below Threshold",
@@ -907,7 +907,7 @@ static EnumPropertyItem *dt_mix_mode_itemf(bContext *C, PointerRNA *ptr, Propert
 		return DT_mix_mode_items;
 	}
 
-	RNA_enum_items_add_value(&item, &totitem, DT_mix_mode_items, CDT_MIX_REPLACE_ALL);
+	RNA_enum_items_add_value(&item, &totitem, DT_mix_mode_items, CDT_MIX_TRANSFER);
 
 	BKE_data_transfer_get_dttypes_capacity(dtmd->data_types, &support_advanced_mixing, &support_threshold);
 
@@ -4190,7 +4190,7 @@ static void rna_def_modifier_datatransfer(BlenderRNA *brna)
 	RNA_def_property_update(prop, 0, "rna_Modifier_update");
 
 	/* Mix stuff */
-	prop = RNA_def_enum(srna, "mix_mode", DT_mix_mode_items, CDT_MIX_REPLACE_ALL, "Mix Mode",
+	prop = RNA_def_enum(srna, "mix_mode", DT_mix_mode_items, CDT_MIX_TRANSFER, "Mix Mode",
 	                   "How to affect destination elements with source values");
 	RNA_def_property_enum_funcs(prop, NULL, NULL, "dt_mix_mode_itemf");
 	RNA_def_property_update(prop, 0, "rna_Modifier_update");
@@ -4199,7 +4199,7 @@ static void rna_def_modifier_datatransfer(BlenderRNA *brna)
 	RNA_def_property_boolean_sdna(prop, NULL, "flags", MOD_DATATRANSFER_USE_CREATE);
 	RNA_def_property_update(prop, 0, "rna_Modifier_update");
 
-	prop = RNA_def_float(srna, "mix_factor", 0.5f, 0.0f, 1.0f, "Mix Factor",
+	prop = RNA_def_float(srna, "mix_factor", 1.0f, 0.0f, 1.0f, "Mix Factor",
 	                     "Factor to use when applying data to destination (exact behavior depends on mix mode)",
 	                     0.0f, 1.0f);
 	RNA_def_property_update(prop, 0, "rna_Modifier_update");

@@ -35,13 +35,16 @@ struct DataTransferLayerMapping;
 struct CustomData;
 struct ListBase;
 
+float data_transfer_interp_float_do(
+        const int mix_mode, const float val_dst, const float val_src, const float mix_factor);
 
 /* Copied from BKE_customdata.h :( */
 typedef void (*cd_datatransfer_interp)(const struct DataTransferLayerMapping *laymap, void *dest,
                                        void **sources, const float *weights, const int count, const float mix_factor);
 
 void data_transfer_layersmapping_add_item(
-        struct ListBase *r_map, const int data_type, const int mix_mode, const float mix_factor, const float *mix_weights,
+        struct ListBase *r_map, const int data_type, const int mix_mode,
+        const float mix_factor, const float *mix_weights,
         void *data_src, void *data_dst, const int data_n_src, const int data_n_dst,
         const size_t elem_size, const size_t data_size, const size_t data_offset, const uint64_t data_flag,
         cd_datatransfer_interp interp);
@@ -49,7 +52,8 @@ void data_transfer_layersmapping_add_item(
 /* Type-specific. */
 
 bool data_transfer_layersmapping_vgroups(
-        struct ListBase *r_map, const int mix_mode, const float mix_factor, const float *mix_weights, const int num_create,
+        struct ListBase *r_map, const int mix_mode, const float mix_factor,
+        const float *mix_weights, const int num_create,
         struct Object *ob_src, struct Object *ob_dst, struct CustomData *cd_src, struct CustomData *cd_dst,
         const bool dup_dst, const int fromlayers, const int tolayers);
 

@@ -72,7 +72,7 @@ static void initData(ModifierData *md)
 		dtmd->tolayers_selmode[i]   = DT_TOLAYERS_NAME;
 	}
 
-	dtmd->mix_mode           = CDT_MIX_REPLACE_ALL;
+	dtmd->mix_mode           = CDT_MIX_TRANSFER;
 	dtmd->mix_factor         = 1.0f;
 	dtmd->defgrp_name[0]     = '\0';
 

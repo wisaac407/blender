@@ -407,9 +407,9 @@ enum {
 
 /* How to filter out some elements (to leave untouched).
  * Note those options are highly dependent on type of transferred data! */
-/* TODO: only MDT_REPLACE is implemented currently! */
 enum {
-	CDT_MIX_REPLACE_ALL             = 0,
+	CDT_MIX_NOMIX                   = -1,  /* Special case, only used because we abuse 'copy' CD callback. */
+	CDT_MIX_TRANSFER             = 0,
 	CDT_MIX_REPLACE_ABOVE_THRESHOLD = 1,
 	CDT_MIX_REPLACE_BELOW_THRESHOLD = 2,
 	CDT_MIX_MIX                     = 16,
