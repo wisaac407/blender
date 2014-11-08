@@ -299,46 +299,6 @@ static void layerInterp_mdeformvert(void **sources, const float *weights,
 	}
 }
 
-#if 0
-static void layerInterp_mdeformvert_single(void **sources, const float *weights, const float *UNUSED(sub_weights),
-                                           int count, void *dest, int def_nr_src, int def_nr_dst)
-{
-	MDeformVert *dvert_dst = dest;
-	MDeformWeight *dw_dst = NULL;
-	float dw_weight = 0.0f;
-
-	if (count <= 0) {
-		return;
-	}
-
-	for (i = 0; i < dvert_dst->totweight; i++) {
-		if (dvert_dst->dw[i].def_nr == def_nr_dst) {
-			dw_dst = &dvert_dst->dw[i];
-		}
-	}
-
-	if (!dw_dst) {
-		return;
-	}
-
-	for (i = 0; i < count; ++i) {
-		MDeformVert *dvert_src = sources[i];
-		const float interp_weight = weights ? weights[i] : 1.0f;
-
-		for (j = 0; j < source->totweight; ++j) {
-			MDeformWeight *dw_src = &dvert_src->dw[j];
-
-			if (dw_src->def_nr == def_nr_src) {
-				dw_weight += dw_src->weight * interp_weight;
-			}
-		}
-	}
-
-	/* delay writing to the destination incase dest is in sources */
-	dw_dst->weight = dw_weight;
-}
-#endif
-
 static void layerCopy_tface(const void *source, void *dest, int count)
 {
 	const MTFace *source_tf = (const MTFace *)source;
