@@ -644,22 +644,29 @@ static void layerCopyValue_mloopcol(const void *source, void *dest, const int mi
 		m2->b = m1->b;
 	}
 	else {  /* Modes that support 'real' mix factor. */
+		unsigned char src[4] = {m1->r, m1->g, m1->b, m1->a};
+		unsigned char dst[4] = {m2->r, m2->g, m2->b, m2->a};
+
 		if (mixmode == CDT_MIX_MIX) {
-			blend_color_mix_byte(tmp_col, (unsigned char *)&m2->r, (unsigned char *)&m1->r);
+			blend_color_mix_byte(tmp_col, dst, src);
 		}
 		else if (mixmode == CDT_MIX_ADD) {
-			blend_color_add_byte(tmp_col, (unsigned char *)&m2->r, (unsigned char *)&m1->r);
+			blend_color_add_byte(tmp_col, dst, src);
 		}
 		else if (mixmode == CDT_MIX_SUB) {
-			blend_color_sub_byte(tmp_col, (unsigned char *)&m2->r, (unsigned char *)&m1->r);
+			blend_color_sub_byte(tmp_col, dst, src);
 		}
 		else if (mixmode == CDT_MIX_MUL) {
-			blend_color_mul_byte(tmp_col, (unsigned char *)&m2->r, (unsigned char *)&m1->r);
+			blend_color_mul_byte(tmp_col, dst, src);
 		}
 		else {
-			memcpy(tmp_col, (unsigned char *)&m1->r, sizeof(tmp_col));
+			memcpy(tmp_col, src, sizeof(tmp_col));
 		}
-		blend_color_interpolate_byte((unsigned char *)&m2->r, tmp_col, (unsigned char *)&m2->r, mixfactor);
+		blend_color_interpolate_byte(dst, dst, tmp_col, mixfactor);
+
+		m2->r = (char)dst[0];
+		m2->g = (char)dst[1];
+		m2->b = (char)dst[2];
 	}
 	m2->a = m1->a;
 }

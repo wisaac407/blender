@@ -352,7 +352,7 @@ static bool data_transfer_layersmapping_cdlayers_multisrc_to_dst(
 					}
 					data_src = CustomData_get_layer_n(cd_src, cddata_type, idx_src);
 					/* If dest is a derivedmesh, we do not want to overwrite cdlayers of org mesh! */
-					data_dst = dup_dst ? CustomData_duplicate_referenced_layer_n(cd_dst, cddata_type, num_create, idx_src) :
+					data_dst = dup_dst ? CustomData_duplicate_referenced_layer_n(cd_dst, cddata_type, idx_src, num_create) :
 					                     CustomData_get_layer_n(cd_dst, cddata_type, idx_src);
 					data_transfer_layersmapping_add_item_cd(r_map, cddata_type, mix_mode, mix_factor, mix_weights, data_src, data_dst);
 				}
@@ -367,6 +367,8 @@ static bool data_transfer_layersmapping_cdlayers_multisrc_to_dst(
 				}
 
 				name = CustomData_get_layer_name(cd_src, cddata_type, idx_src);
+				data_src = CustomData_get_layer_n(cd_src, cddata_type, idx_src);
+
 				if ((idx_dst = CustomData_get_named_layer(cd_dst, cddata_type, name)) == -1) {
 					if (!num_create) {
 						BLI_freelistN(r_map);
@@ -375,9 +377,8 @@ static bool data_transfer_layersmapping_cdlayers_multisrc_to_dst(
 					CustomData_add_layer_named(cd_dst, cddata_type, CD_CALLOC, NULL, num_create, name);
 					idx_dst = CustomData_get_named_layer(cd_dst, cddata_type, name);
 				}
-				data_src = CustomData_get_layer_n(cd_src, cddata_type, idx_src);
 				/* If dest is a derivedmesh, we do not want to overwrite cdlayers of org mesh! */
-				data_dst = dup_dst ? CustomData_duplicate_referenced_layer_n(cd_dst, cddata_type, num_create, idx_dst) :
+				data_dst = dup_dst ? CustomData_duplicate_referenced_layer_n(cd_dst, cddata_type, idx_dst, num_create) :
 				                     CustomData_get_layer_n(cd_dst, cddata_type, idx_dst);
 				data_transfer_layersmapping_add_item_cd(r_map, cddata_type, mix_mode, mix_factor, mix_weights, data_src, data_dst);
 			}
@@ -441,7 +442,7 @@ static bool data_transfer_layersmapping_cdlayers(
 			else {
 				/* If dest is a derivedmesh, we do not want to overwrite cdlayers of org mesh! */
 				if (dup_dst) {
-					data_dst = CustomData_duplicate_referenced_layer_n(cd_dst, cddata_type, num_create, idx_dst);
+					data_dst = CustomData_duplicate_referenced_layer_n(cd_dst, cddata_type, idx_dst, num_create);
 				}
 				else {
 					data_dst = CustomData_get_layer_n(cd_dst, cddata_type, idx_dst);
@@ -462,7 +463,7 @@ static bool data_transfer_layersmapping_cdlayers(
 			}
 			/* If dest is a derivedmesh, we do not want to overwrite cdlayers of org mesh! */
 			if (dup_dst) {
-				data_dst = CustomData_duplicate_referenced_layer_n(cd_dst, cddata_type, num_create, idx_dst);
+				data_dst = CustomData_duplicate_referenced_layer_n(cd_dst, cddata_type, idx_dst, num_create);
 			}
 			else {
 				data_dst = CustomData_get_layer_n(cd_dst, cddata_type, idx_dst);
@@ -479,7 +480,7 @@ static bool data_transfer_layersmapping_cdlayers(
 			}
 			/* If dest is a derivedmesh, we do not want to overwrite cdlayers of org mesh! */
 			if (dup_dst) {
-				data_dst = CustomData_duplicate_referenced_layer_n(cd_dst, cddata_type, num_create, idx_dst);
+				data_dst = CustomData_duplicate_referenced_layer_n(cd_dst, cddata_type, idx_dst, num_create);
 			}
 			else {
 				data_dst = CustomData_get_layer_n(cd_dst, cddata_type, idx_dst);
