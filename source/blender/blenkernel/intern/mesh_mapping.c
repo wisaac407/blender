@@ -199,7 +199,7 @@ static void bke_mesh_vert_poly_loop_map_create(MeshElemMap **r_map, int **r_mem,
 		for (j = 0; j < p->totloop; j++) {
 			unsigned int v = mloop[p->loopstart + j].v;
 
-			map[v].indices[map[v].count] = do_loops ? j + p->totloop : i;
+			map[v].indices[map[v].count] = do_loops ? p->loopstart + j : i;
 			map[v].count++;
 		}
 	}
