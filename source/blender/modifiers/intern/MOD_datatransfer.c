@@ -147,7 +147,7 @@ static DerivedMesh *applyModifier(ModifierData *md, Object *ob, DerivedMesh *der
 	}
 
 	BKE_data_transfer_dm(md->scene, dtmd->ob_source, ob, dm, dtmd->data_types, use_create,
-	                     dtmd->vmap_mode, dtmd->emap_mode, dtmd->pmap_mode, dtmd->lmap_mode,
+	                     dtmd->vmap_mode, dtmd->emap_mode, dtmd->lmap_mode, dtmd->pmap_mode,
 	                     space_transform, max_dist, dtmd->map_ray_radius,
 	                     dtmd->fromlayers_selmode, dtmd->tolayers_selmode,
 	                     dtmd->mix_mode, dtmd->mix_factor, dtmd->defgrp_name, invert_vgroup);

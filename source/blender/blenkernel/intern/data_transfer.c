@@ -580,7 +580,7 @@ static bool data_transfer_layersmapping_generate(
 			return false;
 		}
 	}
-	if (elem_type == ME_EDGE) {
+	else if (elem_type == ME_EDGE) {
 		if (!(cddata_type & CD_FAKE)) {  /* Unused for edges, currently... */
 			cd_src = dm_src->getEdgeDataLayout(dm_src);
 			cd_dst = dm_dst ? dm_dst->getEdgeDataLayout(dm_dst) : &me_dst->edata;
@@ -663,7 +663,33 @@ static bool data_transfer_layersmapping_generate(
 			return false;
 		}
 	}
-	if (elem_type == ME_POLY) {
+	else if (elem_type == ME_LOOP) {
+		if (cddata_type == CD_FAKE_UV) {
+			cddata_type = CD_MLOOPUV;
+		}
+
+		if (!(cddata_type & CD_FAKE)) {
+			cd_src = dm_src->getLoopDataLayout(dm_src);
+			cd_dst = dm_dst ? dm_dst->getLoopDataLayout(dm_dst) : &me_dst->ldata;
+
+			if (!CustomData_has_layer(cd_src, cddata_type)) {
+				return false;
+			}
+
+			if (!data_transfer_layersmapping_cdlayers(r_map, cddata_type, mix_mode, mix_factor, mix_weights,
+			                                          num_create, cd_src, cd_dst, dm_dst != NULL,
+			                                          fromlayers, tolayers))
+			{
+				/* We handle specific source selection cases here. */
+				return false;
+			}
+			return true;
+		}
+		else {
+			return false;
+		}
+	}
+	else if (elem_type == ME_POLY) {
 		if (cddata_type == CD_FAKE_UV) {
 			cddata_type = CD_MTEXPOLY;
 		}
@@ -702,39 +728,13 @@ static bool data_transfer_layersmapping_generate(
 			return false;
 		}
 	}
-	if (elem_type == ME_LOOP) {
-		if (cddata_type == CD_FAKE_UV) {
-			cddata_type = CD_MLOOPUV;
-		}
-
-		if (!(cddata_type & CD_FAKE)) {
-			cd_src = dm_src->getLoopDataLayout(dm_src);
-			cd_dst = dm_dst ? dm_dst->getLoopDataLayout(dm_dst) : &me_dst->ldata;
-
-			if (!CustomData_has_layer(cd_src, cddata_type)) {
-				return false;
-			}
-
-			if (!data_transfer_layersmapping_cdlayers(r_map, cddata_type, mix_mode, mix_factor, mix_weights,
-			                                          num_create, cd_src, cd_dst, dm_dst != NULL,
-			                                          fromlayers, tolayers))
-			{
-				/* We handle specific source selection cases here. */
-				return false;
-			}
-			return true;
-		}
-		else {
-			return false;
-		}
-	}
 
 	return false;
 }
 
 bool BKE_data_transfer_dm(
         Scene *scene, Object *ob_src, Object *ob_dst, DerivedMesh *dm_dst, const int data_types, const bool use_create,
-        const int map_vert_mode, const int map_edge_mode, const int map_poly_mode, const int map_loop_mode,
+        const int map_vert_mode, const int map_edge_mode, const int map_loop_mode, const int map_poly_mode,
         SpaceTransform *space_transform, const float max_distance, const float ray_radius,
         const int fromlayers_select[DT_MULTILAYER_IDX_MAX], const int tolayers_select[DT_MULTILAYER_IDX_MAX],
         const int mix_mode, const float mix_factor, const char *vgroup_name, const bool invert_vgroup)
@@ -868,44 +868,6 @@ bool BKE_data_transfer_dm(
 				BLI_freelistN(&lay_map);
 			}
 		}
-		if (DT_DATATYPE_IS_POLY(dtdata_type)) {
-			MVert *verts_dst = dm_dst ? dm_dst->getVertArray(dm_dst) : me_dst->mvert;
-			const int num_verts_dst = dm_dst ? dm_dst->getNumVerts(dm_dst) : me_dst->totvert;
-			MPoly *polys_dst = dm_dst ? dm_dst->getPolyArray(dm_dst) : me_dst->mpoly;
-			const int num_polys_dst = dm_dst ? dm_dst->getNumPolys(dm_dst) : me_dst->totpoly;
-			MLoop *loops_dst = dm_dst ? dm_dst->getLoopArray(dm_dst) : me_dst->mloop;
-			const int num_loops_dst = dm_dst ? dm_dst->getNumLoops(dm_dst) : me_dst->totloop;
-			CustomData *pdata_dst = dm_dst ? dm_dst->getPolyDataLayout(dm_dst) : &me_dst->pdata;
-			const int num_create = use_create ? num_polys_dst : 0;
-
-			if (!geom_map_init[PDATA]) {
-				BKE_dm2mesh_mapping_polys_compute(map_poly_mode, space_transform, max_distance, ray_radius,
-				                                  verts_dst, num_verts_dst, polys_dst, num_polys_dst,
-				                                  loops_dst, num_loops_dst, pdata_dst, dm_src, &geom_map[PDATA]);
-				geom_map_init[PDATA] = true;
-			}
-
-			if (mdef && vg_idx != -1 && !weights[PDATA]) {
-				weights[PDATA] = MEM_mallocN(sizeof(*weights[PDATA]) * (size_t)num_polys_dst, __func__);
-				BKE_defvert_extract_vgroup_to_polyweights(mdef, vg_idx, num_verts_dst, loops_dst, num_loops_dst,
-				                                          polys_dst, num_polys_dst, weights[PDATA], invert_vgroup);
-			}
-
-			if (data_transfer_layersmapping_generate(&lay_map, ob_src, ob_dst, dm_src, dm_dst, me_dst, ME_POLY,
-			                                         cddata_type, mix_mode, mix_factor, weights[PDATA],
-			                                         num_create, fromlayers, tolayers))
-			{
-				DataTransferLayerMapping *lay_mapit;
-
-				changed = (lay_map.first != NULL);
-
-				for (lay_mapit = lay_map.first; lay_mapit; lay_mapit = lay_mapit->next) {
-					CustomData_data_transfer(&geom_map[PDATA], lay_mapit);
-				}
-
-				BLI_freelistN(&lay_map);
-			}
-		}
 		if (DT_DATATYPE_IS_LOOP(dtdata_type)) {
 			MVert *verts_dst = dm_dst ? dm_dst->getVertArray(dm_dst) : me_dst->mvert;
 			const int num_verts_dst = dm_dst ? dm_dst->getNumVerts(dm_dst) : me_dst->totvert;
@@ -924,7 +886,8 @@ bool BKE_data_transfer_dm(
 			if (!geom_map_init[LDATA]) {
 				BKE_dm2mesh_mapping_loops_compute(map_loop_mode, space_transform, max_distance, ray_radius,
 				                                  verts_dst, num_verts_dst, edges_dst, num_edges_dst,
-				                                  polys_dst, num_polys_dst, loops_dst, num_loops_dst, pdata_dst, ldata_dst,
+				                                  loops_dst, num_loops_dst, polys_dst, num_polys_dst,
+				                                  ldata_dst, pdata_dst,
 				                                  me_dst->smoothresh, dm_src, island_callback, &geom_map[LDATA]);
 				geom_map_init[LDATA] = true;
 			}
@@ -950,6 +913,44 @@ bool BKE_data_transfer_dm(
 				BLI_freelistN(&lay_map);
 			}
 		}
+		if (DT_DATATYPE_IS_POLY(dtdata_type)) {
+			MVert *verts_dst = dm_dst ? dm_dst->getVertArray(dm_dst) : me_dst->mvert;
+			const int num_verts_dst = dm_dst ? dm_dst->getNumVerts(dm_dst) : me_dst->totvert;
+			MPoly *polys_dst = dm_dst ? dm_dst->getPolyArray(dm_dst) : me_dst->mpoly;
+			const int num_polys_dst = dm_dst ? dm_dst->getNumPolys(dm_dst) : me_dst->totpoly;
+			MLoop *loops_dst = dm_dst ? dm_dst->getLoopArray(dm_dst) : me_dst->mloop;
+			const int num_loops_dst = dm_dst ? dm_dst->getNumLoops(dm_dst) : me_dst->totloop;
+			CustomData *pdata_dst = dm_dst ? dm_dst->getPolyDataLayout(dm_dst) : &me_dst->pdata;
+			const int num_create = use_create ? num_polys_dst : 0;
+
+			if (!geom_map_init[PDATA]) {
+				BKE_dm2mesh_mapping_polys_compute(map_poly_mode, space_transform, max_distance, ray_radius,
+				                                  verts_dst, num_verts_dst, loops_dst, num_loops_dst,
+				                                  polys_dst, num_polys_dst, pdata_dst, dm_src, &geom_map[PDATA]);
+				geom_map_init[PDATA] = true;
+			}
+
+			if (mdef && vg_idx != -1 && !weights[PDATA]) {
+				weights[PDATA] = MEM_mallocN(sizeof(*weights[PDATA]) * (size_t)num_polys_dst, __func__);
+				BKE_defvert_extract_vgroup_to_polyweights(mdef, vg_idx, num_verts_dst, loops_dst, num_loops_dst,
+				                                          polys_dst, num_polys_dst, weights[PDATA], invert_vgroup);
+			}
+
+			if (data_transfer_layersmapping_generate(&lay_map, ob_src, ob_dst, dm_src, dm_dst, me_dst, ME_POLY,
+			                                         cddata_type, mix_mode, mix_factor, weights[PDATA],
+			                                         num_create, fromlayers, tolayers))
+			{
+				DataTransferLayerMapping *lay_mapit;
+
+				changed = (lay_map.first != NULL);
+
+				for (lay_mapit = lay_map.first; lay_mapit; lay_mapit = lay_mapit->next) {
+					CustomData_data_transfer(&geom_map[PDATA], lay_mapit);
+				}
+
+				BLI_freelistN(&lay_map);
+			}
+		}
 	}
 
 	for (i = 0; i < DATAMAX; i++) {
@@ -968,13 +969,13 @@ bool BKE_data_transfer_dm(
 
 bool BKE_data_transfer_mesh(
         Scene *scene, Object *ob_src, Object *ob_dst, const int data_types, const bool use_create,
-        const int map_vert_mode, const int map_edge_mode, const int map_poly_mode, const int map_loop_mode,
+        const int map_vert_mode, const int map_edge_mode, const int map_loop_mode, const int map_poly_mode,
         SpaceTransform *space_transform, const float max_distance, const float ray_radius,
         const int fromlayers_select[DT_MULTILAYER_IDX_MAX], const int tolayers_select[DT_MULTILAYER_IDX_MAX],
         const int mix_mode, const float mix_factor, const char *vgroup_name, const bool invert_vgroup)
 {
 	return BKE_data_transfer_dm(scene, ob_src, ob_dst, NULL, data_types, use_create,
-	                            map_vert_mode, map_edge_mode, map_poly_mode, map_loop_mode, space_transform,
+	                            map_vert_mode, map_edge_mode, map_loop_mode, map_poly_mode, space_transform,
 	                            max_distance, ray_radius, fromlayers_select, tolayers_select,
 	                            mix_mode, mix_factor, vgroup_name, invert_vgroup);
 }

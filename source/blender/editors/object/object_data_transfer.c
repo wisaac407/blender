@@ -77,12 +77,12 @@ static EnumPropertyItem DT_layer_items[] = {
 	{DT_DATA_CREASE, "CREASE", 0, "Subsurf Crease", "Transfer crease values"},
 	{DT_DATA_BWEIGHT_EDGE, "BEVEL_WEIGHT_EDGE", 0, "Bevel Weight", "Transfer bevel weights"},
 	{DT_DATA_FREESTYLE_EDGE, "FREESTYLE_EDGE", 0, "Freestyle Flag", "Transfer Freestyle edge flag"},
+	{0, "", 0, "Face Corner Data", ""},
+	{DT_DATA_VCOL, "VCOL", 0, "VCol", "Vertex (face corners) colors"},
 	{0, "", 0, "Face Data", ""},
 	{DT_DATA_UV, "UV", 0, "UVs", "Transfer UV layers"},
 	{DT_DATA_SHARP_FACE, "SMOOTH", 0, "Smooth", "Transfer flat/smooth flag"},
 	{DT_DATA_FREESTYLE_FACE, "FREESTYLE_FACE", 0, "Freestyle Flag", "Transfer Freestyle face flag"},
-	{0, "", 0, "Face Corner Data", ""},
-	{DT_DATA_VCOL, "VCOL", 0, "VCol", "Vertex (face corners) colors"},
 	{0, NULL, 0, NULL, NULL}
 };
 
@@ -269,8 +269,8 @@ static int data_transfer_exec(bContext *C, wmOperator *op)
 
 	const int map_vert_mode = RNA_enum_get(op->ptr, "vert_mapping");
 	const int map_edge_mode = RNA_enum_get(op->ptr, "edge_mapping");
-	const int map_poly_mode = RNA_enum_get(op->ptr, "poly_mapping");
 	const int map_loop_mode = RNA_enum_get(op->ptr, "loop_mapping");
+	const int map_poly_mode = RNA_enum_get(op->ptr, "poly_mapping");
 
 	const bool use_object_transform = RNA_boolean_get(op->ptr, "use_object_transform");
 	const bool use_max_distance = RNA_boolean_get(op->ptr, "use_max_distance");
@@ -305,7 +305,7 @@ static int data_transfer_exec(bContext *C, wmOperator *op)
 		}
 
 		if (BKE_data_transfer_mesh(scene, ob_src, ob_dst, data_type, use_create,
-		                           map_vert_mode, map_edge_mode, map_poly_mode, map_loop_mode,
+		                           map_vert_mode, map_edge_mode, map_loop_mode, map_poly_mode, 
 		                           space_transform, max_distance, ray_radius, fromlayers_select, tolayers_select,
 		                           mix_mode, mix_factor, NULL, false))
 		{
@@ -346,10 +346,10 @@ static bool data_transfer_draw_check_prop(PointerRNA *ptr, PropertyRNA *prop)
 	if (STREQ(prop_id, "edge_mapping") && !DT_DATATYPE_IS_EDGE(data_type)) {
 		return false;
 	}
-	if (STREQ(prop_id, "poly_mapping") && !DT_DATATYPE_IS_POLY(data_type)) {
+	if (STREQ(prop_id, "loop_mapping") && !DT_DATATYPE_IS_LOOP(data_type)) {
 		return false;
 	}
-	if (STREQ(prop_id, "loop_mapping") && !DT_DATATYPE_IS_LOOP(data_type)) {
+	if (STREQ(prop_id, "poly_mapping") && !DT_DATATYPE_IS_POLY(data_type)) {
 		return false;
 	}
 
@@ -409,10 +409,10 @@ void OBJECT_OT_data_transfer(wmOperatorType *ot)
 	             "Method used to map source vertices to destination ones");
 	RNA_def_enum(ot->srna, "edge_mapping", DT_method_edge_items, M2MMAP_MODE_TOPOLOGY, "Edge Mapping",
 	             "Method used to map source edges to destination ones");
-	RNA_def_enum(ot->srna, "poly_mapping", DT_method_poly_items, M2MMAP_MODE_TOPOLOGY, "Face Mapping",
-	             "Method used to map source faces to destination ones");
 	RNA_def_enum(ot->srna, "loop_mapping", DT_method_loop_items, M2MMAP_MODE_TOPOLOGY, "Face Corner Mapping",
 	             "Method used to map source faces' corners to destination ones");
+	RNA_def_enum(ot->srna, "poly_mapping", DT_method_poly_items, M2MMAP_MODE_TOPOLOGY, "Face Mapping",
+	             "Method used to map source faces to destination ones");
 
 	/* Mapping options and filtering. */
 	RNA_def_boolean(ot->srna, "use_object_transform", true, "Object Transform",

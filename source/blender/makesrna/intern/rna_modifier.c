@@ -163,17 +163,6 @@ EnumPropertyItem DT_method_edge_items[] = {
 	{0, NULL, 0, NULL, NULL}
 };
 
-EnumPropertyItem DT_method_poly_items[] = {
-	{M2MMAP_MODE_TOPOLOGY, "TOPOLOGY", 0, "Topology", "Copy from identical topology meshes"},
-	{M2MMAP_MODE_POLY_NEAREST, "NEAREST", 0, "Nearest Face",
-			"Copy from nearest polygon (using center points)"},
-	{M2MMAP_MODE_POLY_NOR, "NORMAL", 0, "Best Normal-Matching",
-			"Copy from source polygon which normal is the closest to dest one"},
-	{M2MMAP_MODE_POLY_POLYINTERP_PNORPROJ, "POLYINTERP_PNORPROJ", 0, "Projected Face Interpolated",
-			"Interpolate all source polygons intersected by the projection of dest one along its own normal"},
-	{0, NULL, 0, NULL, NULL}
-};
-
 EnumPropertyItem DT_method_loop_items[] = {
 	{M2MMAP_MODE_TOPOLOGY, "TOPOLOGY", 0, "Topology", "Copy from identical topology meshes"},
 	{M2MMAP_MODE_LOOP_NEAREST_LOOPNOR, "NEAREST_NORMAL", 0, "Nearest Corner And Best Matching Normal",
@@ -186,6 +175,17 @@ EnumPropertyItem DT_method_loop_items[] = {
 			"Copy from interpolated corners of the nearest source polygon"},
 	{M2MMAP_MODE_LOOP_POLYINTERP_LNORPROJ, "POLYINTERP_LNORPROJ", 0, "Projected Face Interpolated",
 			"Copy from interpolated corners of the source polygon hit by corner normal projection"},
+	{0, NULL, 0, NULL, NULL}
+};
+
+EnumPropertyItem DT_method_poly_items[] = {
+	{M2MMAP_MODE_TOPOLOGY, "TOPOLOGY", 0, "Topology", "Copy from identical topology meshes"},
+	{M2MMAP_MODE_POLY_NEAREST, "NEAREST", 0, "Nearest Face",
+			"Copy from nearest polygon (using center points)"},
+	{M2MMAP_MODE_POLY_NOR, "NORMAL", 0, "Best Normal-Matching",
+			"Copy from source polygon which normal is the closest to dest one"},
+	{M2MMAP_MODE_POLY_POLYINTERP_PNORPROJ, "POLYINTERP_PNORPROJ", 0, "Projected Face Interpolated",
+			"Interpolate all source polygons intersected by the projection of dest one along its own normal"},
 	{0, NULL, 0, NULL, NULL}
 };
 
@@ -4151,15 +4151,15 @@ static void rna_def_modifier_datatransfer(BlenderRNA *brna)
 	RNA_def_property_update(prop, 0, "rna_Modifier_update");
 #endif
 
-	prop = RNA_def_enum(srna, "fromlayers_uv_select", DT_fromlayers_select_items, DT_FROMLAYERS_ALL,
-	                    "Source Layers Selection", "Which layers to transfer, in case of multi-layers types");
-	RNA_def_property_enum_sdna(prop, NULL, "fromlayers_selmode[DT_MULTILAYER_IDX_UV]");
-	RNA_def_property_enum_funcs(prop, NULL, NULL, "dt_fromlayers_select_itemf");
-	RNA_def_property_update(prop, 0, "rna_Modifier_update");
-
 	prop = RNA_def_enum(srna, "fromlayers_vcol_select", DT_fromlayers_select_items, DT_FROMLAYERS_ALL,
 	                    "Source Layers Selection", "Which layers to transfer, in case of multi-layers types");
 	RNA_def_property_enum_sdna(prop, NULL, "fromlayers_selmode[DT_MULTILAYER_IDX_VCOL]");
+	RNA_def_property_enum_funcs(prop, NULL, NULL, "dt_fromlayers_select_itemf");
+	RNA_def_property_update(prop, 0, "rna_Modifier_update");
+
+	prop = RNA_def_enum(srna, "fromlayers_uv_select", DT_fromlayers_select_items, DT_FROMLAYERS_ALL,
+	                    "Source Layers Selection", "Which layers to transfer, in case of multi-layers types");
+	RNA_def_property_enum_sdna(prop, NULL, "fromlayers_selmode[DT_MULTILAYER_IDX_UV]");
 	RNA_def_property_enum_funcs(prop, NULL, NULL, "dt_fromlayers_select_itemf");
 	RNA_def_property_update(prop, 0, "rna_Modifier_update");
 
@@ -4177,15 +4177,15 @@ static void rna_def_modifier_datatransfer(BlenderRNA *brna)
 	RNA_def_property_update(prop, 0, "rna_Modifier_update");
 #endif
 
-	prop = RNA_def_enum(srna, "tolayers_uv_select", DT_tolayers_select_items, DT_TOLAYERS_NAME,
-	                    "Destination Layers Matching", "How to match source and destination layers");
-	RNA_def_property_enum_sdna(prop, NULL, "tolayers_selmode[DT_MULTILAYER_IDX_UV]");
-	RNA_def_property_enum_funcs(prop, NULL, NULL, "dt_tolayers_select_itemf");
-	RNA_def_property_update(prop, 0, "rna_Modifier_update");
-
 	prop = RNA_def_enum(srna, "tolayers_vcol_select", DT_tolayers_select_items, DT_TOLAYERS_NAME,
 	                    "Destination Layers Matching", "How to match source and destination layers");
 	RNA_def_property_enum_sdna(prop, NULL, "tolayers_selmode[DT_MULTILAYER_IDX_VCOL]");
+	RNA_def_property_enum_funcs(prop, NULL, NULL, "dt_tolayers_select_itemf");
+	RNA_def_property_update(prop, 0, "rna_Modifier_update");
+
+	prop = RNA_def_enum(srna, "tolayers_uv_select", DT_tolayers_select_items, DT_TOLAYERS_NAME,
+	                    "Destination Layers Matching", "How to match source and destination layers");
+	RNA_def_property_enum_sdna(prop, NULL, "tolayers_selmode[DT_MULTILAYER_IDX_UV]");
 	RNA_def_property_enum_funcs(prop, NULL, NULL, "dt_tolayers_select_itemf");
 	RNA_def_property_update(prop, 0, "rna_Modifier_update");
 
