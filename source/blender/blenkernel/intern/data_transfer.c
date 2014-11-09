@@ -738,16 +738,22 @@ bool BKE_data_transfer_dm(
         const int fromlayers_select[DT_MULTILAYER_IDX_MAX], const int tolayers_select[DT_MULTILAYER_IDX_MAX],
         const int mix_mode, const float mix_factor, const char *vgroup_name, const bool invert_vgroup)
 {
+#define VDATA 0
+#define EDATA 1
+#define LDATA 2
+#define PDATA 3
+#define DATAMAX 4
+
 	DerivedMesh *dm_src;
 	Mesh *me_dst;
 	int i;
 
 	MDeformVert *mdef = NULL;
 	int vg_idx = -1;
-	float *weights[4] = {NULL};
+	float *weights[DATAMAX] = {NULL};
 
-	Mesh2MeshMapping geom_map[4] = {{0}};
-	bool geom_map_init[4] = {0};
+	Mesh2MeshMapping geom_map[DATAMAX] = {{0}};
+	bool geom_map_init[DATAMAX] = {0};
 	ListBase lay_map = {0};
 	bool changed = false;
 
@@ -800,19 +806,19 @@ bool BKE_data_transfer_dm(
 			const int num_verts_dst = dm_dst ? dm_dst->getNumVerts(dm_dst) : me_dst->totvert;
 			const int num_create = use_create ? num_verts_dst : 0;
 
-			if (!geom_map_init[0]) {
+			if (!geom_map_init[VDATA]) {
 				BKE_dm2mesh_mapping_verts_compute(map_vert_mode, space_transform, max_distance, ray_radius,
-				                                  verts_dst, num_verts_dst, dm_src, &geom_map[0]);
-				geom_map_init[0] = true;
+				                                  verts_dst, num_verts_dst, dm_src, &geom_map[VDATA]);
+				geom_map_init[VDATA] = true;
 			}
 
-			if (mdef && vg_idx != -1 && !weights[0]) {
-				weights[0] = MEM_mallocN(sizeof(*(weights[0])) * (size_t)num_verts_dst, __func__);
-				BKE_defvert_extract_vgroup_to_vertweights(mdef, vg_idx, num_verts_dst, weights[0], invert_vgroup);
+			if (mdef && vg_idx != -1 && !weights[VDATA]) {
+				weights[VDATA] = MEM_mallocN(sizeof(*(weights[VDATA])) * (size_t)num_verts_dst, __func__);
+				BKE_defvert_extract_vgroup_to_vertweights(mdef, vg_idx, num_verts_dst, weights[VDATA], invert_vgroup);
 			}
 
 			if (data_transfer_layersmapping_generate(&lay_map, ob_src, ob_dst, dm_src, dm_dst, me_dst, ME_VERT,
-			                                         cddata_type, mix_mode, mix_factor, weights[0],
+			                                         cddata_type, mix_mode, mix_factor, weights[VDATA],
 			                                         num_create, fromlayers, tolayers))
 			{
 				DataTransferLayerMapping *lay_mapit;
@@ -820,7 +826,7 @@ bool BKE_data_transfer_dm(
 				changed = (lay_map.first != NULL);
 
 				for (lay_mapit = lay_map.first; lay_mapit; lay_mapit = lay_mapit->next) {
-					CustomData_data_transfer(&geom_map[0], lay_mapit);
+					CustomData_data_transfer(&geom_map[VDATA], lay_mapit);
 				}
 
 				BLI_freelistN(&lay_map);
@@ -833,21 +839,21 @@ bool BKE_data_transfer_dm(
 			const int num_edges_dst = dm_dst ? dm_dst->getNumEdges(dm_dst) : me_dst->totedge;
 			const int num_create = use_create ? num_edges_dst : 0;
 
-			if (!geom_map_init[1]) {
+			if (!geom_map_init[EDATA]) {
 				BKE_dm2mesh_mapping_edges_compute(map_edge_mode, space_transform, max_distance, ray_radius,
 				                                  verts_dst, num_verts_dst, edges_dst, num_edges_dst,
-				                                  dm_src, &geom_map[1]);
-				geom_map_init[1] = true;
+				                                  dm_src, &geom_map[EDATA]);
+				geom_map_init[EDATA] = true;
 			}
 
-			if (mdef && vg_idx != -1 && !weights[1]) {
-				weights[1] = MEM_mallocN(sizeof(*weights[1]) * (size_t)num_edges_dst, __func__);
+			if (mdef && vg_idx != -1 && !weights[EDATA]) {
+				weights[EDATA] = MEM_mallocN(sizeof(*weights[EDATA]) * (size_t)num_edges_dst, __func__);
 				BKE_defvert_extract_vgroup_to_edgeweights(mdef, vg_idx, num_verts_dst, edges_dst, num_edges_dst,
-				                                          weights[1], invert_vgroup);
+				                                          weights[EDATA], invert_vgroup);
 			}
 
 			if (data_transfer_layersmapping_generate(&lay_map, ob_src, ob_dst, dm_src, dm_dst, me_dst, ME_EDGE,
-			                                         cddata_type, mix_mode, mix_factor, weights[1],
+			                                         cddata_type, mix_mode, mix_factor, weights[EDATA],
 			                                         num_create, fromlayers, tolayers))
 			{
 				DataTransferLayerMapping *lay_mapit;
@@ -855,7 +861,7 @@ bool BKE_data_transfer_dm(
 				changed = (lay_map.first != NULL);
 
 				for (lay_mapit = lay_map.first; lay_mapit; lay_mapit = lay_mapit->next) {
-					CustomData_data_transfer(&geom_map[1], lay_mapit);
+					CustomData_data_transfer(&geom_map[EDATA], lay_mapit);
 				}
 
 				BLI_freelistN(&lay_map);
@@ -871,21 +877,21 @@ bool BKE_data_transfer_dm(
 			CustomData *pdata_dst = dm_dst ? dm_dst->getPolyDataLayout(dm_dst) : &me_dst->pdata;
 			const int num_create = use_create ? num_polys_dst : 0;
 
-			if (!geom_map_init[2]) {
+			if (!geom_map_init[PDATA]) {
 				BKE_dm2mesh_mapping_polys_compute(map_poly_mode, space_transform, max_distance, ray_radius,
 				                                  verts_dst, num_verts_dst, polys_dst, num_polys_dst,
-				                                  loops_dst, num_loops_dst, pdata_dst, dm_src, &geom_map[2]);
-				geom_map_init[2] = true;
+				                                  loops_dst, num_loops_dst, pdata_dst, dm_src, &geom_map[PDATA]);
+				geom_map_init[PDATA] = true;
 			}
 
-			if (mdef && vg_idx != -1 && !weights[2]) {
-				weights[2] = MEM_mallocN(sizeof(*weights[2]) * (size_t)num_polys_dst, __func__);
+			if (mdef && vg_idx != -1 && !weights[PDATA]) {
+				weights[PDATA] = MEM_mallocN(sizeof(*weights[PDATA]) * (size_t)num_polys_dst, __func__);
 				BKE_defvert_extract_vgroup_to_polyweights(mdef, vg_idx, num_verts_dst, loops_dst, num_loops_dst,
-				                                          polys_dst, num_polys_dst, weights[2], invert_vgroup);
+				                                          polys_dst, num_polys_dst, weights[PDATA], invert_vgroup);
 			}
 
 			if (data_transfer_layersmapping_generate(&lay_map, ob_src, ob_dst, dm_src, dm_dst, me_dst, ME_POLY,
-			                                         cddata_type, mix_mode, mix_factor, weights[2],
+			                                         cddata_type, mix_mode, mix_factor, weights[PDATA],
 			                                         num_create, fromlayers, tolayers))
 			{
 				DataTransferLayerMapping *lay_mapit;
@@ -893,7 +899,7 @@ bool BKE_data_transfer_dm(
 				changed = (lay_map.first != NULL);
 
 				for (lay_mapit = lay_map.first; lay_mapit; lay_mapit = lay_mapit->next) {
-					CustomData_data_transfer(&geom_map[2], lay_mapit);
+					CustomData_data_transfer(&geom_map[PDATA], lay_mapit);
 				}
 
 				BLI_freelistN(&lay_map);
@@ -914,22 +920,22 @@ bool BKE_data_transfer_dm(
 
 			loop_island_compute island_callback = data_transfer_get_loop_islands_generator(cddata_type);
 
-			if (!geom_map_init[3]) {
+			if (!geom_map_init[LDATA]) {
 				BKE_dm2mesh_mapping_loops_compute(map_loop_mode, space_transform, max_distance, ray_radius,
 				                                  verts_dst, num_verts_dst, edges_dst, num_edges_dst,
 				                                  polys_dst, num_polys_dst, loops_dst, num_loops_dst, pdata_dst, ldata_dst,
-				                                  me_dst->smoothresh, dm_src, island_callback, &geom_map[3]);
-				geom_map_init[3] = true;
+				                                  me_dst->smoothresh, dm_src, island_callback, &geom_map[LDATA]);
+				geom_map_init[LDATA] = true;
 			}
 
-			if (mdef && vg_idx != -1 && !weights[3]) {
-				weights[3] = MEM_mallocN(sizeof(*weights[3]) * (size_t)num_loops_dst, __func__);
+			if (mdef && vg_idx != -1 && !weights[LDATA]) {
+				weights[LDATA] = MEM_mallocN(sizeof(*weights[LDATA]) * (size_t)num_loops_dst, __func__);
 				BKE_defvert_extract_vgroup_to_loopweights(mdef, vg_idx, num_verts_dst, loops_dst, num_loops_dst,
-				                                          weights[3], invert_vgroup);
+				                                          weights[LDATA], invert_vgroup);
 			}
 
 			if (data_transfer_layersmapping_generate(&lay_map, ob_src, ob_dst, dm_src, dm_dst, me_dst, ME_LOOP,
-			                                         cddata_type, mix_mode, mix_factor, weights[3],
+			                                         cddata_type, mix_mode, mix_factor, weights[LDATA],
 			                                         num_create, fromlayers, tolayers))
 			{
 				DataTransferLayerMapping *lay_mapit;
@@ -937,7 +943,7 @@ bool BKE_data_transfer_dm(
 				changed = (lay_map.first != NULL);
 
 				for (lay_mapit = lay_map.first; lay_mapit; lay_mapit = lay_mapit->next) {
-					CustomData_data_transfer(&geom_map[3], lay_mapit);
+					CustomData_data_transfer(&geom_map[LDATA], lay_mapit);
 				}
 
 				BLI_freelistN(&lay_map);
@@ -945,12 +951,18 @@ bool BKE_data_transfer_dm(
 		}
 	}
 
-	for (i = 0; i < 4; i++) {
+	for (i = 0; i < DATAMAX; i++) {
 		BKE_mesh2mesh_mapping_free(&geom_map[i]);
 		MEM_SAFE_FREE(weights[i]);
 	}
 
 	return changed;
+
+#undef VDATA
+#undef EDATA
+#undef LDATA
+#undef PDATA
+#undef DATAMAX
 }
 
 bool BKE_data_transfer_mesh(
