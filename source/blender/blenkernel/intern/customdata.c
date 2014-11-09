@@ -809,7 +809,7 @@ static void layerCopyValue_mloopuv(const void *source, void *dest, const int mix
 		copy_v2_v2(luv2->uv, luv1->uv);
 	}
 	else {
-		interp_v2_v2v2(luv2->uv, luv1->uv, luv2->uv, mixfactor);
+		interp_v2_v2v2(luv2->uv, luv2->uv, luv1->uv, mixfactor);
 	}
 }
 
