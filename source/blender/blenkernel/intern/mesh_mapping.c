@@ -2000,9 +2000,9 @@ void BKE_dm2mesh_mapping_polys_compute(
 				const float zvec[3] = {0.0f, 0.0f, 1.0f};
 				float pcent_dst[3];
 				float to_pnor_2d_mat[3][3], from_pnor_2d_mat[3][3];
-				float poly_dst_2d_min_x, poly_dst_2d_min_y, poly_dst_2d_max_x, poly_dst_2d_max_y, poly_dst_2d_z;
-				float poly_dst_2d_size_x, poly_dst_2d_size_y;
-				float grid_step_x, grid_step_y;
+				float poly_dst_2d_min[2], poly_dst_2d_max[2], poly_dst_2d_z;
+				float poly_dst_2d_size[2];
+				float grid_step[2];
 
 				float totweights = 0.0f;
 				float hitdist_accum = 0.0f;
@@ -2031,8 +2031,7 @@ void BKE_dm2mesh_mapping_polys_compute(
 				poly_dst_2d_z = pcent_dst[2];
 
 				/* Get (2D) bounding square of our poly. */
-				poly_dst_2d_min_x = poly_dst_2d_min_y = FLT_MAX;
-				poly_dst_2d_max_x = poly_dst_2d_max_y = -FLT_MAX;
+				INIT_MINMAX2(poly_dst_2d_min, poly_dst_2d_max);
 
 				for (j = 0; j < mp->totloop; j++) {
 					MLoop *ml = &loops_dst[j + mp->loopstart];
@@ -2040,24 +2039,18 @@ void BKE_dm2mesh_mapping_polys_compute(
 					if (space_transform) {
 						BLI_space_transform_apply(space_transform, tmp_co);
 					}
-					mul_m3_v3(to_pnor_2d_mat, tmp_co);
-					copy_v2_v2(poly_vcos_2d[j], tmp_co);
-					if (tmp_co[0] > poly_dst_2d_max_x) poly_dst_2d_max_x = tmp_co[0];
-					if (tmp_co[0] < poly_dst_2d_min_x) poly_dst_2d_min_x = tmp_co[0];
-					if (tmp_co[1] > poly_dst_2d_max_y) poly_dst_2d_max_y = tmp_co[1];
-					if (tmp_co[1] < poly_dst_2d_min_y) poly_dst_2d_min_y = tmp_co[1];
+					mul_v2_m3v3(poly_vcos_2d[j], to_pnor_2d_mat, tmp_co);
+					minmax_v2v2_v2(poly_dst_2d_min, poly_dst_2d_max, poly_vcos_2d[j]);
 				}
 
 				/* We adjust our ray-casting grid to ray_radius (the smaller, the more rays are cast),
 				 * with lower/upper bounds. */
-				poly_dst_2d_size_x = poly_dst_2d_max_x - poly_dst_2d_min_x;
-				poly_dst_2d_size_y = poly_dst_2d_max_y - poly_dst_2d_min_y;
+				sub_v2_v2v2(poly_dst_2d_size, poly_dst_2d_max, poly_dst_2d_min);
 
-				grid_size = (int)((max_ff(poly_dst_2d_size_x, poly_dst_2d_size_y) / ray_radius) + 0.5f);
+				grid_size = (int)((max_ff(poly_dst_2d_size[0], poly_dst_2d_size[1]) / ray_radius) + 0.5f);
 				CLAMP(grid_size, 4, 20);  /* min 16 rays/face, max 400. */
 
-				grid_step_x = poly_dst_2d_size_x / (float)grid_size;
-				grid_step_y = poly_dst_2d_size_y / (float)grid_size;
+				mul_v2_v2fl(grid_step, poly_dst_2d_size, 1.0f / (float)grid_size);
 
 				/* And now we can cast all our rays, and see what we get! */
 				for (j = 0; j < grid_size; j++) {
@@ -2065,8 +2058,8 @@ void BKE_dm2mesh_mapping_polys_compute(
 						int n = (ray_radius > 0.0f) ? M2MMAP_RAYCAST_APPROXIMATE_NR : 1;
 						float w = 1.0f;
 
-						tmp_co[0] = poly_dst_2d_min_x + grid_step_x * (float)j;
-						tmp_co[1] = poly_dst_2d_min_y + grid_step_y * (float)k;
+						tmp_co[0] = poly_dst_2d_min[0] + grid_step[0] * (float)j;
+						tmp_co[1] = poly_dst_2d_min[1] + grid_step[1] * (float)k;
 
 						if (!isect_point_poly_v2(tmp_co, (const float (*)[2])poly_vcos_2d,
 						                         (unsigned int)mp->totloop, false))
