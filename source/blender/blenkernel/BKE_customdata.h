@@ -399,17 +399,17 @@ enum {
 };
 
 enum {
-	ME_VERT = 1,
-	ME_EDGE = 2,
-	ME_POLY = 3,
-	ME_LOOP = 4,
+	ME_VERT = 1 << 0,
+	ME_EDGE = 1 << 1,
+	ME_POLY = 1 << 2,
+	ME_LOOP = 1 << 3,
 };
 
 /* How to filter out some elements (to leave untouched).
  * Note those options are highly dependent on type of transferred data! */
 enum {
 	CDT_MIX_NOMIX                   = -1,  /* Special case, only used because we abuse 'copy' CD callback. */
-	CDT_MIX_TRANSFER             = 0,
+	CDT_MIX_TRANSFER                = 0,
 	CDT_MIX_REPLACE_ABOVE_THRESHOLD = 1,
 	CDT_MIX_REPLACE_BELOW_THRESHOLD = 2,
 	CDT_MIX_MIX                     = 16,

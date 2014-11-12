@@ -282,26 +282,27 @@ enum {
 
 void BKE_dm2mesh_mapping_verts_compute(
         const int mode, const struct SpaceTransform *space_transform, const float max_dist, const float ray_radius,
-        const struct MVert *verts_dst, const int numverts_dst,
+        const struct MVert *verts_dst, const int numverts_dst, const bool dirty_nors_dst,
         struct DerivedMesh *dm_src, Mesh2MeshMapping *r_map);
 
 void BKE_dm2mesh_mapping_edges_compute(
         const int mode, const struct SpaceTransform *space_transform, const float max_dist, const float ray_radius,
         const struct MVert *verts_dst, const int numverts_dst, const struct MEdge *edges_dst, const int numedges_dst,
-        struct DerivedMesh *dm_src, Mesh2MeshMapping *r_map);
+        const bool dirty_nors_dst, struct DerivedMesh *dm_src, Mesh2MeshMapping *r_map);
 
 void BKE_dm2mesh_mapping_loops_compute(
         const int mode, const struct SpaceTransform *space_transform, const float max_dist, const float ray_radius,
         struct MVert *verts_dst, const int numverts_dst, struct MEdge *edges_dst, const int numedges_dst,
         struct MLoop *loops_dst, const int numloops_dst, struct MPoly *polys_dst, const int numpolys_dst,
         struct CustomData *ldata_dst, struct CustomData *pdata_dst, const float split_angle_dst,
+        const bool dirty_nors_dst,
         struct DerivedMesh *dm_src, loop_island_compute gen_islands_src, struct Mesh2MeshMapping *r_map);
 
 void BKE_dm2mesh_mapping_polys_compute(
         const int mode, const struct SpaceTransform *space_transform, const float max_dist, const float ray_radius,
         struct MVert *verts_dst, const int numverts_dst, struct MLoop *loops_dst, const int numloops_dst,
-        struct MPoly *polys_dst, const int numpolys_dst, struct CustomData *pdata_dst, struct DerivedMesh *dm_src,
-        struct Mesh2MeshMapping *r_map);
+        struct MPoly *polys_dst, const int numpolys_dst, struct CustomData *pdata_dst, const bool dirty_nors_dst,
+        struct DerivedMesh *dm_src, struct Mesh2MeshMapping *r_map);
 
 
 /* No good (portable) way to have exported inlined functions... */

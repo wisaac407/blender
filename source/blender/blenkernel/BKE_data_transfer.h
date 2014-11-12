@@ -66,6 +66,7 @@ enum {
 CustomDataMask BKE_data_transfer_dttypes_to_cdmask(const int dtdata_types);
 bool BKE_data_transfer_get_dttypes_capacity(
         const int dtdata_types, bool *r_advanced_mixing, bool *r_threshold);
+int BKE_data_transfer_get_dttypes_item_types(const int dtdata_types);
 
 int BKE_data_transfer_dttype_to_cdtype(const int dtdata_type);
 int BKE_data_transfer_dttype_to_fromto_idx(const int dtdata_type);

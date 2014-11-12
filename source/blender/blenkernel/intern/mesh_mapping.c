@@ -883,7 +883,7 @@ typedef struct IslandResult {
 
 void BKE_dm2mesh_mapping_verts_compute(
         const int mode, const SpaceTransform *space_transform, const float max_dist, const float ray_radius,
-        const MVert *verts_dst, const int numverts_dst, DerivedMesh *dm_src,
+        const MVert *verts_dst, const int numverts_dst, const bool UNUSED(dirty_nors_dst), DerivedMesh *dm_src,
         Mesh2MeshMapping *r_map)
 {
 	const float full_weight = 1.0f;
@@ -1073,11 +1073,10 @@ void BKE_dm2mesh_mapping_verts_compute(
 	}
 }
 
-/* TODO: all those 'nearest' edge computations could be hugely enhanced, not top priority though. */
 void BKE_dm2mesh_mapping_edges_compute(
         const int mode, const SpaceTransform *space_transform, const float max_dist, const float ray_radius,
         const MVert *verts_dst, const int numverts_dst, const MEdge *edges_dst, const int numedges_dst,
-        DerivedMesh *dm_src, Mesh2MeshMapping *r_map)
+        const bool UNUSED(dirty_nors_dst), DerivedMesh *dm_src, Mesh2MeshMapping *r_map)
 {
 	const float full_weight = 1.0f;
 	const float max_dist_sq = max_dist * max_dist;
@@ -1403,7 +1402,7 @@ void BKE_dm2mesh_mapping_loops_compute(
         const int mode, const SpaceTransform *space_transform, const float max_dist, const float ray_radius,
         MVert *verts_dst, const int numverts_dst, MEdge *edges_dst, const int numedges_dst,
         MLoop *loops_dst, const int numloops_dst, MPoly *polys_dst, const int numpolys_dst,
-        CustomData *ldata_dst, CustomData *pdata_dst, const float split_angle_dst,
+        CustomData *ldata_dst, CustomData *pdata_dst, const float split_angle_dst, const bool dirty_nors_dst,
         DerivedMesh *dm_src, loop_island_compute gen_islands_src, Mesh2MeshMapping *r_map)
 {
 	const float full_weight = 1.0f;
@@ -1493,6 +1492,8 @@ void BKE_dm2mesh_mapping_loops_compute(
 				if (!poly_nors_dst) {
 					poly_nors_dst = CustomData_add_layer(pdata_dst, CD_NORMAL, CD_CALLOC, NULL, numpolys_dst);
 					CustomData_set_layer_flag(pdata_dst, CD_NORMAL, CD_FLAG_TEMPORARY);
+				}
+				if (dirty_nors_dst) {
 					BKE_mesh_calc_normals_poly(verts_dst, numverts_dst, loops_dst, polys_dst,
 					                           numloops_dst, numpolys_dst, poly_nors_dst, true);
 				}
@@ -1503,6 +1504,8 @@ void BKE_dm2mesh_mapping_loops_compute(
 				if (!loop_nors_dst) {
 					loop_nors_dst = CustomData_add_layer(ldata_dst, CD_NORMAL, CD_CALLOC, NULL, numloops_dst);
 					CustomData_set_layer_flag(ldata_dst, CD_NORMAL, CD_FLAG_TEMPORARY);
+				}
+				if (dirty_nors_dst) {
 					BKE_mesh_normals_loop_split(verts_dst, numverts_dst, edges_dst, numedges_dst,
 					                            loops_dst, loop_nors_dst, numloops_dst,
 					                            polys_dst, poly_nors_dst, numpolys_dst, split_angle_dst);
@@ -1893,8 +1896,8 @@ void BKE_dm2mesh_mapping_loops_compute(
 void BKE_dm2mesh_mapping_polys_compute(
         const int mode, const SpaceTransform *space_transform, const float max_dist, const float ray_radius,
         MVert *verts_dst, const int numverts_dst, MLoop *loops_dst, const int numloops_dst,
-        MPoly *polys_dst, const int numpolys_dst, CustomData *pdata_dst, DerivedMesh *dm_src,
-        Mesh2MeshMapping *r_map)
+        MPoly *polys_dst, const int numpolys_dst, CustomData *pdata_dst, const bool dirty_nors_dst,
+        DerivedMesh *dm_src, Mesh2MeshMapping *r_map)
 {
 	const float full_weight = 1.0f;
 	const float max_dist_sq = max_dist * max_dist;
@@ -1909,6 +1912,8 @@ void BKE_dm2mesh_mapping_polys_compute(
 		if (!poly_nors_dst) {
 			poly_nors_dst = CustomData_add_layer(pdata_dst, CD_NORMAL, CD_CALLOC, NULL, numpolys_dst);
 			CustomData_set_layer_flag(pdata_dst, CD_NORMAL, CD_FLAG_TEMPORARY);
+		}
+		if (dirty_nors_dst) {
 			BKE_mesh_calc_normals_poly(verts_dst, numverts_dst, loops_dst, polys_dst, numloops_dst, numpolys_dst,
 			                           poly_nors_dst, true);
 		}

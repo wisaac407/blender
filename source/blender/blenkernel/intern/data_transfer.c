@@ -153,6 +153,34 @@ bool BKE_data_transfer_get_dttypes_capacity(
 	return ret;
 }
 
+int BKE_data_transfer_get_dttypes_item_types(const int dtdata_types)
+{
+	int i, ret = 0;
+
+	for (i = 0; (i < 32) && (ret ^ (ME_VERT | ME_EDGE | ME_LOOP | ME_POLY)); i++) {
+		const int dtdata_type = 1 << i;
+
+		if (!(dtdata_types & dtdata_type)) {
+			continue;
+		}
+
+		if (DT_DATATYPE_IS_VERT(dtdata_type)) {
+			ret |= ME_VERT;
+		}
+		if (DT_DATATYPE_IS_EDGE(dtdata_type)) {
+			ret |= ME_EDGE;
+		}
+		if (DT_DATATYPE_IS_LOOP(dtdata_type)) {
+			ret |= ME_LOOP;
+		}
+		if (DT_DATATYPE_IS_POLY(dtdata_type)) {
+			ret |= ME_POLY;
+		}
+	}
+
+	return ret;
+}
+
 int BKE_data_transfer_dttype_to_cdtype(const int dtdata_type)
 {
 	switch (dtdata_type) {
@@ -749,6 +777,7 @@ bool BKE_data_transfer_dm(
 
 	DerivedMesh *dm_src;
 	Mesh *me_dst;
+	bool dirty_nors_dst = true;  /* Assumed always true if not using a dm as destination. */
 	int i;
 
 	MDeformVert *mdef = NULL;
@@ -765,6 +794,9 @@ bool BKE_data_transfer_dm(
 	BLI_assert((ob_src != ob_dst) && (ob_src->type == OB_MESH) && (ob_dst->type == OB_MESH));
 
 	me_dst = ob_dst->data;
+	if (dm_dst) {
+		dirty_nors_dst = (dm_dst->dirty & DM_DIRTY_NORMALS) != 0;
+	}
 
 	if (vgroup_name) {
 		if (dm_dst) {
@@ -817,7 +849,7 @@ bool BKE_data_transfer_dm(
 					return changed;
 				}
 				BKE_dm2mesh_mapping_verts_compute(map_vert_mode, space_transform, max_distance, ray_radius,
-				                                  verts_dst, num_verts_dst, dm_src, &geom_map[VDATA]);
+				                                  verts_dst, num_verts_dst, dirty_nors_dst, dm_src, &geom_map[VDATA]);
 				geom_map_init[VDATA] = true;
 			}
 
@@ -856,7 +888,7 @@ bool BKE_data_transfer_dm(
 					return changed;
 				}
 				BKE_dm2mesh_mapping_edges_compute(map_edge_mode, space_transform, max_distance, ray_radius,
-				                                  verts_dst, num_verts_dst, edges_dst, num_edges_dst,
+				                                  verts_dst, num_verts_dst, edges_dst, num_edges_dst, dirty_nors_dst,
 				                                  dm_src, &geom_map[EDATA]);
 				geom_map_init[EDATA] = true;
 			}
@@ -907,8 +939,8 @@ bool BKE_data_transfer_dm(
 				BKE_dm2mesh_mapping_loops_compute(map_loop_mode, space_transform, max_distance, ray_radius,
 				                                  verts_dst, num_verts_dst, edges_dst, num_edges_dst,
 				                                  loops_dst, num_loops_dst, polys_dst, num_polys_dst,
-				                                  ldata_dst, pdata_dst,
-				                                  me_dst->smoothresh, dm_src, island_callback, &geom_map[LDATA]);
+				                                  ldata_dst, pdata_dst, me_dst->smoothresh, dirty_nors_dst,
+				                                  dm_src, island_callback, &geom_map[LDATA]);
 				geom_map_init[LDATA] = true;
 			}
 
@@ -952,7 +984,8 @@ bool BKE_data_transfer_dm(
 				}
 				BKE_dm2mesh_mapping_polys_compute(map_poly_mode, space_transform, max_distance, ray_radius,
 				                                  verts_dst, num_verts_dst, loops_dst, num_loops_dst,
-				                                  polys_dst, num_polys_dst, pdata_dst, dm_src, &geom_map[PDATA]);
+				                                  polys_dst, num_polys_dst, pdata_dst, dirty_nors_dst,
+				                                  dm_src, &geom_map[PDATA]);
 				geom_map_init[PDATA] = true;
 			}
 

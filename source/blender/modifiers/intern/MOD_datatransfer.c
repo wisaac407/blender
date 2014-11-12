@@ -95,6 +95,27 @@ static CustomDataMask requiredDataMask(Object *UNUSED(ob), ModifierData *md)
 	return dataMask;
 }
 
+static bool dependsOnNormals(ModifierData *md)
+{
+	DataTransferModifierData *dtmd = (DataTransferModifierData *) md;
+	int item_types = BKE_data_transfer_get_dttypes_item_types(dtmd->data_types);
+
+	if ((item_types & ME_VERT) && (dtmd->vmap_mode & (M2MMAP_USE_NORPROJ | M2MMAP_USE_NORMAL))) {
+		return true;
+	}
+	if ((item_types & ME_EDGE) && (dtmd->emap_mode & (M2MMAP_USE_NORPROJ | M2MMAP_USE_NORMAL))) {
+		return true;
+	}
+	if ((item_types & ME_LOOP) && (dtmd->lmap_mode & (M2MMAP_USE_NORPROJ | M2MMAP_USE_NORMAL))) {
+		return true;
+	}
+	if ((item_types & ME_POLY) && (dtmd->pmap_mode & (M2MMAP_USE_NORPROJ | M2MMAP_USE_NORMAL))) {
+		return true;
+	}
+
+	return false;
+}
+
 static void foreachObjectLink(ModifierData *md, Object *ob,
                               void (*walk)(void *userData, Object *ob, Object **obpoin),
                               void *userData)
@@ -187,7 +208,7 @@ ModifierTypeInfo modifierType_DataTransfer = {
 	/* isDisabled */        isDisabled,
 	/* updateDepgraph */    updateDepgraph,
 	/* dependsOnTime */     NULL,
-	/* dependsOnNormals */  NULL,
+	/* dependsOnNormals */  dependsOnNormals,
 	/* foreachObjectLink */ foreachObjectLink,
 	/* foreachIDLink */     foreachIDLink,
 	/* foreachTexLink */    NULL,
