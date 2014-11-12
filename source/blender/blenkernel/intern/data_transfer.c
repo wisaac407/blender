@@ -50,6 +50,7 @@
 #include "BKE_mesh_mapping.h"
 #include "BKE_object.h"
 #include "BKE_object_deform.h"
+#include "BKE_report.h"
 
 #include "data_transfer_intern.h"
 
@@ -737,7 +738,8 @@ bool BKE_data_transfer_dm(
         const int map_vert_mode, const int map_edge_mode, const int map_loop_mode, const int map_poly_mode,
         SpaceTransform *space_transform, const float max_distance, const float ray_radius,
         const int fromlayers_select[DT_MULTILAYER_IDX_MAX], const int tolayers_select[DT_MULTILAYER_IDX_MAX],
-        const int mix_mode, const float mix_factor, const char *vgroup_name, const bool invert_vgroup)
+        const int mix_mode, const float mix_factor, const char *vgroup_name, const bool invert_vgroup,
+        ReportList *reports)
 {
 #define VDATA 0
 #define EDATA 1
@@ -808,6 +810,12 @@ bool BKE_data_transfer_dm(
 			const int num_create = use_create ? num_verts_dst : 0;
 
 			if (!geom_map_init[VDATA]) {
+				if ((map_vert_mode == M2MMAP_MODE_TOPOLOGY) && (num_verts_dst != dm_src->getNumVerts(dm_src))) {
+					BKE_report(reports, RPT_ERROR,
+					           "Source and destination meshes do not have the same amount of vertices, "
+					           "'Topology' mapping cannot be used in this case");
+					return changed;
+				}
 				BKE_dm2mesh_mapping_verts_compute(map_vert_mode, space_transform, max_distance, ray_radius,
 				                                  verts_dst, num_verts_dst, dm_src, &geom_map[VDATA]);
 				geom_map_init[VDATA] = true;
@@ -841,6 +849,12 @@ bool BKE_data_transfer_dm(
 			const int num_create = use_create ? num_edges_dst : 0;
 
 			if (!geom_map_init[EDATA]) {
+				if ((map_edge_mode == M2MMAP_MODE_TOPOLOGY) && (num_edges_dst != dm_src->getNumEdges(dm_src))) {
+					BKE_report(reports, RPT_ERROR,
+					           "Source and destination meshes do not have the same amount of edges, "
+					           "'Topology' mapping cannot be used in this case");
+					return changed;
+				}
 				BKE_dm2mesh_mapping_edges_compute(map_edge_mode, space_transform, max_distance, ray_radius,
 				                                  verts_dst, num_verts_dst, edges_dst, num_edges_dst,
 				                                  dm_src, &geom_map[EDATA]);
@@ -884,6 +898,12 @@ bool BKE_data_transfer_dm(
 			loop_island_compute island_callback = data_transfer_get_loop_islands_generator(cddata_type);
 
 			if (!geom_map_init[LDATA]) {
+				if ((map_loop_mode == M2MMAP_MODE_TOPOLOGY) && (num_loops_dst != dm_src->getNumLoops(dm_src))) {
+					BKE_report(reports, RPT_ERROR,
+					           "Source and destination meshes do not have the same amount of face corners, "
+					           "'Topology' mapping cannot be used in this case");
+					return changed;
+				}
 				BKE_dm2mesh_mapping_loops_compute(map_loop_mode, space_transform, max_distance, ray_radius,
 				                                  verts_dst, num_verts_dst, edges_dst, num_edges_dst,
 				                                  loops_dst, num_loops_dst, polys_dst, num_polys_dst,
@@ -924,6 +944,12 @@ bool BKE_data_transfer_dm(
 			const int num_create = use_create ? num_polys_dst : 0;
 
 			if (!geom_map_init[PDATA]) {
+				if ((map_poly_mode == M2MMAP_MODE_TOPOLOGY) && (num_polys_dst != dm_src->getNumPolys(dm_src))) {
+					BKE_report(reports, RPT_ERROR,
+					           "Source and destination meshes do not have the same amount of faces, "
+					           "'Topology' mapping cannot be used in this case");
+					return changed;
+				}
 				BKE_dm2mesh_mapping_polys_compute(map_poly_mode, space_transform, max_distance, ray_radius,
 				                                  verts_dst, num_verts_dst, loops_dst, num_loops_dst,
 				                                  polys_dst, num_polys_dst, pdata_dst, dm_src, &geom_map[PDATA]);
@@ -972,10 +998,11 @@ bool BKE_data_transfer_mesh(
         const int map_vert_mode, const int map_edge_mode, const int map_loop_mode, const int map_poly_mode,
         SpaceTransform *space_transform, const float max_distance, const float ray_radius,
         const int fromlayers_select[DT_MULTILAYER_IDX_MAX], const int tolayers_select[DT_MULTILAYER_IDX_MAX],
-        const int mix_mode, const float mix_factor, const char *vgroup_name, const bool invert_vgroup)
+        const int mix_mode, const float mix_factor, const char *vgroup_name, const bool invert_vgroup,
+        ReportList *reports)
 {
 	return BKE_data_transfer_dm(scene, ob_src, ob_dst, NULL, data_types, use_create,
 	                            map_vert_mode, map_edge_mode, map_loop_mode, map_poly_mode, space_transform,
 	                            max_distance, ray_radius, fromlayers_select, tolayers_select,
-	                            mix_mode, mix_factor, vgroup_name, invert_vgroup);
+	                            mix_mode, mix_factor, vgroup_name, invert_vgroup, reports);
 }

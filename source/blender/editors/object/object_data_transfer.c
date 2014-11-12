@@ -307,7 +307,7 @@ static int data_transfer_exec(bContext *C, wmOperator *op)
 		if (BKE_data_transfer_mesh(scene, ob_src, ob_dst, data_type, use_create,
 		                           map_vert_mode, map_edge_mode, map_loop_mode, map_poly_mode, 
 		                           space_transform, max_distance, ray_radius, fromlayers_select, tolayers_select,
-		                           mix_mode, mix_factor, NULL, false))
+		                           mix_mode, mix_factor, NULL, false, op->reports))
 		{
 			changed = true;
 		}

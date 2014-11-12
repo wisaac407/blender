@@ -42,6 +42,7 @@
 #include "BKE_library.h"
 #include "BKE_mesh_mapping.h"
 #include "BKE_modifier.h"
+#include "BKE_report.h"
 
 #include "MEM_guardedalloc.h"
 #include "MOD_util.h"
@@ -133,6 +134,7 @@ static DerivedMesh *applyModifier(ModifierData *md, Object *ob, DerivedMesh *der
 {
 	DataTransferModifierData *dtmd = (DataTransferModifierData *) md;
 	DerivedMesh *dm = derivedData;
+	ReportList reports;
 
 	const bool use_create = (dtmd->flags & MOD_DATATRANSFER_USE_CREATE) != 0;
 	const bool invert_vgroup = (dtmd->flags & MOD_DATATRANSFER_INVERT_VGROUP) != 0;
@@ -146,11 +148,17 @@ static DerivedMesh *applyModifier(ModifierData *md, Object *ob, DerivedMesh *der
 		BLI_SPACE_TRANSFORM_SETUP(space_transform, ob, dtmd->ob_source);
 	}
 
+	BKE_reports_init(&reports, RPT_STORE);
+
 	BKE_data_transfer_dm(md->scene, dtmd->ob_source, ob, dm, dtmd->data_types, use_create,
 	                     dtmd->vmap_mode, dtmd->emap_mode, dtmd->lmap_mode, dtmd->pmap_mode,
 	                     space_transform, max_dist, dtmd->map_ray_radius,
 	                     dtmd->fromlayers_selmode, dtmd->tolayers_selmode,
-	                     dtmd->mix_mode, dtmd->mix_factor, dtmd->defgrp_name, invert_vgroup);
+	                     dtmd->mix_mode, dtmd->mix_factor, dtmd->defgrp_name, invert_vgroup, &reports);
+
+	if (BKE_reports_contain(&reports, RPT_ERROR)) {
+		modifier_setError(md, "%s", BKE_reports_string(&reports, RPT_ERROR));
+	}
 
 	return dm;
 }
