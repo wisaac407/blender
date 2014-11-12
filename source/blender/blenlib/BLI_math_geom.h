@@ -42,6 +42,8 @@ extern "C" {
 #  pragma GCC diagnostic ignored "-Wredundant-decls"
 #endif
 
+struct RNG;
+
 /********************************** Polygons *********************************/
 
 void cent_tri_v3(float r[3], const float a[3], const float b[3], const float c[3]);
@@ -62,6 +64,8 @@ float cotangent_tri_weight_v3(const float v1[3], const float v2[3], const float 
 
 MINLINE float cross_tri_v2(const float v1[2], const float v2[2], const float v3[2]);
 float cross_poly_v2(const float verts[][2], unsigned int nr);
+
+void BLI_tri_v2_sample_random_point(const float v1[2], const float v2[2], const float v3[2], struct RNG *rng, float r_pt[2]);
 
 /********************************* Planes **********************************/
 

@@ -31,6 +31,7 @@
 
 #include "BLI_math.h"
 #include "BLI_utildefines.h"
+#include "BLI_rand.h"
 
 #include "BLI_strict_flags.h"
 
@@ -206,6 +207,29 @@ float cotangent_tri_weight_v3(const float v1[3], const float v2[3], const float 
 	else {
 		return 0.0f;
 	}
+}
+
+/**
+ * Generate a random point inside given tri.
+ */
+void BLI_tri_v2_sample_random_point(const float v1[2], const float v2[2], const float v3[2], RNG *rng, float r_pt[2])
+{
+	float u = BLI_rng_get_float(rng);
+	float v = BLI_rng_get_float(rng);
+
+	float uside[2], vside[2];
+
+	if ((u + v) > 1.0f) {
+		u = 1.0f - u;
+		v = 1.0f - v;
+	}
+
+	sub_v2_v2v2(uside, v2, v1);
+	sub_v2_v2v2(vside, v3, v1);
+
+	copy_v2_v2(r_pt, v1);
+	madd_v2_v2fl(r_pt, uside, u);
+	madd_v2_v2fl(r_pt, vside, v);
 }
 
 /********************************* Planes **********************************/

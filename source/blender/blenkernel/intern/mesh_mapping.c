@@ -37,6 +37,8 @@
 #include "BLI_bitmap.h"
 #include "BLI_math.h"
 #include "BLI_memarena.h"
+#include "BLI_polyfill2d.h"
+#include "BLI_rand.h"
 
 #include "BKE_bvhutils.h"
 #include "BKE_customdata.h"
@@ -1980,6 +1982,11 @@ void BKE_dm2mesh_mapping_polys_compute(
 			}
 		}
 		else if (mode == M2MMAP_MODE_POLY_POLYINTERP_PNORPROJ) {
+			/* We cast our rays randomly, with a pseudo-even distribution (since we spread across tessellated tris,
+			 * with additional weighting based on each tri's relative area).
+			 */
+			RNG *rng = BLI_rng_new(0);
+
 			const size_t numpolys_src = (size_t)dm_src->getNumPolys(dm_src);
 
 			/* Here it's simpler to just allocate for all polys :/ */
@@ -1988,6 +1995,8 @@ void BKE_dm2mesh_mapping_polys_compute(
 
 			size_t tmp_poly_size = 32;  /* Will be enough in 99% of cases. */
 			float (*poly_vcos_2d)[2] = MEM_mallocN(sizeof(*poly_vcos_2d) * tmp_poly_size, __func__);
+			/* Tessellated 2D poly, always (num_loops - 2) triangles. */
+			int (*tri_vidx_2d)[3] = MEM_mallocN(sizeof(*tri_vidx_2d) * (tmp_poly_size - 2), __func__);
 
 			for (i = 0; i < numpolys_dst; i++) {
 				/* For each dst poly, we sample some rays from it (2D grid in pnor space)
@@ -1996,18 +2005,20 @@ void BKE_dm2mesh_mapping_polys_compute(
 				MPoly *mp = &polys_dst[i];
 				float tmp_co[3], tmp_no[3];
 
-				int grid_size;
+				int tot_rays, done_rays = 0;
+				float poly_area_2d_inv, done_area = 0.0f;
+
 				const float zvec[3] = {0.0f, 0.0f, 1.0f};
 				float pcent_dst[3];
 				float to_pnor_2d_mat[3][3], from_pnor_2d_mat[3][3];
 				float poly_dst_2d_min[2], poly_dst_2d_max[2], poly_dst_2d_z;
 				float poly_dst_2d_size[2];
-				float grid_step[2];
 
 				float totweights = 0.0f;
 				float hitdist_accum = 0.0f;
 				int nbr_sources = 0;
-				int j, k;
+				int nbr_tris = mp->totloop - 2;
+				int j;
 
 				BKE_mesh_calc_poly_center(mp, &loops_dst[mp->loopstart], verts_dst, pcent_dst);
 				copy_v3_v3(tmp_no, poly_nors_dst[i]);
@@ -2022,6 +2033,7 @@ void BKE_dm2mesh_mapping_polys_compute(
 				if ((size_t)mp->totloop > tmp_poly_size) {
 					tmp_poly_size = (size_t)mp->totloop;
 					poly_vcos_2d = MEM_reallocN(poly_vcos_2d, sizeof(*poly_vcos_2d) * tmp_poly_size);
+					tri_vidx_2d = MEM_reallocN(tri_vidx_2d, sizeof(*tri_vidx_2d) * (tmp_poly_size - 2));
 				}
 
 				rotation_between_vecs_to_mat3(to_pnor_2d_mat, tmp_no, zvec);
@@ -2047,25 +2059,53 @@ void BKE_dm2mesh_mapping_polys_compute(
 				 * with lower/upper bounds. */
 				sub_v2_v2v2(poly_dst_2d_size, poly_dst_2d_max, poly_dst_2d_min);
 
-				grid_size = (int)((max_ff(poly_dst_2d_size[0], poly_dst_2d_size[1]) / ray_radius) + 0.5f);
-				CLAMP(grid_size, 4, 20);  /* min 16 rays/face, max 400. */
+				if (ray_radius) {
+					tot_rays = (int)((max_ff(poly_dst_2d_size[0], poly_dst_2d_size[1]) / ray_radius) + 0.5f);
+					CLAMP(tot_rays, 4, 20);  /* min 16 rays/face, max 400. */
+				}
+				else {
+					tot_rays = 20;  /* If no radius (pure rays), give max number of rays! */
+				}
+				tot_rays *= tot_rays;
 
-				mul_v2_v2fl(grid_step, poly_dst_2d_size, 1.0f / (float)grid_size);
+				poly_area_2d_inv = 1.0f / area_poly_v2((const float(*)[2])poly_vcos_2d, (unsigned int)mp->totloop);
 
-				/* And now we can cast all our rays, and see what we get! */
-				for (j = 0; j < grid_size; j++) {
-					for (k = 0; k < grid_size; k++) {
+				/* Tessellate our poly. */
+				if (mp->totloop == 3) {
+					tri_vidx_2d[0][0] = 0;
+					tri_vidx_2d[0][1] = 1;
+					tri_vidx_2d[0][2] = 2;
+				}
+				if (mp->totloop == 4) {
+					tri_vidx_2d[0][0] = 0;
+					tri_vidx_2d[0][1] = 1;
+					tri_vidx_2d[0][2] = 2;
+					tri_vidx_2d[1][0] = 0;
+					tri_vidx_2d[1][1] = 2;
+					tri_vidx_2d[1][2] = 3;
+				}
+				else {
+					BLI_polyfill_calc((const float(*)[2])poly_vcos_2d, (unsigned int)mp->totloop, -1,
+					                  (unsigned int (*)[3])tri_vidx_2d);
+				}
+
+				for (j = 0; j < nbr_tris; j++) {
+					float *v1 = poly_vcos_2d[tri_vidx_2d[j][0]];
+					float *v2 = poly_vcos_2d[tri_vidx_2d[j][1]];
+					float *v3 = poly_vcos_2d[tri_vidx_2d[j][2]];
+					int nbr_rays;
+
+					/* All this allows us to get 'absolute' number of rays for each tri, avoiding accumulating
+					 * errors over iterations, and helping better even distribution. */
+					done_area += area_tri_v2(v1, v2, v3);
+					nbr_rays = (int)((float)tot_rays * done_area * poly_area_2d_inv + 0.5f) - done_rays;
+					done_rays += nbr_rays;
+
+					while (nbr_rays--) {
 						int n = (ray_radius > 0.0f) ? M2MMAP_RAYCAST_APPROXIMATE_NR : 1;
 						float w = 1.0f;
 
-						tmp_co[0] = poly_dst_2d_min[0] + grid_step[0] * (float)j;
-						tmp_co[1] = poly_dst_2d_min[1] + grid_step[1] * (float)k;
-
-						if (!isect_point_poly_v2(tmp_co, (const float (*)[2])poly_vcos_2d,
-						                         (unsigned int)mp->totloop, false))
-						{
-							continue;
-						}
+						BLI_tri_v2_sample_random_point(v1, v2, v3, rng, tmp_co);
 
 						tmp_co[2] = poly_dst_2d_z;
 						mul_m3_v3(from_pnor_2d_mat, tmp_co);
@@ -2087,6 +2127,7 @@ void BKE_dm2mesh_mapping_polys_compute(
 						}
 					}
 				}
+
 				if (totweights > 0.0f) {
 					for (j = 0; j < (int)numpolys_src; j++) {
 						if (!weights[j]) {
@@ -2106,9 +2147,11 @@ void BKE_dm2mesh_mapping_polys_compute(
 				}
 			}
 
+			MEM_freeN(tri_vidx_2d);
 			MEM_freeN(poly_vcos_2d);
 			MEM_freeN(indices);
 			MEM_freeN(weights);
+			BLI_rng_free(rng);
 		}
 		else {
 			printf("WARNING! Unsupported mesh-to-mesh poly mapping mode (%d)!\n", mode);
