@@ -192,7 +192,7 @@ EnumPropertyItem DT_method_poly_items[] = {
 /* How to filter out some elements (to leave untouched).
  * Note those options are highly dependent on type of transferred data! */
 EnumPropertyItem DT_mix_mode_items[] = {
-	{CDT_MIX_TRANSFER, "REPLACE", 0, "All", "Overwrite all elements' data"},
+	{CDT_MIX_TRANSFER, "REPLACE", 0, "Replace", "Overwrite all elements' data"},
 	{CDT_MIX_REPLACE_ABOVE_THRESHOLD, "ABOVE_THRESHOLD", 0, "Above Threshold",
 			"Only replace dest elements where data is above given threshold (exact behavior depends on data type)"},
 	{CDT_MIX_REPLACE_BELOW_THRESHOLD, "BELOW_THRESHOLD", 0, "Below Threshold",
@@ -226,7 +226,7 @@ EnumPropertyItem DT_fromlayers_select_items[] = {
 EnumPropertyItem DT_tolayers_select_items[] = {
 	{DT_TOLAYERS_ACTIVE, "ACTIVE", 0, "Active Layer", "Affect active data layer of all targets"},
 	{DT_TOLAYERS_NAME, "NAME", 0, "By Name", "Match target data layers to affect by name"},
-	{DT_TOLAYERS_INDEX, "INDEX", 0, "By Position", "Match target data layers to affect by position (indices)"},
+	{DT_TOLAYERS_INDEX, "INDEX", 0, "By Order", "Match target data layers to affect by order (indices)"},
 	{0, NULL, 0, NULL, NULL}
 };
 
@@ -4019,7 +4019,7 @@ static void rna_def_modifier_datatransfer(BlenderRNA *brna)
 		{DT_DATA_SEAM, "SEAM", 0, "Seam", "Transfer UV seam flag"},
 		{DT_DATA_CREASE, "CREASE", 0, "Subsurf Crease", "Transfer crease values"},
 		{DT_DATA_BWEIGHT_EDGE, "BEVEL_WEIGHT_EDGE", 0, "Bevel Weight", "Transfer bevel weights"},
-		{DT_DATA_FREESTYLE_EDGE, "FREESTYLE_EDGE", 0, "Freestyle Flag", "Transfer Freestyle edge flag"},
+		{DT_DATA_FREESTYLE_EDGE, "FREESTYLE_EDGE", 0, "Freestyle Mark", "Transfer Freestyle edge mark"},
 		{0, NULL, 0, NULL, NULL}
 	};
 
@@ -4033,7 +4033,7 @@ static void rna_def_modifier_datatransfer(BlenderRNA *brna)
 
 	static EnumPropertyItem DT_layer_poly_items[] = {
 		{DT_DATA_SHARP_FACE, "SMOOTH", 0, "Smooth", "Transfer flat/smooth flag"},
-		{DT_DATA_FREESTYLE_FACE, "FREESTYLE_FACE", 0, "Freestyle Flag", "Transfer Freestyle face flag"},
+		{DT_DATA_FREESTYLE_FACE, "FREESTYLE_FACE", 0, "Freestyle Mark", "Transfer Freestyle face mark"},
 		{0, NULL, 0, NULL, NULL}
 	};
 	static EnumPropertyItem DT_layer_poly_uv_items[] = {
