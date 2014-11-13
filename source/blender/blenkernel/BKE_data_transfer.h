@@ -59,13 +59,13 @@ enum {
 	DT_DATA_EDGE_ALL                    = DT_DATA_SHARP_EDGE | DT_DATA_SEAM | DT_DATA_CREASE | DT_DATA_BWEIGHT_EDGE |
 	                                      DT_DATA_FREESTYLE_EDGE,
 
-	DT_DATA_UV                          = 1 << 16,
-	DT_DATA_SHARP_FACE                  = 1 << 17,
-	DT_DATA_FREESTYLE_FACE              = 1 << 18,
-	DT_DATA_POLY_ALL                    = DT_DATA_UV | DT_DATA_SHARP_FACE | DT_DATA_FREESTYLE_FACE,
-
-	DT_DATA_VCOL                        = 1 << 24,
+	DT_DATA_VCOL                        = 1 << 16,
 	DT_DATA_LOOP_ALL                    = DT_DATA_VCOL,
+
+	DT_DATA_UV                          = 1 << 24,
+	DT_DATA_SHARP_FACE                  = 1 << 25,
+	DT_DATA_FREESTYLE_FACE              = 1 << 26,
+	DT_DATA_POLY_ALL                    = DT_DATA_UV | DT_DATA_SHARP_FACE | DT_DATA_FREESTYLE_FACE,
 };
 
 CustomDataMask BKE_data_transfer_dttypes_to_cdmask(const int dtdata_types);
@@ -80,18 +80,18 @@ int BKE_data_transfer_dttype_to_fromto_idx(const int dtdata_type);
                                            DT_DATA_BWEIGHT_VERT)
 #define DT_DATATYPE_IS_EDGE(_dt) ELEM(_dt, DT_DATA_CREASE, DT_DATA_SHARP_EDGE, DT_DATA_SEAM,  \
                                            DT_DATA_BWEIGHT_EDGE, DT_DATA_FREESTYLE_EDGE)
-#define DT_DATATYPE_IS_POLY(_dt) ELEM(_dt, DT_DATA_UV, DT_DATA_SHARP_FACE, DT_DATA_FREESTYLE_FACE)
 #define DT_DATATYPE_IS_LOOP(_dt) ELEM(_dt, DT_DATA_UV, DT_DATA_VCOL)
+#define DT_DATATYPE_IS_POLY(_dt) ELEM(_dt, DT_DATA_UV, DT_DATA_SHARP_FACE, DT_DATA_FREESTYLE_FACE)
 
-#define DT_DATATYPE_IS_MULTILAYERS(_dt) ELEM(_dt, DT_DATA_MDEFORMVERT, DT_DATA_SHAPEKEY, DT_DATA_UV, DT_DATA_VCOL)
+#define DT_DATATYPE_IS_MULTILAYERS(_dt) ELEM(_dt, DT_DATA_MDEFORMVERT, DT_DATA_SHAPEKEY, DT_DATA_VCOL, DT_DATA_UV)
 
 
 enum {
 	DT_MULTILAYER_IDX_INVALID           = -1,
 	DT_MULTILAYER_IDX_MDEFORMVERT       = 0,
 	DT_MULTILAYER_IDX_SHAPEKEY          = 1,
-	DT_MULTILAYER_IDX_UV                = 2,
-	DT_MULTILAYER_IDX_VCOL              = 3,
+	DT_MULTILAYER_IDX_VCOL              = 2,
+	DT_MULTILAYER_IDX_UV                = 3,
 	DT_MULTILAYER_IDX_MAX               = 4,
 };
 
