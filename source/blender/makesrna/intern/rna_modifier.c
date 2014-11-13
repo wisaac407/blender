@@ -712,6 +712,46 @@ static int rna_LaplacianDeformModifier_is_bind_get(PointerRNA *ptr)
 	return ((lmd->flag & MOD_LAPLACIANDEFORM_BIND) && (lmd->cache_system != NULL));
 }
 
+static void dt_use_data_update(Main *bmain, Scene *scene, PointerRNA *ptr)
+{
+	DataTransferModifierData *dtmd = (DataTransferModifierData *)ptr->data;
+
+	if (!(dtmd->flags & MOD_DATATRANSFER_USE_VERT)) {
+		dtmd->data_types &= ~DT_DATA_VERT_ALL;
+	}
+	if (!(dtmd->flags & MOD_DATATRANSFER_USE_EDGE)) {
+		dtmd->data_types &= ~DT_DATA_EDGE_ALL;
+	}
+	if (!(dtmd->flags & MOD_DATATRANSFER_USE_LOOP)) {
+		dtmd->data_types &= ~DT_DATA_LOOP_ALL;
+	}
+	if (!(dtmd->flags & MOD_DATATRANSFER_USE_POLY)) {
+		dtmd->data_types &= ~DT_DATA_POLY_ALL;
+	}
+
+	rna_Modifier_update(bmain, scene, ptr);
+}
+
+static void dt_data_types_update(Main *bmain, Scene *scene, PointerRNA *ptr)
+{
+	DataTransferModifierData *dtmd = (DataTransferModifierData *)ptr->data;
+	const int item_types = BKE_data_transfer_get_dttypes_item_types(dtmd->data_types);
+
+	if (item_types & ME_VERT) {
+		dtmd->flags |= MOD_DATATRANSFER_USE_VERT;
+	}
+	if (item_types & ME_EDGE) {
+		dtmd->flags |= MOD_DATATRANSFER_USE_EDGE;
+	}
+	if (item_types & ME_LOOP) {
+		dtmd->flags |= MOD_DATATRANSFER_USE_LOOP;
+	}
+	if (item_types & ME_POLY) {
+		dtmd->flags |= MOD_DATATRANSFER_USE_POLY;
+	}
+
+	rna_Modifier_update(bmain, scene, ptr);
+}
 
 static EnumPropertyItem *dt_fromlayers_select_itemf(bContext *C, PointerRNA *ptr, PropertyRNA *prop, bool *r_free)
 {
@@ -4057,44 +4097,62 @@ static void rna_def_modifier_datatransfer(BlenderRNA *brna)
 	RNA_def_property_boolean_sdna(prop, NULL, "flags", MOD_DATATRANSFER_OBSRC_TRANSFORM);
 	RNA_def_property_update(prop, 0, "rna_Modifier_update");
 
+	/* Generic, UI-only data types toggles. */
+	prop = RNA_def_boolean(srna, "use_vert_data", false, "Vertex Data", "Enable vertex data transfer");
+	RNA_def_property_boolean_sdna(prop, NULL, "flags", MOD_DATATRANSFER_USE_VERT);
+	RNA_def_property_update(prop, 0, "dt_use_data_update");
+
+	prop = RNA_def_boolean(srna, "use_edge_data", false, "Edge Data", "Enable edge data transfer");
+	RNA_def_property_boolean_sdna(prop, NULL, "flags", MOD_DATATRANSFER_USE_EDGE);
+	RNA_def_property_update(prop, 0, "dt_use_data_update");
+
+	prop = RNA_def_boolean(srna, "use_loop_data", false, "Face Corner Data", "Enable face corner data transfer");
+	RNA_def_property_boolean_sdna(prop, NULL, "flags", MOD_DATATRANSFER_USE_LOOP);
+	RNA_def_property_update(prop, 0, "dt_use_data_update");
+
+	prop = RNA_def_boolean(srna, "use_poly_data", false, "Face Data", "Enable face data transfer");
+	RNA_def_property_boolean_sdna(prop, NULL, "flags", MOD_DATATRANSFER_USE_POLY);
+	RNA_def_property_update(prop, 0, "dt_use_data_update");
+
+	/* Actual data types selection. */
 	prop = RNA_def_enum(srna, "data_types_verts", DT_layer_vert_items, 0, "Vertex Data Types",
 	                    "Which vertex data layers to transfer");
 	RNA_def_property_flag(prop, PROP_ENUM_FLAG);
 	RNA_def_property_enum_sdna(prop, NULL, "data_types");
-	RNA_def_property_update(prop, 0, "rna_Modifier_update");
+	RNA_def_property_update(prop, 0, "dt_data_types_update");
 	prop = RNA_def_enum(srna, "data_types_verts_vgroup", DT_layer_vert_vgroup_items, 0, "Vertex Data Types",
 	                    "Which vertex data layers to transfer");
 	RNA_def_property_flag(prop, PROP_ENUM_FLAG);
 	RNA_def_property_enum_sdna(prop, NULL, "data_types");
-	RNA_def_property_update(prop, 0, "rna_Modifier_update");
+	RNA_def_property_update(prop, 0, "dt_data_types_update");
 
 	prop = RNA_def_enum(srna, "data_types_edges", DT_layer_edge_items, 0, "Edge Data Types",
 	                    "Which edge data layers to transfer");
 	RNA_def_property_flag(prop, PROP_ENUM_FLAG);
 	RNA_def_property_enum_sdna(prop, NULL, "data_types");
-	RNA_def_property_update(prop, 0, "rna_Modifier_update");
+	RNA_def_property_update(prop, 0, "dt_data_types_update");
 
 	prop = RNA_def_enum(srna, "data_types_loops", DT_layer_loop_items, 0, "Face Corner Data Types",
 	                    "Which face corner data layers to transfer");
 	RNA_def_property_flag(prop, PROP_ENUM_FLAG);
 	RNA_def_property_enum_sdna(prop, NULL, "data_types");
-	RNA_def_property_update(prop, 0, "rna_Modifier_update");
+	RNA_def_property_update(prop, 0, "dt_data_types_update");
 	prop = RNA_def_enum(srna, "data_types_loops_vcol", DT_layer_loop_vcol_items, 0, "Face Corner Data Types",
 	                    "Which face corner data layers to transfer");
 	RNA_def_property_flag(prop, PROP_ENUM_FLAG);
 	RNA_def_property_enum_sdna(prop, NULL, "data_types");
-	RNA_def_property_update(prop, 0, "rna_Modifier_update");
+	RNA_def_property_update(prop, 0, "dt_data_types_update");
 
 	prop = RNA_def_enum(srna, "data_types_polys", DT_layer_poly_items, 0, "Poly Data Types",
 	                    "Which poly data layers to transfer");
 	RNA_def_property_flag(prop, PROP_ENUM_FLAG);
 	RNA_def_property_enum_sdna(prop, NULL, "data_types");
-	RNA_def_property_update(prop, 0, "rna_Modifier_update");
+	RNA_def_property_update(prop, 0, "dt_data_types_update");
 	prop = RNA_def_enum(srna, "data_types_polys_uv", DT_layer_poly_uv_items, 0, "Poly Data Types",
 	                    "Which poly data layers to transfer");
 	RNA_def_property_flag(prop, PROP_ENUM_FLAG);
 	RNA_def_property_enum_sdna(prop, NULL, "data_types");
-	RNA_def_property_update(prop, 0, "rna_Modifier_update");
+	RNA_def_property_update(prop, 0, "dt_data_types_update");
 
 	/* Mapping methods. */
 	prop = RNA_def_enum(srna, "vert_mapping", DT_method_vertex_items, M2MMAP_MODE_TOPOLOGY, "Vertex Mapping",

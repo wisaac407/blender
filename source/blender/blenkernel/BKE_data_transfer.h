@@ -49,18 +49,23 @@ enum {
 	DT_DATA_SHAPEKEY                    = 1 << 1,
 	DT_DATA_SKIN                        = 1 << 2,
 	DT_DATA_BWEIGHT_VERT                = 1 << 3,
+	DT_DATA_VERT_ALL                    = DT_DATA_MDEFORMVERT | DT_DATA_SHAPEKEY | DT_DATA_SKIN | DT_DATA_BWEIGHT_VERT,
 
 	DT_DATA_SHARP_EDGE                  = 1 << 8,
 	DT_DATA_SEAM                        = 1 << 9,
 	DT_DATA_CREASE                      = 1 << 10,
 	DT_DATA_BWEIGHT_EDGE                = 1 << 11,
 	DT_DATA_FREESTYLE_EDGE              = 1 << 12,
+	DT_DATA_EDGE_ALL                    = DT_DATA_SHARP_EDGE | DT_DATA_SEAM | DT_DATA_CREASE | DT_DATA_BWEIGHT_EDGE |
+	                                      DT_DATA_FREESTYLE_EDGE,
 
 	DT_DATA_UV                          = 1 << 16,
 	DT_DATA_SHARP_FACE                  = 1 << 17,
 	DT_DATA_FREESTYLE_FACE              = 1 << 18,
+	DT_DATA_POLY_ALL                    = DT_DATA_UV | DT_DATA_SHARP_FACE | DT_DATA_FREESTYLE_FACE,
 
 	DT_DATA_VCOL                        = 1 << 24,
+	DT_DATA_LOOP_ALL                    = DT_DATA_VCOL,
 };
 
 CustomDataMask BKE_data_transfer_dttypes_to_cdmask(const int dtdata_types);
