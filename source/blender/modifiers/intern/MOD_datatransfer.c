@@ -165,6 +165,24 @@ static DerivedMesh *applyModifier(ModifierData *md, Object *ob, DerivedMesh *der
 	SpaceTransform space_transform_data;
 	SpaceTransform *space_transform = (dtmd->flags & MOD_DATATRANSFER_OBSRC_TRANSFORM) ? &space_transform_data : NULL;
 
+	/* We check source object does not have a data transfer mod from our object too,
+	 * cycle dependency here his deadly! */
+	{
+		ModifierData *md_it = dtmd->ob_source->modifiers.first;
+
+		for (; md_it; md_it = md_it->next) {
+			if (md_it->type == md->type) {
+				DataTransferModifierData *dtmd_it = (DataTransferModifierData *) md_it;
+				if (dtmd_it->ob_source && (dtmd_it->ob_source == ob)) {
+					modifier_setError(md, "This modifier does not support cycle dependencies, source object '%s' "
+					                      "already uses this object as data transfer source",
+					                  &dtmd_it->ob_source->id.name[2]);
+					return dm;
+				}
+			}
+		}
+	}
+
 	if (space_transform) {
 		BLI_SPACE_TRANSFORM_SETUP(space_transform, ob, dtmd->ob_source);
 	}
