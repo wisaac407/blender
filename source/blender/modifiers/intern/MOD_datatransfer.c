@@ -60,10 +60,10 @@ static void initData(ModifierData *md)
 	dtmd->ob_source          = NULL;
 	dtmd->data_types         = 0;
 
-	dtmd->vmap_mode          = M2MMAP_MODE_TOPOLOGY;
-	dtmd->emap_mode          = M2MMAP_MODE_TOPOLOGY;
-	dtmd->lmap_mode          = M2MMAP_MODE_TOPOLOGY;
-	dtmd->pmap_mode          = M2MMAP_MODE_TOPOLOGY;
+	dtmd->vmap_mode          = M2MMAP_MODE_VERT_NEAREST;
+	dtmd->emap_mode          = M2MMAP_MODE_EDGE_NEAREST;
+	dtmd->lmap_mode          = M2MMAP_MODE_LOOP_NEAREST_POLYNOR;
+	dtmd->pmap_mode          = M2MMAP_MODE_POLY_NEAREST;
 
 	dtmd->map_max_distance   = 1.0f;
 	dtmd->map_ray_radius     = 0.0f;

@@ -4155,22 +4155,22 @@ static void rna_def_modifier_datatransfer(BlenderRNA *brna)
 	RNA_def_property_update(prop, 0, "dt_data_types_update");
 
 	/* Mapping methods. */
-	prop = RNA_def_enum(srna, "vert_mapping", DT_method_vertex_items, M2MMAP_MODE_TOPOLOGY, "Vertex Mapping",
+	prop = RNA_def_enum(srna, "vert_mapping", DT_method_vertex_items, M2MMAP_MODE_VERT_NEAREST, "Vertex Mapping",
 	                    "Method used to map source vertices to destination ones");
 	RNA_def_property_enum_sdna(prop, NULL, "vmap_mode");
 	RNA_def_property_update(prop, 0, "rna_Modifier_update");
 
-	prop = RNA_def_enum(srna, "edge_mapping", DT_method_edge_items, M2MMAP_MODE_TOPOLOGY, "Edge Mapping",
+	prop = RNA_def_enum(srna, "edge_mapping", DT_method_edge_items, M2MMAP_MODE_EDGE_NEAREST, "Edge Mapping",
 	                    "Method used to map source edges to destination ones");
 	RNA_def_property_enum_sdna(prop, NULL, "emap_mode");
 	RNA_def_property_update(prop, 0, "rna_Modifier_update");
 
-	prop = RNA_def_enum(srna, "loop_mapping", DT_method_loop_items, M2MMAP_MODE_TOPOLOGY, "Face Corner Mapping",
-	                    "Method used to map source faces' corners to destination ones");
+	prop = RNA_def_enum(srna, "loop_mapping", DT_method_loop_items, M2MMAP_MODE_LOOP_NEAREST_POLYNOR,
+	                    "Face Corner Mapping", "Method used to map source faces' corners to destination ones");
 	RNA_def_property_enum_sdna(prop, NULL, "lmap_mode");
 	RNA_def_property_update(prop, 0, "rna_Modifier_update");
 
-	prop = RNA_def_enum(srna, "poly_mapping", DT_method_poly_items, M2MMAP_MODE_TOPOLOGY, "Face Mapping",
+	prop = RNA_def_enum(srna, "poly_mapping", DT_method_poly_items, M2MMAP_MODE_POLY_NEAREST, "Face Mapping",
 	                    "Method used to map source faces to destination ones");
 	RNA_def_property_enum_sdna(prop, NULL, "pmap_mode");
 	RNA_def_property_update(prop, 0, "rna_Modifier_update");

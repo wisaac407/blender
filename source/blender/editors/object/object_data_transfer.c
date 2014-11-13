@@ -405,13 +405,13 @@ void OBJECT_OT_data_transfer(wmOperatorType *ot)
 	RNA_def_boolean(ot->srna, "use_create", true, "Create Data", "Add data layers on destination meshes if needed");
 
 	/* Mapping methods. */
-	RNA_def_enum(ot->srna, "vert_mapping", DT_method_vertex_items, M2MMAP_MODE_TOPOLOGY, "Vertex Mapping",
+	RNA_def_enum(ot->srna, "vert_mapping", DT_method_vertex_items, M2MMAP_MODE_VERT_NEAREST, "Vertex Mapping",
 	             "Method used to map source vertices to destination ones");
-	RNA_def_enum(ot->srna, "edge_mapping", DT_method_edge_items, M2MMAP_MODE_TOPOLOGY, "Edge Mapping",
+	RNA_def_enum(ot->srna, "edge_mapping", DT_method_edge_items, M2MMAP_MODE_EDGE_NEAREST, "Edge Mapping",
 	             "Method used to map source edges to destination ones");
-	RNA_def_enum(ot->srna, "loop_mapping", DT_method_loop_items, M2MMAP_MODE_TOPOLOGY, "Face Corner Mapping",
-	             "Method used to map source faces' corners to destination ones");
-	RNA_def_enum(ot->srna, "poly_mapping", DT_method_poly_items, M2MMAP_MODE_TOPOLOGY, "Face Mapping",
+	RNA_def_enum(ot->srna, "loop_mapping", DT_method_loop_items, M2MMAP_MODE_LOOP_NEAREST_POLYNOR,
+	             "Face Corner Mapping", "Method used to map source faces' corners to destination ones");
+	RNA_def_enum(ot->srna, "poly_mapping", DT_method_poly_items, M2MMAP_MODE_POLY_NEAREST, "Face Mapping",
 	             "Method used to map source faces to destination ones");
 
 	/* Mapping options and filtering. */
