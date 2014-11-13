@@ -4015,8 +4015,8 @@ static void rna_def_modifier_datatransfer(BlenderRNA *brna)
 #endif
 
 	static EnumPropertyItem DT_layer_edge_items[] = {
-		{DT_DATA_SHARP_EDGE, "SHARP_EDGE", 0, "Sharp", "Transfer sharp flag"},
-		{DT_DATA_SEAM, "SEAM", 0, "Seam", "Transfer UV seam flag"},
+		{DT_DATA_SHARP_EDGE, "SHARP_EDGE", 0, "Sharp", "Transfer sharp mark"},
+		{DT_DATA_SEAM, "SEAM", 0, "UV Seam", "Transfer UV seam mark"},
 		{DT_DATA_CREASE, "CREASE", 0, "Subsurf Crease", "Transfer crease values"},
 		{DT_DATA_BWEIGHT_EDGE, "BEVEL_WEIGHT_EDGE", 0, "Bevel Weight", "Transfer bevel weights"},
 		{DT_DATA_FREESTYLE_EDGE, "FREESTYLE_EDGE", 0, "Freestyle Mark", "Transfer Freestyle edge mark"},
@@ -4032,7 +4032,7 @@ static void rna_def_modifier_datatransfer(BlenderRNA *brna)
 	};
 
 	static EnumPropertyItem DT_layer_poly_items[] = {
-		{DT_DATA_SHARP_FACE, "SMOOTH", 0, "Smooth", "Transfer flat/smooth flag"},
+		{DT_DATA_SHARP_FACE, "SMOOTH", 0, "Smooth", "Transfer flat/smooth mark"},
 		{DT_DATA_FREESTYLE_FACE, "FREESTYLE_FACE", 0, "Freestyle Mark", "Transfer Freestyle face mark"},
 		{0, NULL, 0, NULL, NULL}
 	};

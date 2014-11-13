@@ -72,8 +72,8 @@ static EnumPropertyItem DT_layer_items[] = {
 #endif
 	{DT_DATA_BWEIGHT_VERT, "BEVEL_WEIGHT_VERT", 0, "Bevel Weight", "Transfer bevel weights"},
 	{0, "", 0, "Edge Data", ""},
-	{DT_DATA_SHARP_EDGE, "SHARP_EDGE", 0, "Sharp", "Transfer sharp flag"},
-	{DT_DATA_SEAM, "SEAM", 0, "Seam", "Transfer UV seam flag"},
+	{DT_DATA_SHARP_EDGE, "SHARP_EDGE", 0, "Sharp", "Transfer sharp mark"},
+	{DT_DATA_SEAM, "SEAM", 0, "UV Seam", "Transfer UV seam mark"},
 	{DT_DATA_CREASE, "CREASE", 0, "Subsurf Crease", "Transfer crease values"},
 	{DT_DATA_BWEIGHT_EDGE, "BEVEL_WEIGHT_EDGE", 0, "Bevel Weight", "Transfer bevel weights"},
 	{DT_DATA_FREESTYLE_EDGE, "FREESTYLE_EDGE", 0, "Freestyle Mark", "Transfer Freestyle edge mark"},
@@ -81,7 +81,7 @@ static EnumPropertyItem DT_layer_items[] = {
 	{DT_DATA_VCOL, "VCOL", 0, "VCol", "Vertex (face corners) colors"},
 	{0, "", 0, "Face Data", ""},
 	{DT_DATA_UV, "UV", 0, "UVs", "Transfer UV layers"},
-	{DT_DATA_SHARP_FACE, "SMOOTH", 0, "Smooth", "Transfer flat/smooth flag"},
+	{DT_DATA_SHARP_FACE, "SMOOTH", 0, "Smooth", "Transfer flat/smooth mark"},
 	{DT_DATA_FREESTYLE_FACE, "FREESTYLE_FACE", 0, "Freestyle Mark", "Transfer Freestyle face mark"},
 	{0, NULL, 0, NULL, NULL}
 };
