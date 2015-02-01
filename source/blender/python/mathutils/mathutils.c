@@ -41,8 +41,10 @@ PyDoc_STRVAR(M_Mathutils_doc,
 "This module provides access to the math classes :class:`Color`,\n"
 ":class:`Euler`, :class:`Matrix`, :class:`Quaternion` and :class:`Vector`.\n"
 "\n"
-"Classes and methods that accept Vectors also accept other numeric sequences,\n"
-"such as tuples and lists."
+".. note::\n"
+"\n"
+"   Classes, methods and functions that accept Vector args also accept other numeric sequences,\n"
+"   such as tuples, lists."
 );
 static int mathutils_array_parse_fast(float *array,
                                       int size,

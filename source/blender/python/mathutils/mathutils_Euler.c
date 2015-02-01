@@ -659,12 +659,12 @@ static struct PyMethodDef Euler_methods[] = {
 PyDoc_STRVAR(euler_doc,
 ".. class:: Euler(angles, order='XYZ')\n"
 "\n"
-"   :param angles: three angles, in radians\n"
-"   :type angles: 3-:class:`Vector`\n"
-"   :param order: order of the angles, a permutation of 'XYZ'\n"
-"   :type order: str\n"
+"   This object gives access to Eulers in Blender.\n"
 "\n"
-"This object gives access to Eulers in Blender."
+"   :param angles: Three angles, in radians.\n"
+"   :type angles: 3d vector\n"
+"   :param order: Optional order of the angles, a permutation of ``XYZ``.\n"
+"   :type order: str\n"
 );
 PyTypeObject euler_Type = {
 	PyVarObject_HEAD_INIT(NULL, 0)

@@ -2716,14 +2716,14 @@ static struct PyMethodDef Matrix_methods[] = {
 
 /*------------------PY_OBECT DEFINITION--------------------------*/
 PyDoc_STRVAR(matrix_doc,
-".. class:: Matrix([sequence_of_rows])\n"
+".. class:: Matrix([rows])\n"
 "\n"
-"   :param sequence_of_rows: Sequence of rows (which are sequences of floats).\n"
-"                            When ommitted, a 4x4 identity matrix is constructed.\n"
-"   :type sequence_of_rows: tuple or list\n"
+"   This object gives access to Matrices in Blender, supporting square and rectangular\n"
+"   matrices from 2x2 up to 4x4.\n"
 "\n"
-"This object gives access to Matrices in Blender, supporting square and rectangular\n"
-"matrices from 2x2 up to 4x4.\n"
+"   :param rows: Sequence of rows.\n"
+"   When ommitted, a 4x4 identity matrix is constructed.\n"
+"   :type rows: 2d number sequence\n"
 );
 PyTypeObject matrix_Type = {
 	PyVarObject_HEAD_INIT(NULL, 0)
