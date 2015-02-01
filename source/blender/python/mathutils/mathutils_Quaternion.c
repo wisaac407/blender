@@ -187,6 +187,8 @@ PyDoc_STRVAR(Quaternion_to_exponential_map_doc,
 "\n"
 "   :return: exponential map.\n"
 "   :rtype: :class:`Vector` of size 3\n"
+"\n"
+"   To convert back to a quaternion, pass it to the :class:`Quaternion` constructor.\n"
 );
 static PyObject *Quaternion_to_exponential_map(QuaternionObject *self)
 {
@@ -1226,7 +1228,30 @@ static PyGetSetDef Quaternion_getseters[] = {
 
 /* ------------------PY_OBECT DEFINITION-------------------------- */
 PyDoc_STRVAR(quaternion_doc,
-"This object gives access to Quaternions in Blender."
+".. class:: Quaternion([vector, [angle]])\n"
+"\n"
+"   :param vector: size 3 or 4\n"
+"   :type vector: :class:`Vector`\n"
+"   :param angle: rotation angle, in radians\n"
+"   :type angle: float\n"
+"\n"
+"   This object gives access to Quaternions in Blender. The constructor takes\n"
+"   arguments in various forms:\n"
+"\n"
+"   no arguments\n"
+"       Create an identity quaternion\n"
+"\n"
+"   (`wxyz`)\n"
+"       Create a quaternion from a `(w, x, y, z)` vector.\n"
+"\n"
+"   (`exponential_map`)\n"
+"       Create a quaternion from an exponential map vector.\n"
+"       See also :meth:`to_exponential_map`\n"
+"\n"
+"   (`axis`, `angle`)\n"
+"       Create a quaternion representing a rotation of `angle` radians over `axis`.\n"
+"       See also :meth:`to_axis_angle`\n"
+"\n"
 );
 PyTypeObject quaternion_Type = {
 	PyVarObject_HEAD_INIT(NULL, 0)

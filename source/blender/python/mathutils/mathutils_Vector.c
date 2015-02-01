@@ -2904,7 +2904,12 @@ static struct PyMethodDef Vector_methods[] = {
  */
 
 PyDoc_STRVAR(vector_doc,
-"This object gives access to Vectors in Blender."
+".. class:: Vector(sequence_of_floats=(0, 0, 0))\n"
+"\n"
+"   :param sequence_of_floats: components of the vector, must be a sequence of at least two elements\n"
+"   :type sequence_of_floats: tuple or :class:`Vector`\n"
+"\n"
+"   This object gives access to Vectors in Blender.\n"
 );
 PyTypeObject vector_Type = {
 	PyVarObject_HEAD_INIT(NULL, 0)
