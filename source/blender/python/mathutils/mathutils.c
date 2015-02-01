@@ -43,7 +43,7 @@ PyDoc_STRVAR(M_Mathutils_doc,
 "\n"
 ".. note::\n"
 "\n"
-"   Classes, methods and functions that accept Vector args also accept other numeric sequences,\n"
+"   Classes, methods and attributes that accept Vector types also accept other numeric sequences,\n"
 "   such as tuples, lists."
 );
 static int mathutils_array_parse_fast(float *array,
