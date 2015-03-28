@@ -187,6 +187,8 @@ static void smooth_iter(
 {
 	const unsigned int numEdges = (unsigned int)dm->getNumEdges(dm);
 	const MEdge *edges = dm->getEdgeArray(dm);
+	const float lambda = dmmd->lambda;
+	const float eps = FLT_EPSILON * 10.0f;
 	unsigned int i;
 
 	for (i = 0; i < numEdges; i++) {
@@ -210,23 +212,40 @@ static void smooth_iter(
 		sd->edge_count += 1.0f;
 	}
 
-	for (i = 0; i < numVerts; i++) {
-		SmoothingData *sd = &smooth_data[i];
-
-		if (sd->edge_lengths * sd->edge_count > FLT_EPSILON * 10.0f) {
-			float w = 1.0f;
-			if (dmmd->smooth_weights) {
-				w = dmmd->smooth_weights[i];
+	if ((dmmd->smooth_weights == NULL) && (boundaries == NULL)) {
+		/* fast-path */
+		for (i = 0; i < numVerts; i++) {
+			SmoothingData *sd = &smooth_data[i];
+			float div = sd->edge_lengths * sd->edge_count;
+			if (div > eps) {
+				madd_v3_v3fl(vertexCos[i], sd->delta, lambda / div);
 			}
-			if (boundaries) {
-				w =  w * (boundaries[i] != 0 ? 0.0f : 1.0f);
-			}
-			mul_v3_fl(sd->delta, (w * dmmd->lambda) / (sd->edge_lengths * sd->edge_count));
-			add_v3_v3(vertexCos[i], sd->delta);
+			/* zero for the next iteration (saves memset on entire array) */
+			memset(sd, 0, sizeof(*sd));
 		}
+	}
+	else {
 
-		/* zero for the next iteration (saves memset on entire array) */
-		memset(sd, 0, sizeof(*sd));
+		for (i = 0; i < numVerts; i++) {
+			SmoothingData *sd = &smooth_data[i];
+			float div = sd->edge_lengths * sd->edge_count;
+
+			if (div > eps) {
+				float lambda_alt = lambda;
+
+				if (dmmd->smooth_weights) {
+					lambda_alt *= dmmd->smooth_weights[i];
+				}
+
+				if (boundaries) {
+					lambda_alt *= (boundaries[i] != 0 ? 0.0f : 1.0f);
+				}
+
+				madd_v3_v3fl(vertexCos[i], sd->delta, lambda_alt / div);
+			}
+
+			memset(sd, 0, sizeof(*sd));
+		}
 	}
 }
 
