@@ -33,16 +33,18 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BKE_cdderivedmesh.h" 
+#include "BKE_cdderivedmesh.h"
 #include "BKE_deform.h"
 
 #include "MOD_modifiertypes.h"
 #include "MOD_util.h"
 
 
+#include "BLI_strict_flags.h"
+
 static void initData(ModifierData *md)
 {
-	DeltaMushModifierData *dmmd = (DeltaMushModifierData *) md;
+	DeltaMushModifierData *dmmd = (DeltaMushModifierData *)md;
 
 	dmmd->dm_flags = MOD_DELTAMUSH_PINBOUNDS;
 	dmmd->boundverts = 0;
@@ -57,8 +59,8 @@ static void initData(ModifierData *md)
 
 static void copyData(ModifierData *md, ModifierData *target)
 {
-	DeltaMushModifierData *dmmd = (DeltaMushModifierData *) md;
-	DeltaMushModifierData *t_dmmd = (DeltaMushModifierData *) target;
+	DeltaMushModifierData *dmmd = (DeltaMushModifierData *)md;
+	DeltaMushModifierData *t_dmmd = (DeltaMushModifierData *)target;
 	modifier_copyData_generic(md, target);
 	if (dmmd->deltas) {
 		t_dmmd->deltas = MEM_dupallocN(dmmd->deltas);
@@ -120,7 +122,7 @@ static void update_weights(Object *ob, DeltaMushModifierData *dmmd, DerivedMesh 
 	modifier_get_vgroup(ob, dm, dmmd->defgrp_name, &dvert, &defgrp_index);
 	if (!dmmd->smooth_weights && dvert) {
 		dmmd->smooth_weights = MEM_callocN(sizeof(float) * (size_t) numVerts, "delta mush weight cache");
-	} 
+	}
 	else if (dmmd->smooth_weights && !dvert) {
 		MEM_freeN(dmmd->smooth_weights);
 		dmmd->smooth_weights = NULL;
@@ -140,7 +142,8 @@ static void update_weights(Object *ob, DeltaMushModifierData *dmmd, DerivedMesh 
 }
 
 
-static void find_boundaries(DerivedMesh *dm, short *adjacent_counts) {
+static void find_boundaries(DerivedMesh *dm, short *adjacent_counts)
+{
 	MPoly *polys = dm->getPolyArray(dm);
 	MLoop *loops = dm->getLoopArray(dm);
 	MEdge *edges = dm->getEdgeArray(dm);
@@ -164,16 +167,16 @@ static void find_boundaries(DerivedMesh *dm, short *adjacent_counts) {
 }
 
 
-typedef struct SmoothingData{
+typedef struct SmoothingData {
 	float delta[3];
 	float edge_lengths;
 	float edge_count;
-
 } SmoothingData;
 
 
-static void smooth_iter(DeltaMushModifierData *dmmd, DerivedMesh *dm, float(*vertexCos)[3], int numVerts,
-	short *boundaries, SmoothingData *smoothingData)
+static void smooth_iter(
+        DeltaMushModifierData *dmmd, DerivedMesh *dm, float(*vertexCos)[3], int numVerts,
+        short *boundaries, SmoothingData *smoothingData)
 {
 	int numEdges = dm->getNumEdges(dm);
 	MEdge *edges = dm->getEdgeArray(dm);
@@ -202,24 +205,26 @@ static void smooth_iter(DeltaMushModifierData *dmmd, DerivedMesh *dm, float(*ver
 				w =  w * (boundaries[i] != 0 ? 0.0f : 1.0f);
 			}
 			mul_v3_fl(smoothingData[i].delta, w * dmmd->lambda /
-					(smoothingData[i].edge_lengths * smoothingData[i].edge_count));
+			          (smoothingData[i].edge_lengths * smoothingData[i].edge_count));
 			add_v3_v3(vertexCos[i], smoothingData[i].delta);
 		}
 	}
 }
 
 
-static void smooth_verts(DeltaMushModifierData *dmmd, DerivedMesh *derivedData, float(*vertexCos)[3], int numVerts)
+static void smooth_verts(
+        DeltaMushModifierData *dmmd, DerivedMesh *derivedData,
+        float(*vertexCos)[3], int numVerts)
 {
-	SmoothingData *smoothingData = MEM_mallocN((size_t)(numVerts)* sizeof(SmoothingData), "delta mush smoothing data");
+	SmoothingData *smoothingData = MEM_mallocN((size_t)numVerts * sizeof(SmoothingData), "delta mush smoothing data");
 	short *boundaries = NULL;
 	int i;
 	if (dmmd->dm_flags & MOD_DELTAMUSH_PINBOUNDS) {
-		boundaries = MEM_callocN((size_t)(numVerts)* sizeof(short), "delta mush boundary data");
+		boundaries = MEM_callocN((size_t)numVerts * sizeof(short), "delta mush boundary data");
 		find_boundaries(derivedData, boundaries);
 	}
 	for (i = 0; i < dmmd->repeat; i++) {
-		memset(smoothingData, 0, (size_t)(numVerts)* sizeof(SmoothingData));
+		memset(smoothingData, 0, (size_t)numVerts * sizeof(SmoothingData));
 		smooth_iter(dmmd, derivedData, vertexCos, numVerts, boundaries, smoothingData);
 	}
 	MEM_freeN(smoothingData);
@@ -229,8 +234,9 @@ static void smooth_verts(DeltaMushModifierData *dmmd, DerivedMesh *derivedData, 
 }
 
 
-static void calc_axes(const MLoop *pre, const MLoop *loop, const MLoop *post, float(*vertexCos)[3],
-		float r_tspace[3][3])
+static void calc_axes(
+        const MLoop *pre, const MLoop *loop, const MLoop *post, float(*vertexCos)[3],
+        float r_tspace[3][3])
 {
 	float v_prev[3];
 	float v_next[3];
@@ -243,7 +249,7 @@ static void calc_axes(const MLoop *pre, const MLoop *loop, const MLoop *post, fl
 	add_v3_v3v3(r_tspace[1], v_prev, v_next);
 
 	if (compare_v3v3(v_prev, v_next, FLT_EPSILON * 10.0f) == false) {
-		float nor[3]; 
+		float nor[3];
 		float weight = fabsf(acosf(dot_v3v3(v_next, v_prev)));
 
 		cross_v3_v3v3(nor, v_prev, v_next);
@@ -258,15 +264,17 @@ static void calc_axes(const MLoop *pre, const MLoop *loop, const MLoop *post, fl
 }
 
 
-static void calculate_tangent_spaces(DerivedMesh *dm, float(*vertexCos)[3],
-		float(*r_tangentSpaces)[3][3])
+static void calculate_tangent_spaces(
+        DerivedMesh *dm, float(*vertexCos)[3],
+        float (*r_tangentSpaces)[3][3])
 {
 	MPoly *polys = dm->getPolyArray(dm);
 	MLoop *loops = dm->getLoopArray(dm);
-	int numFaces, f, numLoops, l, pre, post, loop, vert;
+	int numFaces, f, numLoops, l, pre, post, loop, i;
 	float t[3], bt[3], temp1[3], temp2[3];
 
 	numFaces = dm->getNumPolys(dm);
+
 	for (f = 0; f < numFaces; f++) {
 		MPoly *p = &polys[f];
 		numLoops = p->totloop;
@@ -274,36 +282,37 @@ static void calculate_tangent_spaces(DerivedMesh *dm, float(*vertexCos)[3],
 		loop = pre + 1;
 		post = p->loopstart;
 		for (l = 0; l < numLoops; l++) {
-			vert = loops[loop].v;
-			calc_axes(&loops[pre], &loops[loop], &loops[post], vertexCos, r_tangentSpaces[vert]);
+			i = (int)loops[loop].v;
+			calc_axes(&loops[pre], &loops[loop], &loops[post], vertexCos, r_tangentSpaces[i]);
 			pre = loop;
 			loop = post;
 			post++;
 		}
 	}
-	for (vert = 0; vert < dm->getNumVerts(dm); vert++) {
-		normalize_v3(r_tangentSpaces[vert][2]);
 
-		copy_v3_v3(t, r_tangentSpaces[vert][0]);
-		copy_v3_v3(bt, r_tangentSpaces[vert][1]);
+	for (i = 0; i < dm->getNumVerts(dm); i++) {
+		normalize_v3(r_tangentSpaces[i][2]);
 
-		cross_v3_v3v3(r_tangentSpaces[vert][1], r_tangentSpaces[vert][2], t);
-		mul_v3_fl(r_tangentSpaces[vert][1], dot_v3v3(r_tangentSpaces[vert][1], bt) < 0.0f ? -1.0f : 1.0f);
+		copy_v3_v3(t, r_tangentSpaces[i][0]);
+		copy_v3_v3(bt, r_tangentSpaces[i][1]);
+
+		cross_v3_v3v3(r_tangentSpaces[i][1], r_tangentSpaces[i][2], t);
+		mul_v3_fl(r_tangentSpaces[i][1], dot_v3v3(r_tangentSpaces[i][1], bt) < 0.0f ? -1.0f : 1.0f);
 
 		/* orthognalise tangent */
-		mul_v3_v3fl(temp1, r_tangentSpaces[vert][2], dot_v3v3(r_tangentSpaces[vert][2], t));
-		sub_v3_v3v3(r_tangentSpaces[vert][0], t, temp1);
+		mul_v3_v3fl(temp1, r_tangentSpaces[i][2], dot_v3v3(r_tangentSpaces[i][2], t));
+		sub_v3_v3v3(r_tangentSpaces[i][0], t, temp1);
 
 		/* orthognalise bitangent */
-		mul_v3_v3fl(temp1, r_tangentSpaces[vert][2],
-			dot_v3v3(r_tangentSpaces[vert][2], r_tangentSpaces[vert][1]));
-		mul_v3_v3fl(temp2, r_tangentSpaces[vert][0],
-			dot_v3v3(r_tangentSpaces[vert][0], r_tangentSpaces[vert][1]) / dot_v3v3(t, t));
-		sub_v3_v3(r_tangentSpaces[vert][1], temp1);
-		sub_v3_v3(r_tangentSpaces[vert][1], temp2);
+		mul_v3_v3fl(temp1, r_tangentSpaces[i][2],
+			dot_v3v3(r_tangentSpaces[i][2], r_tangentSpaces[i][1]));
+		mul_v3_v3fl(temp2, r_tangentSpaces[i][0],
+			dot_v3v3(r_tangentSpaces[i][0], r_tangentSpaces[i][1]) / dot_v3v3(t, t));
+		sub_v3_v3(r_tangentSpaces[i][1], temp1);
+		sub_v3_v3(r_tangentSpaces[i][1], temp2);
 
-		normalize_v3(r_tangentSpaces[vert][0]);
-		normalize_v3(r_tangentSpaces[vert][1]);
+		normalize_v3(r_tangentSpaces[i][0]);
+		normalize_v3(r_tangentSpaces[i][1]);
 	}
 }
 
@@ -315,7 +324,7 @@ static void calc_deltas(DeltaMushModifierData *dmmd, DerivedMesh *dm, float(*ver
 	float invMat[3][3], d[3];
 	int i;
 
-	tangentSpaces = MEM_callocN((size_t)(numVerts) * sizeof(float [3][3]), "delta mush tangents");
+	tangentSpaces = MEM_callocN((size_t)(numVerts) * sizeof(float[3][3]), "delta mush tangents");
 	dmmd->boundverts = numVerts;
 	/* allocate deltas if they have not yet been allocated, otheriwse we will just write over them */
 	if (!dmmd->deltas) {
@@ -399,8 +408,9 @@ static void deltamushmodifier_do(ModifierData *md, Object *ob, DerivedMesh *dm, 
 }
 
 
-static void deformVerts(ModifierData *md, Object *ob, DerivedMesh *derivedData,
-		float(*vertexCos)[3], int numVerts, ModifierApplyFlag UNUSED(flag))
+static void deformVerts(
+        ModifierData *md, Object *ob, DerivedMesh *derivedData,
+        float(*vertexCos)[3], int numVerts, ModifierApplyFlag UNUSED(flag))
 {
 	DerivedMesh *dm = get_dm(ob, NULL, derivedData, NULL, false, false);
 
@@ -412,8 +422,9 @@ static void deformVerts(ModifierData *md, Object *ob, DerivedMesh *derivedData,
 }
 
 
-static void deformVertsEM(ModifierData *md, Object *ob, struct BMEditMesh *editData,
-		DerivedMesh *derivedData, float(*vertexCos)[3], int numVerts)
+static void deformVertsEM(
+        ModifierData *md, Object *ob, struct BMEditMesh *editData,
+        DerivedMesh *derivedData, float(*vertexCos)[3], int numVerts)
 {
 	DerivedMesh *dm = get_dm(ob, editData, derivedData, NULL, false, false);
 
@@ -431,7 +442,7 @@ ModifierTypeInfo modifierType_DeltaMush = {
 		/* structSize */        sizeof(DeltaMushModifierData),
 		/* type */              eModifierTypeType_OnlyDeform,
 		/* flags */             eModifierTypeFlag_AcceptsMesh |
-				eModifierTypeFlag_SupportsEditmode,
+		                        eModifierTypeFlag_SupportsEditmode,
 
 		/* copyData */          copyData,
 		/* deformVerts */       deformVerts,

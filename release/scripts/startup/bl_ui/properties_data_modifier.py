@@ -1387,10 +1387,10 @@ class DATA_PT_modifiers(ModifierButtonsPanel, Panel):
         sub.prop(md, "use_invert_vertex_group", text="", icon='ARROW_LEFTRIGHT')
 
     def DELTAMUSH(self, layout, ob, md):
-        if bool(md.bind):
+        if md.bind:
             layout.operator("object.deltamush_bind", text="Unbind")
         else:
-            layout.operator("object.deltamush_bind", text="Bind") 
+            layout.operator("object.deltamush_bind", text="Bind")
         layout.prop(md, "only_smooth");
         layout.prop(md, "pin_bounds");
         layout.label(text="Smoothing Details")
@@ -1398,6 +1398,7 @@ class DATA_PT_modifiers(ModifierButtonsPanel, Panel):
         layout.prop(md, "lambda_factor", text="Factor")
         layout.label(text="Vertex Group:")
         layout.prop_search(md, "vertex_group", ob, "vertex_groups", text="")
-    
+
+
 if __name__ == "__main__":  # only for live edit.
     bpy.utils.register_module(__name__)
