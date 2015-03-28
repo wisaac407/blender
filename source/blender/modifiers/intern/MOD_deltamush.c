@@ -48,6 +48,8 @@
 #  include "PIL_time_utildefines.h"
 #endif
 
+#define USE_TANGENT_CALC_INLINE
+
 static void initData(ModifierData *md)
 {
 	DeltaMushModifierData *dmmd = (DeltaMushModifierData *)md;
@@ -176,14 +178,14 @@ static void find_boundaries(DerivedMesh *dm, short *adjacent_counts)
 typedef struct SmoothingData {
 	float delta[3];
 	float edge_lengths;
-	float edge_count;
 } SmoothingData;
 
 
 static void smooth_iter(
         DeltaMushModifierData *dmmd, DerivedMesh *dm,
         float(*vertexCos)[3], unsigned int numVerts,
-        const short *boundaries, SmoothingData *smooth_data)
+        const short *boundaries, const float *vertex_edge_count,
+        SmoothingData *smooth_data)
 {
 	const unsigned int numEdges = (unsigned int)dm->getNumEdges(dm);
 	const MEdge *edges = dm->getEdgeArray(dm);
@@ -204,19 +206,17 @@ static void smooth_iter(
 		sd = &smooth_data[edges[i].v1];
 		add_v3_v3(sd->delta, edge_dir);
 		sd->edge_lengths += edge_dist;
-		sd->edge_count += 1.0f;
 
 		sd = &smooth_data[edges[i].v2];
 		sub_v3_v3(sd->delta, edge_dir);
 		sd->edge_lengths += edge_dist;
-		sd->edge_count += 1.0f;
 	}
 
 	if ((dmmd->smooth_weights == NULL) && (boundaries == NULL)) {
 		/* fast-path */
 		for (i = 0; i < numVerts; i++) {
 			SmoothingData *sd = &smooth_data[i];
-			float div = sd->edge_lengths * sd->edge_count;
+			float div = sd->edge_lengths * vertex_edge_count[i];
 			if (div > eps) {
 				madd_v3_v3fl(vertexCos[i], sd->delta, lambda / div);
 			}
@@ -228,7 +228,7 @@ static void smooth_iter(
 
 		for (i = 0; i < numVerts; i++) {
 			SmoothingData *sd = &smooth_data[i];
-			float div = sd->edge_lengths * sd->edge_count;
+			float div = sd->edge_lengths * vertex_edge_count[i];
 
 			if (div > eps) {
 				float lambda_alt = lambda;
@@ -251,32 +251,76 @@ static void smooth_iter(
 
 
 static void smooth_verts(
-        DeltaMushModifierData *dmmd, DerivedMesh *derivedData,
+        DeltaMushModifierData *dmmd, DerivedMesh *dm,
         float(*vertexCos)[3], unsigned int numVerts)
 {
+	const unsigned int numEdges = (unsigned int)dm->getNumEdges(dm);
+	MEdge *edges = dm->getEdgeArray(dm);
+
 	SmoothingData *smooth_data;
+	float *vertex_edge_count;
 	short *boundaries = NULL;
-	int i;
+	unsigned int i;
 
 	if (dmmd->dm_flags & MOD_DELTAMUSH_PINBOUNDS) {
 		boundaries = MEM_callocN((size_t)numVerts * sizeof(short), "delta mush boundary data");
-		find_boundaries(derivedData, boundaries);
+		find_boundaries(dm, boundaries);
+	}
+
+	/* calculate as floats to avoid int->float conversion in #smooth_iter */
+	vertex_edge_count = MEM_callocN((size_t)numVerts * sizeof(float), __func__);
+	for (i = 0; i < numEdges; i++) {
+		vertex_edge_count[edges[i].v1] += 1.0f;
+		vertex_edge_count[edges[i].v2] += 1.0f;
 	}
 
 	smooth_data = MEM_callocN((size_t)numVerts * sizeof(SmoothingData), "delta mush smoothing data");
-	for (i = 0; i < dmmd->repeat; i++) {
+	for (i = 0; i < (unsigned int)dmmd->repeat; i++) {
 		/* no need to memset each time, 'smooth_iter' cleans up after its self */
-		smooth_iter(dmmd, derivedData, vertexCos, numVerts, boundaries, smooth_data);
+		smooth_iter(dmmd, dm, vertexCos, numVerts, boundaries, vertex_edge_count, smooth_data);
 	}
 	MEM_freeN(smooth_data);
+	MEM_freeN(vertex_edge_count);
 
 	if (boundaries) {
 		MEM_freeN(boundaries);
 	}
 }
 
+/**
+ * finalize after accumulation.
+ */
+static void calc_tangent_ortho(float ts[3][3])
+{
+	float v_tan_a[3], v_tan_b[3];
+	float t_vec_a[3], t_vec_b[3];
 
-static void calc_loop_axis(
+	normalize_v3(ts[2]);
+
+	copy_v3_v3(v_tan_a, ts[0]);
+	copy_v3_v3(v_tan_b, ts[1]);
+
+	cross_v3_v3v3(ts[1], ts[2], v_tan_a);
+	mul_v3_fl(ts[1], dot_v3v3(ts[1], v_tan_b) < 0.0f ? -1.0f : 1.0f);
+
+	/* orthognalise tangent */
+	mul_v3_v3fl(t_vec_a, ts[2], dot_v3v3(ts[2], v_tan_a));
+	sub_v3_v3v3(ts[0], v_tan_a, t_vec_a);
+
+	/* orthognalise bitangent */
+	mul_v3_v3fl(t_vec_a, ts[2], dot_v3v3(ts[2], ts[1]));
+	mul_v3_v3fl(t_vec_b, ts[0], dot_v3v3(ts[0], ts[1]) / dot_v3v3(v_tan_a, v_tan_a));
+	sub_v3_v3(ts[1], t_vec_a);
+	sub_v3_v3(ts[1], t_vec_b);
+
+	normalize_v3(ts[0]);
+	normalize_v3(ts[1]);
+}
+
+/**
+ * accumulate edge-vectors from all polys.
+ */
+static void calc_tangent_loop_accum(
         const float v_dir_prev[3],
         const float v_dir_next[3],
         float r_tspace[3][3])
@@ -304,7 +348,9 @@ static void calc_tangent_spaces(
         float (*r_tangent_spaces)[3][3])
 {
 	const unsigned int mpoly_num = (unsigned int)dm->getNumPolys(dm);
+#ifndef USE_TANGENT_CALC_INLINE
 	const unsigned int mvert_num = (unsigned int)dm->getNumVerts(dm);
+#endif
 	const MPoly *mpoly = dm->getPolyArray(dm);
 	const MLoop *mloop = dm->getLoopArray(dm);
 	unsigned int i;
@@ -337,38 +383,19 @@ static void calc_tangent_spaces(
 			sub_v3_v3v3(v_dir_next, vertexCos[l_curr->v], vertexCos[l_next->v]);
 			normalize_v3(v_dir_next);
 
-			calc_loop_axis(v_dir_prev, v_dir_next, ts);
+			calc_tangent_loop_accum(v_dir_prev, v_dir_next, ts);
 
 			copy_v3_v3(v_dir_prev, v_dir_next);
 		}
 	}
 
+	/* do inline */
+#ifndef USE_TANGENT_CALC_INLINE
 	for (i = 0; i < mvert_num; i++) {
 		float (*ts)[3] = r_tangent_spaces[i];
-		float v_tan_a[3], v_tan_b[3];
-		float t_vec_a[3], t_vec_b[3];
-
-		normalize_v3(ts[2]);
-
-		copy_v3_v3(v_tan_a, ts[0]);
-		copy_v3_v3(v_tan_b, ts[1]);
-
-		cross_v3_v3v3(ts[1], ts[2], v_tan_a);
-		mul_v3_fl(ts[1], dot_v3v3(ts[1], v_tan_b) < 0.0f ? -1.0f : 1.0f);
-
-		/* orthognalise tangent */
-		mul_v3_v3fl(t_vec_a, ts[2], dot_v3v3(ts[2], v_tan_a));
-		sub_v3_v3v3(ts[0], v_tan_a, t_vec_a);
-
-		/* orthognalise bitangent */
-		mul_v3_v3fl(t_vec_a, ts[2], dot_v3v3(ts[2], ts[1]));
-		mul_v3_v3fl(t_vec_b, ts[0], dot_v3v3(ts[0], ts[1]) / dot_v3v3(v_tan_a, v_tan_a));
-		sub_v3_v3(ts[1], t_vec_a);
-		sub_v3_v3(ts[1], t_vec_b);
-
-		normalize_v3(ts[0]);
-		normalize_v3(ts[1]);
+		calc_tangent_ortho(ts);
 	}
+#endif
 }
 
 
@@ -393,6 +420,10 @@ static void calc_deltas(
 
 	for (i = 0; i < numVerts; i++) {
 		float imat[3][3], delta[3];
+
+#ifdef USE_TANGENT_CALC_INLINE
+		calc_tangent_ortho(tangent_spaces[i]);
+#endif
 
 		sub_v3_v3v3(delta, vertexCos[i], smooth_vertex_cos[i]);
 		if (UNLIKELY(!invert_m3_m3(imat, tangent_spaces[i]))) {
@@ -466,6 +497,11 @@ static void deltamushmodifier_do(
 
 		for (i = 0; i < numVerts; i++) {
 			float delta[3];
+
+#ifdef USE_TANGENT_CALC_INLINE
+			calc_tangent_ortho(tangent_spaces[i]);
+#endif
+
 			mul_v3_m3v3(delta, tangent_spaces[i], dmmd->deltas[i]);
 			add_v3_v3(vertexCos[i], delta);
 		}
