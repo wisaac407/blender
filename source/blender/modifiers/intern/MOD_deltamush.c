@@ -258,27 +258,17 @@ static void smooth_verts(
 
 
 static void calc_loop_axis(
-        const MLoop *l_prev,
-        const MLoop *l_curr,
-        const MLoop *l_next,
-        float(*vertexCos)[3],
+        const float v_dir_prev[3],
+        const float v_dir_next[3],
         float r_tspace[3][3])
 {
-	float v_prev[3];
-	float v_next[3];
+	add_v3_v3v3(r_tspace[1], v_dir_prev, v_dir_next);
 
-	sub_v3_v3v3(v_prev, vertexCos[l_prev->v], vertexCos[l_curr->v]);
-	sub_v3_v3v3(v_next, vertexCos[l_curr->v], vertexCos[l_next->v]);
-
-	normalize_v3(v_prev);
-	normalize_v3(v_next);
-	add_v3_v3v3(r_tspace[1], v_prev, v_next);
-
-	if (compare_v3v3(v_prev, v_next, FLT_EPSILON * 10.0f) == false) {
-		const float weight = fabsf(acosf(dot_v3v3(v_next, v_prev)));
+	if (compare_v3v3(v_dir_prev, v_dir_next, FLT_EPSILON * 10.0f) == false) {
+		const float weight = fabsf(acosf(dot_v3v3(v_dir_next, v_dir_prev)));
 		float nor[3];
 
-		cross_v3_v3v3(nor, v_prev, v_next);
+		cross_v3_v3v3(nor, v_dir_prev, v_dir_next);
 		normalize_v3(nor);
 
 		cross_v3_v3v3(r_tspace[0], r_tspace[1], nor);
@@ -302,15 +292,35 @@ static void calc_tangent_spaces(
 
 	for (i = 0; i < mpoly_num; i++) {
 		const MPoly *mp = &mpoly[i];
-		const unsigned int l_term = (unsigned int)(mp->loopstart + mp->totloop);
-		unsigned int l_prev, l_curr, l_next;
+		const MLoop *l_next = &mloop[mp->loopstart];
+		const MLoop *l_term = l_next + mp->totloop;
+		const MLoop *l_prev = l_term - 2;
+		const MLoop *l_curr = l_term - 1;
 
-		for (l_prev = l_term - 2, l_curr = l_term - 1, l_next = (unsigned int)mp->loopstart;
-		     l_next < l_term;
+		/* loop directions */
+		float v_dir_prev[3], v_dir_next[3];
+
+		/* needed entering the loop */
+		sub_v3_v3v3(v_dir_prev, vertexCos[l_prev->v], vertexCos[l_curr->v]);
+		normalize_v3(v_dir_prev);
+
+		for (;
+		     l_next != l_term;
 		     l_prev = l_curr, l_curr = l_next, l_next++)
 		{
-			float (*ts)[3] = r_tangent_spaces[mloop[l_curr].v];
-			calc_loop_axis(&mloop[l_prev], &mloop[l_curr], &mloop[l_next], vertexCos, ts);
+			float (*ts)[3] = r_tangent_spaces[l_curr->v];
+
+			/* re-use the previous value */
+#if 0
+			sub_v3_v3v3(v_dir_prev, vertexCos[l_prev->v], vertexCos[l_curr->v]);
+			normalize_v3(v_dir_prev);
+#endif
+			sub_v3_v3v3(v_dir_next, vertexCos[l_curr->v], vertexCos[l_next->v]);
+			normalize_v3(v_dir_next);
+
+			calc_loop_axis(v_dir_prev, v_dir_next, ts);
+
+			copy_v3_v3(v_dir_prev, v_dir_next);
 		}
 	}
 
