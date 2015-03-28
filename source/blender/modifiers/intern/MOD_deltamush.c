@@ -39,8 +39,14 @@
 #include "MOD_modifiertypes.h"
 #include "MOD_util.h"
 
-
 #include "BLI_strict_flags.h"
+
+#define DEBUG_TIME
+
+#include "PIL_time.h"
+#ifdef DEBUG_TIME
+#  include "PIL_time_utildefines.h"
+#endif
 
 static void initData(ModifierData *md)
 {
@@ -403,6 +409,10 @@ static void deltamushmodifier_do(
 	BLI_assert(dmmd->boundverts == numVerts && dmmd->deltas);
 
 
+#ifdef DEBUG_TIME
+	TIMEIT_START(delta_mush);
+#endif
+
 	/* do the actual delta mush */
 	smooth_verts(dmmd, dm, vertexCos, numVerts);
 
@@ -424,6 +434,10 @@ static void deltamushmodifier_do(
 
 		MEM_freeN(tangent_spaces);
 	}
+
+#ifdef DEBUG_TIME
+	TIMEIT_END(delta_mush);
+#endif
 }
 
 
