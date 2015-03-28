@@ -4949,6 +4949,27 @@ static void direct_link_modifiers(FileData *fd, ListBase *lb)
 			}
 			lmd->cache_system = NULL;
 		}
+		else if (md->type == eModifierType_DeltaMush) {
+			DeltaMushModifierData *dmmd = (DeltaMushModifierData*)md;
+			if (dmmd->deltas) {
+				dmmd->deltas = newdataadr(fd, dmmd->deltas);
+				if (fd->flags & FD_FLAGS_SWITCH_ENDIAN) {
+					BLI_endian_switch_float_array((float *)dmmd->deltas, dmmd->boundverts * 3);				
+				}
+			}
+			if (dmmd->positions) {
+				dmmd->positions = newdataadr(fd, dmmd->positions);
+				if (fd->flags & FD_FLAGS_SWITCH_ENDIAN) {
+					BLI_endian_switch_float_array((float *)dmmd->positions, dmmd->boundverts * 3);
+				}
+			}
+			if (dmmd->smooth_weights) {
+				dmmd->smooth_weights = newdataadr(fd, dmmd->smooth_weights);
+				if (fd->flags & FD_FLAGS_SWITCH_ENDIAN) {
+					BLI_endian_switch_float_array(dmmd->smooth_weights, dmmd->boundverts);
+				}
+			}
+		}
 	}
 }
 

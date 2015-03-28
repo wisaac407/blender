@@ -54,6 +54,7 @@ set(SRC
 	intern/MOD_curve.c
 	intern/MOD_datatransfer.c
 	intern/MOD_decimate.c
+	intern/MOD_deltamush.c
 	intern/MOD_displace.c
 	intern/MOD_dynamicpaint.c
 	intern/MOD_edgesplit.c

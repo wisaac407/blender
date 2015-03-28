@@ -268,6 +268,7 @@ void modifier_type_init(ModifierTypeInfo *types[])
 	INIT_TYPE(UVProject);
 	INIT_TYPE(Decimate);
 	INIT_TYPE(Smooth);
+	INIT_TYPE(DeltaMush);
 	INIT_TYPE(Cast);
 	INIT_TYPE(Wave);
 	INIT_TYPE(Armature);

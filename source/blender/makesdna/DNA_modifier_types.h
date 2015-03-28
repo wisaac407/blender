@@ -84,6 +84,7 @@ typedef enum ModifierType {
 	eModifierType_Wireframe         = 48,
 	eModifierType_DataTransfer      = 49,
 	eModifierType_NormalEdit        = 50,
+	eModifierType_DeltaMush			= 51,
 	NUM_MODIFIER_TYPES
 } ModifierType;
 
@@ -1286,6 +1287,26 @@ enum {
 	MOD_LAPLACIANSMOOTH_Z               = (1 << 3),
 	MOD_LAPLACIANSMOOTH_PRESERVE_VOLUME = (1 << 4),
 	MOD_LAPLACIANSMOOTH_NORMALIZED      = (1 << 5),
+};
+
+
+typedef struct DeltaMushModifierData {
+	ModifierData modifier;
+	float (*deltas)[3];
+	float (*positions)[3];
+	float *smooth_weights;
+	float lambda;
+	char defgrp_name[64];  /* MAX_VGROUP_NAME */
+	short repeat, dm_flags;
+
+	int boundverts, pad;
+} DeltaMushModifierData;
+
+/* Delta Mush modifier flags */
+enum {
+	MOD_DELTAMUSH_BIND = (1 << 1),
+	MOD_DELTAMUSH_SHOWSMOOTH = (1 << 2),
+	MOD_DELTAMUSH_PINBOUNDS = (1 << 3),
 };
 
 typedef struct UVWarpModifierData {

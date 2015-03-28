@@ -93,6 +93,7 @@ EnumPropertyItem modifier_type_items[] = {
 	{eModifierType_Armature, "ARMATURE", ICON_MOD_ARMATURE, "Armature", ""},
 	{eModifierType_Cast, "CAST", ICON_MOD_CAST, "Cast", ""},
 	{eModifierType_Curve, "CURVE", ICON_MOD_CURVE, "Curve", ""},
+	{eModifierType_DeltaMush, "DELTAMUSH", ICON_MOD_SMOOTH, "Delta Mush", ""},
 	{eModifierType_Displace, "DISPLACE", ICON_MOD_DISPLACE, "Displace", ""},
 	{eModifierType_Hook, "HOOK", ICON_HOOK, "Hook", ""},
 	{eModifierType_LaplacianSmooth, "LAPLACIANSMOOTH", ICON_MOD_SMOOTH, "Laplacian Smooth", ""},
@@ -377,6 +378,8 @@ static StructRNA *rna_Modifier_refine(struct PointerRNA *ptr)
 			return &RNA_DataTransferModifier;
 		case eModifierType_NormalEdit:
 			return &RNA_NormalEditModifier;
+		case eModifierType_DeltaMush:
+			return &RNA_DeltaMushModifier;
 		/* Default */
 		case eModifierType_None:
 		case eModifierType_ShapeKey:
@@ -444,6 +447,7 @@ RNA_MOD_VGROUP_NAME_SET(Cast, defgrp_name);
 RNA_MOD_VGROUP_NAME_SET(Curve, name);
 RNA_MOD_VGROUP_NAME_SET(DataTransfer, defgrp_name);
 RNA_MOD_VGROUP_NAME_SET(Decimate, defgrp_name);
+RNA_MOD_VGROUP_NAME_SET(DeltaMush, defgrp_name);
 RNA_MOD_VGROUP_NAME_SET(Displace, defgrp_name);
 RNA_MOD_VGROUP_NAME_SET(Hook, name);
 RNA_MOD_VGROUP_NAME_SET(LaplacianDeform, anchor_grp_name);
@@ -1032,6 +1036,17 @@ static EnumPropertyItem *rna_DataTransferModifier_mix_mode_itemf(bContext *C, Po
 	*r_free = true;
 
 	return item;
+}
+
+
+static void rna_DeltaMushModifier_update(Main *bmain, Scene *scene, PointerRNA *ptr)
+{
+	DeltaMushModifierData *dmmd = (DeltaMushModifierData *)ptr->data;
+	if(dmmd->deltas) {
+		MEM_freeN(dmmd->deltas);
+		dmmd->deltas = NULL;
+	}
+	rna_Modifier_update(bmain, scene, ptr);
 }
 
 #else
@@ -2110,6 +2125,56 @@ static void rna_def_modifier_smooth(BlenderRNA *brna)
 	RNA_def_property_string_funcs(prop, NULL, NULL, "rna_SmoothModifier_defgrp_name_set");
 	RNA_def_property_update(prop, 0, "rna_Modifier_update");
 }
+
+
+static void rna_def_modifier_deltamush(BlenderRNA *brna)
+{
+	StructRNA *srna;
+	PropertyRNA *prop;
+
+	srna = RNA_def_struct(brna, "DeltaMushModifier", "Modifier");
+	RNA_def_struct_ui_text(srna, "Delta Mush Modifier", "Deformation Relaxation modifier");
+	RNA_def_struct_sdna(srna, "DeltaMushModifierData");
+	RNA_def_struct_ui_icon(srna, ICON_MOD_SMOOTH);
+	
+	prop = RNA_def_property(srna, "lambda_factor", PROP_FLOAT, PROP_NONE);
+	RNA_def_property_float_sdna(prop, NULL, "lambda");
+	RNA_def_property_range(prop, -FLT_MAX, FLT_MAX);
+	RNA_def_property_ui_range(prop, 0.0, 1.0, 5, 3);
+	RNA_def_property_ui_text(prop, "Lambda Factor", "Smooth factor effect");
+	RNA_def_property_update(prop, 0, "rna_DeltaMushModifier_update");
+
+	prop = RNA_def_property(srna, "iterations", PROP_INT, PROP_NONE);
+	RNA_def_property_int_sdna(prop, NULL, "repeat");
+	RNA_def_property_ui_range(prop, 0, 200, 1, -1);
+	RNA_def_property_ui_text(prop, "Repeat", "");
+	RNA_def_property_update(prop, 0, "rna_DeltaMushModifier_update");
+
+	prop = RNA_def_property(srna, "vertex_group", PROP_STRING, PROP_NONE);
+	RNA_def_property_string_sdna(prop, NULL, "defgrp_name");
+	RNA_def_property_ui_text(prop, "Vertex Group",
+		"Name of Vertex Group which determines influence of modifier per point");
+	RNA_def_property_string_funcs(prop, NULL, NULL, "rna_DeltaMushModifier_defgrp_name_set");
+	RNA_def_property_update(prop, 0, "rna_DeltaMushModifier_update");
+
+	prop = RNA_def_property(srna, "bind", PROP_BOOLEAN, PROP_NONE);
+	RNA_def_property_boolean_sdna(prop, NULL, "dm_flags", MOD_DELTAMUSH_BIND);
+	RNA_def_property_ui_text(prop, "Bind current shape", "");
+	RNA_def_property_update(prop, 0, "rna_Modifier_update");
+
+	prop = RNA_def_property(srna, "only_smooth", PROP_BOOLEAN, PROP_NONE);
+	RNA_def_property_boolean_sdna(prop, NULL, "dm_flags", MOD_DELTAMUSH_SHOWSMOOTH);
+	RNA_def_property_ui_text(prop, "Display Smoothing Only", 
+		"Display the effects of smoothing without reconstructing the surface");
+	RNA_def_property_update(prop, 0, "rna_Modifier_update");
+
+	prop = RNA_def_property(srna, "pin_bounds", PROP_BOOLEAN, PROP_NONE);
+	RNA_def_property_boolean_sdna(prop, NULL, "dm_flags", MOD_DELTAMUSH_PINBOUNDS);
+	RNA_def_property_ui_text(prop, "Pin Boundaries",
+		"Excludes vertices on a mesh boundary from being smoothed");
+	RNA_def_property_update(prop, 0, "rna_DeltaMushModifier_update");
+}
+
 
 static void rna_def_modifier_laplaciansmooth(BlenderRNA *brna)
 {
@@ -4520,6 +4585,7 @@ void RNA_def_modifier(BlenderRNA *brna)
 	rna_def_modifier_displace(brna);
 	rna_def_modifier_uvproject(brna);
 	rna_def_modifier_smooth(brna);
+	rna_def_modifier_deltamush(brna);
 	rna_def_modifier_cast(brna);
 	rna_def_modifier_meshdeform(brna);
 	rna_def_modifier_particlesystem(brna);
