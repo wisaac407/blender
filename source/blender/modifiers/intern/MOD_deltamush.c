@@ -175,28 +175,32 @@ typedef struct SmoothingData {
 
 
 static void smooth_iter(
-        DeltaMushModifierData *dmmd, DerivedMesh *dm, float(*vertexCos)[3], int numVerts,
-        short *boundaries, SmoothingData *smoothingData)
+        DeltaMushModifierData *dmmd, DerivedMesh *dm, float(*vertexCos)[3], unsigned int numVerts,
+        short *boundaries, SmoothingData *smooth_data)
 {
-	int numEdges = dm->getNumEdges(dm);
-	MEdge *edges = dm->getEdgeArray(dm);
-	float edge_dir[3], distance;
-	int i;
+	const unsigned int numEdges = (unsigned int)dm->getNumEdges(dm);
+	const MEdge *edges = dm->getEdgeArray(dm);
+	unsigned int i;
+
 	for (i = 0; i < numEdges; i++) {
+		float edge_dir[3];
+		float dist;
+
 		sub_v3_v3v3(edge_dir, vertexCos[edges[i].v2], vertexCos[edges[i].v1]);
-		distance = len_v3(edge_dir);
+		dist = len_v3(edge_dir);
 
-		mul_v3_fl(edge_dir, distance);
-		add_v3_v3(smoothingData[edges[i].v1].delta, edge_dir);
-		smoothingData[edges[i].v1].edge_lengths += distance;
-		smoothingData[edges[i].v1].edge_count += 1.0f;
+		mul_v3_fl(edge_dir, dist);
+		add_v3_v3(smooth_data[edges[i].v1].delta, edge_dir);
+		smooth_data[edges[i].v1].edge_lengths += dist;
+		smooth_data[edges[i].v1].edge_count += 1.0f;
 
-		sub_v3_v3(smoothingData[edges[i].v2].delta, edge_dir);
-		smoothingData[edges[i].v2].edge_lengths += distance;
-		smoothingData[edges[i].v2].edge_count += 1.0f;
+		sub_v3_v3(smooth_data[edges[i].v2].delta, edge_dir);
+		smooth_data[edges[i].v2].edge_lengths += dist;
+		smooth_data[edges[i].v2].edge_count += 1.0f;
 	}
+
 	for (i = 0; i < numVerts; i++) {
-		if (smoothingData[i].edge_lengths * smoothingData[i].edge_count > FLT_EPSILON * 10.0f) {
+		if (smooth_data[i].edge_lengths * smooth_data[i].edge_count > FLT_EPSILON * 10.0f) {
 			float w = 1.0f;
 			if (dmmd->smooth_weights) {
 				w = dmmd->smooth_weights[i];
@@ -204,9 +208,9 @@ static void smooth_iter(
 			if (boundaries) {
 				w =  w * (boundaries[i] != 0 ? 0.0f : 1.0f);
 			}
-			mul_v3_fl(smoothingData[i].delta, w * dmmd->lambda /
-			          (smoothingData[i].edge_lengths * smoothingData[i].edge_count));
-			add_v3_v3(vertexCos[i], smoothingData[i].delta);
+			mul_v3_fl(smooth_data[i].delta, w * dmmd->lambda /
+			          (smooth_data[i].edge_lengths * smooth_data[i].edge_count));
+			add_v3_v3(vertexCos[i], smooth_data[i].delta);
 		}
 	}
 }
@@ -214,35 +218,42 @@ static void smooth_iter(
 
 static void smooth_verts(
         DeltaMushModifierData *dmmd, DerivedMesh *derivedData,
-        float(*vertexCos)[3], int numVerts)
+        float(*vertexCos)[3], unsigned int numVerts)
 {
-	SmoothingData *smoothingData = MEM_mallocN((size_t)numVerts * sizeof(SmoothingData), "delta mush smoothing data");
+	SmoothingData *smooth_data;
 	short *boundaries = NULL;
 	int i;
+
 	if (dmmd->dm_flags & MOD_DELTAMUSH_PINBOUNDS) {
 		boundaries = MEM_callocN((size_t)numVerts * sizeof(short), "delta mush boundary data");
 		find_boundaries(derivedData, boundaries);
 	}
+
+	smooth_data = MEM_mallocN((size_t)numVerts * sizeof(SmoothingData), "delta mush smoothing data");
 	for (i = 0; i < dmmd->repeat; i++) {
-		memset(smoothingData, 0, (size_t)numVerts * sizeof(SmoothingData));
-		smooth_iter(dmmd, derivedData, vertexCos, numVerts, boundaries, smoothingData);
+		memset(smooth_data, 0, (size_t)numVerts * sizeof(SmoothingData));
+		smooth_iter(dmmd, derivedData, vertexCos, numVerts, boundaries, smooth_data);
 	}
-	MEM_freeN(smoothingData);
+	MEM_freeN(smooth_data);
+
 	if (boundaries) {
 		MEM_freeN(boundaries);
 	}
 }
 
 
-static void calc_axes(
-        const MLoop *pre, const MLoop *loop, const MLoop *post, float(*vertexCos)[3],
+static void calc_loop_axis(
+        const MLoop *l_prev,
+        const MLoop *l_curr,
+        const MLoop *l_next,
+        float(*vertexCos)[3],
         float r_tspace[3][3])
 {
 	float v_prev[3];
 	float v_next[3];
 
-	sub_v3_v3v3(v_prev, vertexCos[pre->v], vertexCos[loop->v]);
-	sub_v3_v3v3(v_next, vertexCos[loop->v], vertexCos[post->v]);
+	sub_v3_v3v3(v_prev, vertexCos[l_prev->v], vertexCos[l_curr->v]);
+	sub_v3_v3v3(v_next, vertexCos[l_curr->v], vertexCos[l_next->v]);
 
 	normalize_v3(v_prev);
 	normalize_v3(v_next);
@@ -264,146 +275,154 @@ static void calc_axes(
 }
 
 
-static void calculate_tangent_spaces(
+static void calc_tangent_spaces(
         DerivedMesh *dm, float(*vertexCos)[3],
-        float (*r_tangentSpaces)[3][3])
+        float (*r_tangent_spaces)[3][3])
 {
-	MPoly *polys = dm->getPolyArray(dm);
-	MLoop *loops = dm->getLoopArray(dm);
-	int numFaces, f, numLoops, l, pre, post, loop, i;
-	float t[3], bt[3], temp1[3], temp2[3];
+	const unsigned int mpoly_num = (unsigned int)dm->getNumPolys(dm);
+	const unsigned int mvert_num = (unsigned int)dm->getNumVerts(dm);
+	const MPoly *mpoly = dm->getPolyArray(dm);
+	const MLoop *mloop = dm->getLoopArray(dm);
+	unsigned int i;
 
-	numFaces = dm->getNumPolys(dm);
+	for (i = 0; i < mpoly_num; i++) {
+		const MPoly *mp = &mpoly[i];
+		const unsigned int l_term = (unsigned int)(mp->loopstart + mp->totloop);
+		unsigned int l_prev, l_curr, l_next;
 
-	for (f = 0; f < numFaces; f++) {
-		MPoly *p = &polys[f];
-		numLoops = p->totloop;
-		pre = p->loopstart + numLoops - 2;
-		loop = pre + 1;
-		post = p->loopstart;
-		for (l = 0; l < numLoops; l++) {
-			i = (int)loops[loop].v;
-			calc_axes(&loops[pre], &loops[loop], &loops[post], vertexCos, r_tangentSpaces[i]);
-			pre = loop;
-			loop = post;
-			post++;
+		for (l_prev = l_term - 2, l_curr = l_term - 1, l_next = (unsigned int)mp->loopstart;
+		     l_next < l_term;
+		     l_prev = l_curr, l_curr = l_next, l_next++)
+		{
+			float (*ts)[3] = r_tangent_spaces[mloop[l_curr].v];
+			calc_loop_axis(&mloop[l_prev], &mloop[l_curr], &mloop[l_next], vertexCos, ts);
 		}
 	}
 
-	for (i = 0; i < dm->getNumVerts(dm); i++) {
-		normalize_v3(r_tangentSpaces[i][2]);
+	for (i = 0; i < mvert_num; i++) {
+		float (*ts)[3] = r_tangent_spaces[i];
+		float v_tan_a[3], v_tan_b[3];
+		float t_vec_a[3], t_vec_b[3];
 
-		copy_v3_v3(t, r_tangentSpaces[i][0]);
-		copy_v3_v3(bt, r_tangentSpaces[i][1]);
+		normalize_v3(ts[2]);
 
-		cross_v3_v3v3(r_tangentSpaces[i][1], r_tangentSpaces[i][2], t);
-		mul_v3_fl(r_tangentSpaces[i][1], dot_v3v3(r_tangentSpaces[i][1], bt) < 0.0f ? -1.0f : 1.0f);
+		copy_v3_v3(v_tan_a, ts[0]);
+		copy_v3_v3(v_tan_b, ts[1]);
+
+		cross_v3_v3v3(ts[1], ts[2], v_tan_a);
+		mul_v3_fl(ts[1], dot_v3v3(ts[1], v_tan_b) < 0.0f ? -1.0f : 1.0f);
 
 		/* orthognalise tangent */
-		mul_v3_v3fl(temp1, r_tangentSpaces[i][2], dot_v3v3(r_tangentSpaces[i][2], t));
-		sub_v3_v3v3(r_tangentSpaces[i][0], t, temp1);
+		mul_v3_v3fl(t_vec_a, ts[2], dot_v3v3(ts[2], v_tan_a));
+		sub_v3_v3v3(ts[0], v_tan_a, t_vec_a);
 
 		/* orthognalise bitangent */
-		mul_v3_v3fl(temp1, r_tangentSpaces[i][2],
-			dot_v3v3(r_tangentSpaces[i][2], r_tangentSpaces[i][1]));
-		mul_v3_v3fl(temp2, r_tangentSpaces[i][0],
-			dot_v3v3(r_tangentSpaces[i][0], r_tangentSpaces[i][1]) / dot_v3v3(t, t));
-		sub_v3_v3(r_tangentSpaces[i][1], temp1);
-		sub_v3_v3(r_tangentSpaces[i][1], temp2);
+		mul_v3_v3fl(t_vec_a, ts[2], dot_v3v3(ts[2], ts[1]));
+		mul_v3_v3fl(t_vec_b, ts[0], dot_v3v3(ts[0], ts[1]) / dot_v3v3(v_tan_a, v_tan_a));
+		sub_v3_v3(ts[1], t_vec_a);
+		sub_v3_v3(ts[1], t_vec_b);
 
-		normalize_v3(r_tangentSpaces[i][0]);
-		normalize_v3(r_tangentSpaces[i][1]);
+		normalize_v3(ts[0]);
+		normalize_v3(ts[1]);
 	}
 }
 
 
-static void calc_deltas(DeltaMushModifierData *dmmd, DerivedMesh *dm, float(*vertexCos)[3], int numVerts)
+static void calc_deltas(
+        DeltaMushModifierData *dmmd, DerivedMesh *dm,
+        float(*vertexCos)[3], unsigned int numVerts)
 {
-	float(*smoothVertexCos)[3] = MEM_dupallocN(vertexCos);
-	float(*tangentSpaces)[3][3];
-	float invMat[3][3], d[3];
-	int i;
+	float(*smooth_vertex_cos)[3] = MEM_dupallocN(vertexCos);
+	float(*tangent_spaces)[3][3];
+	unsigned int i;
 
-	tangentSpaces = MEM_callocN((size_t)(numVerts) * sizeof(float[3][3]), "delta mush tangents");
+	tangent_spaces = MEM_callocN((size_t)(numVerts) * sizeof(float[3][3]), "delta mush tangents");
 	dmmd->boundverts = numVerts;
 	/* allocate deltas if they have not yet been allocated, otheriwse we will just write over them */
 	if (!dmmd->deltas) {
 		dmmd->deltas = MEM_mallocN((size_t)(numVerts * 3) * sizeof(float), "delta mush deltas");
 	}
 
-	smooth_verts(dmmd, dm, smoothVertexCos, numVerts);
+	smooth_verts(dmmd, dm, smooth_vertex_cos, numVerts);
 
-	calculate_tangent_spaces(dm, smoothVertexCos, tangentSpaces);
+	calc_tangent_spaces(dm, smooth_vertex_cos, tangent_spaces);
 
 	for (i = 0; i < numVerts; i++) {
-		sub_v3_v3v3(d, vertexCos[i], smoothVertexCos[i]);
-		if (!invert_m3_m3(invMat, tangentSpaces[i])) {
-			transpose_m3_m3(invMat, tangentSpaces[i]);
+		float imat[3][3], delta[3];
+
+		sub_v3_v3v3(delta, vertexCos[i], smooth_vertex_cos[i]);
+		if (UNLIKELY(!invert_m3_m3(imat, tangent_spaces[i]))) {
+			transpose_m3_m3(imat, tangent_spaces[i]);
 		}
-		mul_v3_m3v3(dmmd->deltas[i], invMat, d);
+		mul_v3_m3v3(dmmd->deltas[i], imat, delta);
 	}
 
-	MEM_freeN(smoothVertexCos);
-	MEM_freeN(tangentSpaces);
+	MEM_freeN(smooth_vertex_cos);
+	MEM_freeN(tangent_spaces);
 }
 
 
-static void deltamushmodifier_do(ModifierData *md, Object *ob, DerivedMesh *dm, float(*vertexCos)[3], int numVerts)
+static void deltamushmodifier_do(
+        ModifierData *md, Object *ob, DerivedMesh *dm,
+        float(*vertexCos)[3], unsigned int numVerts)
 {
-	DeltaMushModifierData *dmmd = (DeltaMushModifierData *) md;
+	DeltaMushModifierData *dmmd = (DeltaMushModifierData *)md;
+	const bool use_bind = (dmmd->dm_flags & MOD_DELTAMUSH_BIND) != 0;
+	const bool use_only_smooth = (dmmd->dm_flags & MOD_DELTAMUSH_SHOWSMOOTH)  != 0;
 
-	bool bind = (dmmd->dm_flags & MOD_DELTAMUSH_BIND) != 0;
-	bool showSmooth = (dmmd->dm_flags & MOD_DELTAMUSH_SHOWSMOOTH)  != 0;
-	if (!bind) {
+	if (UNLIKELY(use_bind == false)) {
 		freeBind(dmmd);
 		update_weights(ob, dmmd, dm);
 		smooth_verts(dmmd, dm, vertexCos, numVerts);
-		if (dmmd->smooth_weights) {
-			MEM_freeN(dmmd->smooth_weights);
-			dmmd->smooth_weights = NULL;
-		}
+		MEM_SAFE_FREE(dmmd->smooth_weights);
+		return;
 	}
-	else {
-		/* if rest positions not are defined, set them */
-		if (!dmmd->positions) {
-			dmmd->positions = MEM_dupallocN(vertexCos);
-			dmmd->boundverts = numVerts;
-			if (!dmmd->positions) {
-				return;
-			}
-		}
 
-		/* If the number of verts has changed, the bind is invalid, so we do nothing */
-		if (dmmd->boundverts != numVerts) {
-			modifier_setError(md, "Verts changed from %d to %d", dmmd->boundverts, numVerts);
+	/* if rest positions not are defined, set them */
+	if (!dmmd->positions) {
+		dmmd->positions = MEM_dupallocN(vertexCos);
+		dmmd->boundverts = numVerts;
+		if (!dmmd->positions) {
 			return;
 		}
+	}
 
-		/* check to see if our deltas are still valid */
-		update_weights(ob, dmmd, dm);
-		if (!dmmd->deltas) {
-			calc_deltas(dmmd, dm, dmmd->positions, numVerts);
+	/* If the number of verts has changed, the bind is invalid, so we do nothing */
+	if (dmmd->boundverts != numVerts) {
+		modifier_setError(md, "Verts changed from %d to %d", dmmd->boundverts, numVerts);
+		return;
+	}
+
+	/* check to see if our deltas are still valid */
+	update_weights(ob, dmmd, dm);
+	if (!dmmd->deltas) {
+		calc_deltas(dmmd, dm, dmmd->positions, numVerts);
+	}
+
+	/* this could be a check, but at this point it _must_ be valid */
+	BLI_assert(dmmd->boundverts == numVerts && dmmd->deltas);
+
+
+	/* do the actual delta mush */
+	smooth_verts(dmmd, dm, vertexCos, numVerts);
+
+	if (!use_only_smooth) {
+		unsigned int i;
+
+		float(*tangent_spaces)[3][3];
+
+		/* calloc, since values are accumulated */
+		tangent_spaces = MEM_callocN((size_t)(numVerts) * sizeof(float[3][3]), "delta mush tangents");
+
+		calc_tangent_spaces(dm, vertexCos, tangent_spaces);
+
+		for (i = 0; i < numVerts; i++) {
+			float delta[3];
+			mul_v3_m3v3(delta, tangent_spaces[i], dmmd->deltas[i]);
+			add_v3_v3(vertexCos[i], delta);
 		}
 
-		/* now, if everything is valid, do the actual delta mush */
-		if (dmmd->boundverts == numVerts && dmmd->deltas) {
-			float(*tangentSpaces)[3][3];
-			float d[3];
-			int i;
-			tangentSpaces = MEM_callocN((size_t)(numVerts) * sizeof(float[3][3]), "delta mush tangents");
-
-			smooth_verts(dmmd, dm, vertexCos, numVerts);
-
-			if (!showSmooth) {
-				calculate_tangent_spaces(dm, vertexCos, tangentSpaces);
-
-				for (i = 0; i < numVerts; i++) {
-					mul_v3_m3v3(d, tangentSpaces[i], dmmd->deltas[i]);
-					add_v3_v3(vertexCos[i], d);
-				}
-			}
-			MEM_freeN(tangentSpaces);
-		}
+		MEM_freeN(tangent_spaces);
 	}
 }
 
@@ -414,7 +433,7 @@ static void deformVerts(
 {
 	DerivedMesh *dm = get_dm(ob, NULL, derivedData, NULL, false, false);
 
-	deltamushmodifier_do(md, ob, dm, vertexCos, numVerts);
+	deltamushmodifier_do(md, ob, dm, vertexCos, (unsigned int)numVerts);
 
 	if (dm != derivedData) {
 		dm->release(dm);
@@ -428,7 +447,7 @@ static void deformVertsEM(
 {
 	DerivedMesh *dm = get_dm(ob, editData, derivedData, NULL, false, false);
 
-	deltamushmodifier_do(md, ob, dm, vertexCos, numVerts);
+	deltamushmodifier_do(md, ob, dm, vertexCos, (unsigned int)numVerts);
 
 	if (dm != derivedData) {
 		dm->release(dm);

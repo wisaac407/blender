@@ -1299,7 +1299,7 @@ typedef struct DeltaMushModifierData {
 	char defgrp_name[64];  /* MAX_VGROUP_NAME */
 	short repeat, dm_flags;
 
-	int boundverts, pad;
+	unsigned int boundverts, pad;
 } DeltaMushModifierData;
 
 /* Delta Mush modifier flags */
