@@ -181,32 +181,39 @@ typedef struct SmoothingData {
 
 
 static void smooth_iter(
-        DeltaMushModifierData *dmmd, DerivedMesh *dm, float(*vertexCos)[3], unsigned int numVerts,
-        short *boundaries, SmoothingData *smooth_data)
+        DeltaMushModifierData *dmmd, DerivedMesh *dm,
+        float(*vertexCos)[3], unsigned int numVerts,
+        const short *boundaries, SmoothingData *smooth_data)
 {
 	const unsigned int numEdges = (unsigned int)dm->getNumEdges(dm);
 	const MEdge *edges = dm->getEdgeArray(dm);
 	unsigned int i;
 
 	for (i = 0; i < numEdges; i++) {
+		SmoothingData *sd;
 		float edge_dir[3];
-		float dist;
+		float edge_dist;
 
 		sub_v3_v3v3(edge_dir, vertexCos[edges[i].v2], vertexCos[edges[i].v1]);
-		dist = len_v3(edge_dir);
+		edge_dist = len_v3(edge_dir);
 
-		mul_v3_fl(edge_dir, dist);
-		add_v3_v3(smooth_data[edges[i].v1].delta, edge_dir);
-		smooth_data[edges[i].v1].edge_lengths += dist;
-		smooth_data[edges[i].v1].edge_count += 1.0f;
+		mul_v3_fl(edge_dir, edge_dist);
 
-		sub_v3_v3(smooth_data[edges[i].v2].delta, edge_dir);
-		smooth_data[edges[i].v2].edge_lengths += dist;
-		smooth_data[edges[i].v2].edge_count += 1.0f;
+		sd = &smooth_data[edges[i].v1];
+		add_v3_v3(sd->delta, edge_dir);
+		sd->edge_lengths += edge_dist;
+		sd->edge_count += 1.0f;
+
+		sd = &smooth_data[edges[i].v2];
+		sub_v3_v3(sd->delta, edge_dir);
+		sd->edge_lengths += edge_dist;
+		sd->edge_count += 1.0f;
 	}
 
 	for (i = 0; i < numVerts; i++) {
-		if (smooth_data[i].edge_lengths * smooth_data[i].edge_count > FLT_EPSILON * 10.0f) {
+		SmoothingData *sd = &smooth_data[i];
+
+		if (sd->edge_lengths * sd->edge_count > FLT_EPSILON * 10.0f) {
 			float w = 1.0f;
 			if (dmmd->smooth_weights) {
 				w = dmmd->smooth_weights[i];
@@ -214,10 +221,12 @@ static void smooth_iter(
 			if (boundaries) {
 				w =  w * (boundaries[i] != 0 ? 0.0f : 1.0f);
 			}
-			mul_v3_fl(smooth_data[i].delta, w * dmmd->lambda /
-			          (smooth_data[i].edge_lengths * smooth_data[i].edge_count));
-			add_v3_v3(vertexCos[i], smooth_data[i].delta);
+			mul_v3_fl(sd->delta, (w * dmmd->lambda) / (sd->edge_lengths * sd->edge_count));
+			add_v3_v3(vertexCos[i], sd->delta);
 		}
+
+		/* zero for the next iteration (saves memset on entire array) */
+		memset(sd, 0, sizeof(*sd));
 	}
 }
 
@@ -235,9 +244,9 @@ static void smooth_verts(
 		find_boundaries(derivedData, boundaries);
 	}
 
-	smooth_data = MEM_mallocN((size_t)numVerts * sizeof(SmoothingData), "delta mush smoothing data");
+	smooth_data = MEM_callocN((size_t)numVerts * sizeof(SmoothingData), "delta mush smoothing data");
 	for (i = 0; i < dmmd->repeat; i++) {
-		memset(smooth_data, 0, (size_t)numVerts * sizeof(SmoothingData));
+		/* no need to memset each time, 'smooth_iter' cleans up after its self */
 		smooth_iter(dmmd, derivedData, vertexCos, numVerts, boundaries, smooth_data);
 	}
 	MEM_freeN(smooth_data);
@@ -266,8 +275,8 @@ static void calc_loop_axis(
 	add_v3_v3v3(r_tspace[1], v_prev, v_next);
 
 	if (compare_v3v3(v_prev, v_next, FLT_EPSILON * 10.0f) == false) {
+		const float weight = fabsf(acosf(dot_v3v3(v_next, v_prev)));
 		float nor[3];
-		float weight = fabsf(acosf(dot_v3v3(v_next, v_prev)));
 
 		cross_v3_v3v3(nor, v_prev, v_next);
 		normalize_v3(nor);
