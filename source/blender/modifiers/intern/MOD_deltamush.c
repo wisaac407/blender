@@ -194,22 +194,24 @@ static void smooth_iter(
 	unsigned int i;
 
 	for (i = 0; i < numEdges; i++) {
-		SmoothingData *sd;
+		SmoothingData *sd_v1;
+		SmoothingData *sd_v2;
 		float edge_dir[3];
 		float edge_dist;
 
 		sub_v3_v3v3(edge_dir, vertexCos[edges[i].v2], vertexCos[edges[i].v1]);
 		edge_dist = len_v3(edge_dir);
-
 		mul_v3_fl(edge_dir, edge_dist);
 
-		sd = &smooth_data[edges[i].v1];
-		add_v3_v3(sd->delta, edge_dir);
-		sd->edge_lengths += edge_dist;
 
-		sd = &smooth_data[edges[i].v2];
-		sub_v3_v3(sd->delta, edge_dir);
-		sd->edge_lengths += edge_dist;
+		sd_v1 = &smooth_data[edges[i].v1];
+		sd_v2 = &smooth_data[edges[i].v2];
+
+		add_v3_v3(sd_v1->delta, edge_dir);
+		sub_v3_v3(sd_v2->delta, edge_dir);
+
+		sd_v1->edge_lengths += edge_dist;
+		sd_v2->edge_lengths += edge_dist;
 	}
 
 	if ((dmmd->smooth_weights == NULL) && (boundaries == NULL)) {
