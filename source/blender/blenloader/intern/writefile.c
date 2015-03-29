@@ -1624,13 +1624,10 @@ static void write_modifiers(WriteData *wd, ListBase *modbase)
 			DeltaMushModifierData *dmmd = (DeltaMushModifierData*)md;
 
 			if (dmmd->deltas) {
-				writedata(wd, DATA, sizeof(float) * (size_t)(3 * dmmd->boundverts), dmmd->deltas);
+				writedata(wd, DATA, sizeof(float[3]) * dmmd->boundverts, dmmd->deltas);
 			}
 			if (dmmd->positions) {
-				writedata(wd, DATA, sizeof(float) * (size_t)(3 * dmmd->boundverts), dmmd->positions);
-			}
-			if (dmmd->smooth_weights) {
-				writedata(wd, DATA, sizeof(float) * (size_t)(dmmd->boundverts), dmmd->smooth_weights);
+				writedata(wd, DATA, sizeof(float[3]) * dmmd->boundverts, dmmd->positions);
 			}
 		}
 	}

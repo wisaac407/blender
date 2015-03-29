@@ -77,7 +77,6 @@ static void initData(ModifierData *md)
 	dmmd->boundverts = 0;
 	dmmd->deltas = NULL;
 	dmmd->positions = NULL;
-	dmmd->smooth_weights = NULL;
 	dmmd->lambda = 0.5f;
 	dmmd->repeat = 5;
 	dmmd->defgrp_name[0] = '\0';
@@ -88,13 +87,13 @@ static void copyData(ModifierData *md, ModifierData *target)
 {
 	DeltaMushModifierData *dmmd = (DeltaMushModifierData *)md;
 	DeltaMushModifierData *t_dmmd = (DeltaMushModifierData *)target;
+
 	modifier_copyData_generic(md, target);
+
 	if (dmmd->deltas) {
 		t_dmmd->deltas = MEM_dupallocN(dmmd->deltas);
 	}
-	if (dmmd->smooth_weights) {
-		t_dmmd->smooth_weights = MEM_dupallocN(dmmd->smooth_weights);
-	}
+
 	if (dmmd->positions) {
 		t_dmmd->positions = MEM_dupallocN(dmmd->positions);
 	}
@@ -107,14 +106,12 @@ static void freeBind(DeltaMushModifierData * dmmd)
 		MEM_freeN(dmmd->deltas);
 		dmmd->deltas = NULL;
 	}
-	if (dmmd->smooth_weights) {
-		MEM_freeN(dmmd->smooth_weights);
-		dmmd->smooth_weights = NULL;
-	}
+
 	if (dmmd->positions) {
 		MEM_freeN(dmmd->positions);
 		dmmd->positions = NULL;
 	}
+
 	dmmd->boundverts = 0;
 }
 
@@ -139,61 +136,60 @@ static CustomDataMask requiredDataMask(Object *UNUSED(ob), ModifierData *md)
 
 
 /* check individual weights for changes and cache values */
-static void update_weights(Object *ob, DeltaMushModifierData *dmmd, DerivedMesh *dm)
+static float *dm_get_weights(
+        MDeformVert *dvert, const int defgrp_index,
+        const unsigned int numVerts)
 {
-	MDeformVert *dvert = NULL;
-	int defgrp_index;
-	const unsigned int numVerts = (unsigned int)dm->getNumVerts(dm);
-
-	modifier_get_vgroup(ob, dm, dmmd->defgrp_name, &dvert, &defgrp_index);
-
-	if (!dmmd->smooth_weights && dvert) {
-		dmmd->smooth_weights = MEM_callocN(sizeof(float) * (size_t) numVerts, "delta mush weight cache");
-	}
-	else if (dmmd->smooth_weights && !dvert) {
-		MEM_freeN(dmmd->smooth_weights);
-		dmmd->smooth_weights = NULL;
-	}
-
-	if (dmmd->smooth_weights && dvert) {
+	if (dvert) {
 		unsigned int i;
+		float *smooth_weights;
+
+		smooth_weights = MEM_mallocN(sizeof(float) * numVerts, "delta mush weight cache");
+
 		for (i = 0; i < numVerts; i++, dvert++) {
 			const float w = defvert_find_weight(dvert, defgrp_index);
-			if (dmmd->smooth_weights[i] != w) {
-				dmmd->smooth_weights[i] = w;
-				if (dmmd->deltas) {
-					MEM_freeN(dmmd->deltas);
-					dmmd->deltas = NULL;
-				}
-			}
+			smooth_weights[i] = w;
 		}
+
+		return smooth_weights;
+	}
+	else {
+		return NULL;
 	}
 }
 
 
-static void find_boundaries(DerivedMesh *dm, short *adjacent_counts)
+static short *dm_get_boundaries(DerivedMesh *dm)
 {
 	const MPoly *mpoly = dm->getPolyArray(dm);
 	const MLoop *mloop = dm->getLoopArray(dm);
 	const MEdge *medge = dm->getEdgeArray(dm);
-	unsigned int mpoly_num, medge_num, i;
-	medge_num = (unsigned int)dm->getNumEdges(dm);
+	unsigned int mpoly_num, medge_num, mvert_num, i;
+	short *boundaries;
+
 	mpoly_num = (unsigned int)dm->getNumPolys(dm);
+	medge_num = (unsigned int)dm->getNumEdges(dm);
+	mvert_num = (unsigned int)dm->getNumVerts(dm);
+
+	boundaries = MEM_callocN(mvert_num * sizeof(*boundaries), "delta mush boundary data");
+
 	/* count the number of adjacent faces */
 	for (i = 0; i < mpoly_num; i++) {
 		const MPoly *p = &mpoly[i];
 		const int totloop = p->totloop;
 		int j;
 		for (j = 0; j < totloop; j++) {
-			adjacent_counts[mloop[p->loopstart + j].v]++;
+			boundaries[mloop[p->loopstart + j].v]++;
 		}
 	}
 	/* subtract one from the count for each connected edge - if th count ends up as zero, edge is not a boundary */
 	/* this may also consider some other non-manifold edges as boundaries */
 	for (i = 0; i < medge_num; i++) {
-		adjacent_counts[medge[i].v1]--;
-		adjacent_counts[medge[i].v2]--;
+		boundaries[medge[i].v1]--;
+		boundaries[medge[i].v2]--;
 	}
+
+	return boundaries;
 }
 
 
@@ -211,7 +207,7 @@ typedef struct SmoothingData {
 static void smooth_iter(
         DeltaMushModifierData *dmmd, DerivedMesh *dm,
         float(*vertexCos)[3], unsigned int numVerts,
-        const short *boundaries,
+        const float *smooth_weights, const short *boundaries,
         unsigned int iterations)
 {
 	const float lambda = dmmd->lambda;
@@ -338,7 +334,7 @@ static void smooth_iter(
 			sd_v2->edge_lengths += edge_dist;
 		}
 
-		if ((dmmd->smooth_weights == NULL) && (boundaries == NULL)) {
+		if ((smooth_weights == NULL) && (boundaries == NULL)) {
 			/* fast-path */
 			for (i = 0; i < numVerts; i++) {
 				SmoothingData *sd = &smooth_data[i];
@@ -358,8 +354,8 @@ static void smooth_iter(
 				if (div > eps) {
 					float lambda_alt = lambda;
 
-					if (dmmd->smooth_weights) {
-						lambda_alt *= dmmd->smooth_weights[i];
+					if (smooth_weights) {
+						lambda_alt *= smooth_weights[i];
 					}
 
 					if (boundaries) {
@@ -459,17 +455,24 @@ static void smooth_iter(
 
 static void smooth_verts(
         DeltaMushModifierData *dmmd, DerivedMesh *dm,
+        MDeformVert *dvert, const int defgrp_index,
         float(*vertexCos)[3], unsigned int numVerts)
 {
+	float *smooth_weights = NULL;
 	short *boundaries = NULL;
 
+	smooth_weights = dm_get_weights(dvert, defgrp_index, numVerts);
+
 	if (dmmd->flag & MOD_DELTAMUSH_PIN_BOUNDARY) {
-		boundaries = MEM_callocN((size_t)numVerts * sizeof(short), "delta mush boundary data");
-		find_boundaries(dm, boundaries);
+		boundaries = dm_get_boundaries(dm);
 	}
 
 	/* no need to memset each time, 'smooth_iter' cleans up after its self */
-	smooth_iter(dmmd, dm, vertexCos, numVerts, boundaries, (unsigned int)dmmd->repeat);
+	smooth_iter(dmmd, dm, vertexCos, numVerts, smooth_weights, boundaries, (unsigned int)dmmd->repeat);
+
+	if (smooth_weights) {
+		MEM_freeN(smooth_weights);
+	}
 
 	if (boundaries) {
 		MEM_freeN(boundaries);
@@ -590,6 +593,7 @@ static void calc_tangent_spaces(
 
 static void calc_deltas(
         DeltaMushModifierData *dmmd, DerivedMesh *dm,
+        MDeformVert *dvert, const int defgrp_index,
         float(*vertexCos)[3], unsigned int numVerts)
 {
 	float(*smooth_vertex_cos)[3] = MEM_dupallocN(vertexCos);
@@ -603,7 +607,7 @@ static void calc_deltas(
 		dmmd->deltas = MEM_mallocN((size_t)numVerts * sizeof(float[3]), "delta mush deltas");
 	}
 
-	smooth_verts(dmmd, dm, smooth_vertex_cos, numVerts);
+	smooth_verts(dmmd, dm, dvert, defgrp_index, smooth_vertex_cos, numVerts);
 
 	calc_tangent_spaces(dm, smooth_vertex_cos, tangent_spaces);
 
@@ -633,12 +637,14 @@ static void deltamushmodifier_do(
 	DeltaMushModifierData *dmmd = (DeltaMushModifierData *)md;
 	const bool use_bind = (dmmd->flag & MOD_DELTAMUSH_BIND) != 0;
 	const bool use_only_smooth = (dmmd->flag & MOD_DELTAMUSH_ONLY_SMOOTH)  != 0;
+	MDeformVert *dvert = NULL;
+	int defgrp_index;
+
+	modifier_get_vgroup(ob, dm, dmmd->defgrp_name, &dvert, &defgrp_index);
 
 	if (UNLIKELY(use_bind == false)) {
 		freeBind(dmmd);
-		update_weights(ob, dmmd, dm);
-		smooth_verts(dmmd, dm, vertexCos, numVerts);
-		MEM_SAFE_FREE(dmmd->smooth_weights);
+		smooth_verts(dmmd, dm, dvert, defgrp_index, vertexCos, numVerts);
 		return;
 	}
 
@@ -658,9 +664,8 @@ static void deltamushmodifier_do(
 	}
 
 	/* check to see if our deltas are still valid */
-	update_weights(ob, dmmd, dm);
 	if (!dmmd->deltas) {
-		calc_deltas(dmmd, dm, dmmd->positions, numVerts);
+		calc_deltas(dmmd, dm, dvert, defgrp_index, dmmd->positions, numVerts);
 	}
 
 	/* this could be a check, but at this point it _must_ be valid */
@@ -672,7 +677,7 @@ static void deltamushmodifier_do(
 #endif
 
 	/* do the actual delta mush */
-	smooth_verts(dmmd, dm, vertexCos, numVerts);
+	smooth_verts(dmmd, dm, dvert, defgrp_index, vertexCos, numVerts);
 
 	if (!use_only_smooth) {
 		unsigned int i;
