@@ -51,10 +51,22 @@
 /* minor optimization, calculate this inline */
 #define USE_TANGENT_CALC_INLINE
 
-#define SMOOTH_METHOD_SIMPLE 1
-#define SMOOTH_METHOD_SQUAREDLENGTH 2
 
+
+/* -------------------------------------------------------------------- */
+/* Smoothing Method (currently testing different methods) */
+
+/* simple median */
+#define SMOOTH_METHOD_SIMPLE 1
+/* squared edge-length median (original patch) */
+#define SMOOTH_METHOD_SQUAREDLENGTH 2
+/* use poly-loop angle weighted median */
+#define SMOOTH_METHOD_LOOPWEIGHT 3
+
+/* use one of the smoothing methods above */
 #define SMOOTH_METHOD SMOOTH_METHOD_SQUAREDLENGTH
+/* -------------------------------------------------------------------- */
+
 
 
 static void initData(ModifierData *md)
@@ -184,7 +196,7 @@ static void find_boundaries(DerivedMesh *dm, short *adjacent_counts)
 
 typedef struct SmoothingData {
 	float delta[3];
-#ifdef SMOOTH_METHOD_SQUAREDLENGTH
+#if (SMOOTH_METHOD == SMOOTH_METHOD_SQUAREDLENGTH) || (SMOOTH_METHOD == SMOOTH_METHOD_LOOPWEIGHT)
 	float edge_lengths;
 #endif
 } SmoothingData;
@@ -199,29 +211,29 @@ static void smooth_iter(
         const short *boundaries,
         unsigned int iterations)
 {
-	const float eps = FLT_EPSILON * 10.0f;
-	const unsigned int numEdges = (unsigned int)dm->getNumEdges(dm);
-	const MEdge *edges = dm->getEdgeArray(dm);
 	const float lambda = dmmd->lambda;
 	unsigned int i;
 
-	SmoothingData *smooth_data;
-	float *vertex_edge_count;
+	SmoothingData *smooth_data  = MEM_callocN((size_t)numVerts * sizeof(SmoothingData), "delta mush smoothing data");
+
 
 #if (SMOOTH_METHOD == SMOOTH_METHOD_SIMPLE)
 
+	const unsigned int numEdges = (unsigned int)dm->getNumEdges(dm);
+	const MEdge *edges = dm->getEdgeArray(dm);
+
+	float *vertex_edge_count_div;
+
+	vertex_edge_count_div = MEM_callocN((size_t)numVerts * sizeof(float), __func__);
+
 	/* calculate as floats to avoid int->float conversion in #smooth_iter */
-	vertex_edge_count = MEM_callocN((size_t)numVerts * sizeof(float), __func__);
 	for (i = 0; i < numEdges; i++) {
-		vertex_edge_count[edges[i].v1] += 1.0f;
-		vertex_edge_count[edges[i].v2] += 1.0f;
+		vertex_edge_count_div[edges[i].v1] += 1.0f;
+		vertex_edge_count_div[edges[i].v2] += 1.0f;
 	}
 	for (i = 0; i < numVerts; i++) {
-		vertex_edge_count[i] = vertex_edge_count[i] ? (1.0f / vertex_edge_count[i]) : 1.0f;
+		vertex_edge_count_div[i] = vertex_edge_count_div[i] ? (1.0f / vertex_edge_count_div[i]) : 1.0f;
 	}
-
-	smooth_data = MEM_callocN((size_t)numVerts * sizeof(SmoothingData), "delta mush smoothing data");
-
 
 	/* -------------------------------------------------------------------- */
 	/* Main Loop */
@@ -250,7 +262,7 @@ static void smooth_iter(
 			/* fast-path */
 			for (i = 0; i < numVerts; i++) {
 				SmoothingData *sd = &smooth_data[i];
-				mul_v3_v3fl(vertexCos[i], sd->delta, vertex_edge_count[i]);
+				mul_v3_v3fl(vertexCos[i], sd->delta, vertex_edge_count_div[i]);
 				/* zero for the next iteration (saves memset on entire array) */
 				memset(sd, 0, sizeof(*sd));
 			}
@@ -270,7 +282,7 @@ static void smooth_iter(
 					lambda_alt *= (boundaries[i] != 0 ? 0.0f : 1.0f);
 				}
 
-				mul_v3_fl(sd->delta, vertex_edge_count[i]);
+				mul_v3_fl(sd->delta, vertex_edge_count_div[i]);
 				interp_v3_v3v3(vertexCos[i], vertexCos[i], sd->delta, lambda_alt);
 
 				memset(sd, 0, sizeof(*sd));
@@ -278,7 +290,17 @@ static void smooth_iter(
 		}
 	}
 
+	MEM_freeN(vertex_edge_count_div);
+
 #elif (SMOOTH_METHOD == SMOOTH_METHOD_SQUAREDLENGTH)
+
+	const float eps = FLT_EPSILON * 10.0f;
+
+	const unsigned int numEdges = (unsigned int)dm->getNumEdges(dm);
+	const MEdge *edges = dm->getEdgeArray(dm);
+
+	float *vertex_edge_count;
+
 
 	/* calculate as floats to avoid int->float conversion in #smooth_iter */
 	vertex_edge_count = MEM_callocN((size_t)numVerts * sizeof(float), __func__);
@@ -286,8 +308,6 @@ static void smooth_iter(
 		vertex_edge_count[edges[i].v1] += 1.0f;
 		vertex_edge_count[edges[i].v2] += 1.0f;
 	}
-
-	smooth_data = MEM_callocN((size_t)numVerts * sizeof(SmoothingData), "delta mush smoothing data");
 
 
 	/* -------------------------------------------------------------------- */
@@ -351,10 +371,86 @@ static void smooth_iter(
 		}
 	}
 
+	MEM_freeN(vertex_edge_count);
+
+
+#elif (SMOOTH_METHOD == SMOOTH_METHOD_LOOPWEIGHT)
+
+	const float eps = FLT_EPSILON * 10.0f;
+
+	/* -------------------------------------------------------------------- */
+	/* Main Loop */
+
+	while (iterations--) {
+
+		{
+			const MPoly *mpoly = dm->getPolyArray(dm);
+			const MLoop *mloop = dm->getLoopArray(dm);
+			unsigned int mpoly_num, j;
+			mpoly_num = (unsigned int)dm->getNumPolys(dm);
+			for (i = 0; i < mpoly_num; i++) {
+				const MPoly *p = &mpoly[i];
+				const MLoop *ml = &mloop[p->loopstart];
+				const unsigned int totloop = (unsigned int)p->totloop;
+				for (j = 0; j < totloop; j++) {
+					/* TODO, optimize (just testing method right now) */
+					const unsigned int v_prev = ml[((totloop + j) - 1) % totloop].v;
+					const unsigned int v_curr = ml[((totloop + j)    ) % totloop].v;
+					const unsigned int v_next = ml[((totloop + j) + 1) % totloop].v;
+					const float *co_prev = vertexCos[v_prev];
+					const float *co_curr = vertexCos[v_curr];
+					const float *co_next = vertexCos[v_next];
+					float angle = angle_v3v3v3(co_prev, co_curr, co_next);
+					SmoothingData *sd = &smooth_data[v_curr];
+					float co_mid[3];
+
+					mid_v3_v3v3(co_mid, co_prev, co_next);
+					madd_v3_v3fl(sd->delta, co_mid, angle);
+					sd->edge_lengths += angle;
+				}
+			}
+		}
+
+		if ((dmmd->smooth_weights == NULL) && (boundaries == NULL)) {
+			/* fast-path */
+			for (i = 0; i < numVerts; i++) {
+				SmoothingData *sd = &smooth_data[i];
+				if (sd->edge_lengths > eps) {
+					mul_v3_fl(sd->delta, 1.0f / sd->edge_lengths);
+					interp_v3_v3v3(vertexCos[i], vertexCos[i], sd->delta, lambda);
+				}
+				/* zero for the next iteration (saves memset on entire array) */
+				memset(sd, 0, sizeof(*sd));
+			}
+		}
+		else {
+
+			for (i = 0; i < numVerts; i++) {
+				SmoothingData *sd = &smooth_data[i];
+
+				if (sd->edge_lengths > eps) {
+					float lambda_alt = 1.0;
+
+					if (dmmd->smooth_weights) {
+						lambda_alt *= dmmd->smooth_weights[i];
+					}
+
+					if (boundaries) {
+						lambda_alt *= (boundaries[i] != 0 ? 0.0f : 1.0f);
+					}
+
+					mul_v3_fl(sd->delta, 1.0f / sd->edge_lengths);
+					interp_v3_v3v3(vertexCos[i], vertexCos[i], sd->delta, lambda_alt);
+				}
+
+				memset(sd, 0, sizeof(*sd));
+			}
+		}
+	}
+
 #endif
 
 	MEM_freeN(smooth_data);
-	MEM_freeN(vertex_edge_count);
 }
 
 
