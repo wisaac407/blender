@@ -1292,7 +1292,10 @@ enum {
 
 typedef struct DeltaMushModifierData {
 	ModifierData modifier;
+
+	/* positions set during 'bind' operator */
 	float (*positions)[3];
+
 	float lambda;
 	char defgrp_name[64];  /* MAX_VGROUP_NAME */
 	short repeat, flag;
@@ -1306,10 +1309,10 @@ typedef struct DeltaMushModifierData {
 
 /* Delta Mush modifier flags */
 enum {
-	MOD_DELTAMUSH_INVERT_VGROUP = (1 << 0),
-	MOD_DELTAMUSH_BIND = (1 << 1),
-	MOD_DELTAMUSH_ONLY_SMOOTH = (1 << 2),
-	MOD_DELTAMUSH_PIN_BOUNDARY = (1 << 3),
+	MOD_DELTAMUSH_INVERT_VGROUP         = (1 << 0),
+	MOD_DELTAMUSH_BIND                  = (1 << 1),
+	MOD_DELTAMUSH_ONLY_SMOOTH           = (1 << 2),
+	MOD_DELTAMUSH_PIN_BOUNDARY          = (1 << 3),
 };
 
 typedef struct UVWarpModifierData {

@@ -1827,8 +1827,7 @@ static int deltamush_bind_exec(bContext *C, wmOperator *op)
 	Object *ob = ED_object_active_context(C);
 	DeltaMushModifierData *mmd = (DeltaMushModifierData *)edit_modifier_property_get(op, ob, eModifierType_DeltaMush);
 
-	if (!mmd)
-	{
+	if (!mmd) {
 		return OPERATOR_CANCELLED;
 	}
 
