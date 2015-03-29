@@ -74,9 +74,9 @@ static void initData(ModifierData *md)
 	DeltaMushModifierData *dmmd = (DeltaMushModifierData *)md;
 
 	dmmd->flag = MOD_DELTAMUSH_PIN_BOUNDARY;
-	dmmd->boundverts = 0;
 	dmmd->deltas = NULL;
 	dmmd->positions = NULL;
+	dmmd->positions_num = 0;
 	dmmd->lambda = 0.5f;
 	dmmd->repeat = 5;
 	dmmd->defgrp_name[0] = '\0';
@@ -112,7 +112,7 @@ static void freeBind(DeltaMushModifierData * dmmd)
 		dmmd->positions = NULL;
 	}
 
-	dmmd->boundverts = 0;
+	dmmd->positions_num = 0;
 }
 
 
@@ -609,7 +609,7 @@ static void calc_deltas(
 	unsigned int i;
 
 	tangent_spaces = MEM_callocN((size_t)(numVerts) * sizeof(float[3][3]), "delta mush tangents");
-	dmmd->boundverts = numVerts;
+	dmmd->positions_num = numVerts;
 	/* allocate deltas if they have not yet been allocated, otheriwse we will just write over them */
 	if (!dmmd->deltas) {
 		dmmd->deltas = MEM_mallocN((size_t)numVerts * sizeof(float[3]), "delta mush deltas");
@@ -656,18 +656,19 @@ static void deltamushmodifier_do(
 		return;
 	}
 
-	/* if rest positions not are defined, set them */
+	/* if rest positions not are defined, set them (only run during bind) */
 	if (!dmmd->positions) {
 		dmmd->positions = MEM_dupallocN(vertexCos);
-		dmmd->boundverts = numVerts;
+		dmmd->positions_num = numVerts;
 		if (!dmmd->positions) {
 			return;
 		}
 	}
 
 	/* If the number of verts has changed, the bind is invalid, so we do nothing */
-	if (dmmd->boundverts != numVerts) {
-		modifier_setError(md, "Verts changed from %d to %d", dmmd->boundverts, numVerts);
+	if (dmmd->positions_num != numVerts) {
+		modifier_setError(md, "Verts changed from %d to %d", dmmd->positions_num, numVerts);
+		MEM_SAFE_FREE(dmmd->deltas);
 		return;
 	}
 
@@ -677,7 +678,7 @@ static void deltamushmodifier_do(
 	}
 
 	/* this could be a check, but at this point it _must_ be valid */
-	BLI_assert(dmmd->boundverts == numVerts && dmmd->deltas);
+	BLI_assert(dmmd->positions_num == numVerts && dmmd->deltas);
 
 
 #ifdef DEBUG_TIME

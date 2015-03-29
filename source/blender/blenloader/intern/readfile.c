@@ -4955,13 +4955,13 @@ static void direct_link_modifiers(FileData *fd, ListBase *lb)
 			if (dmmd->deltas) {
 				dmmd->deltas = newdataadr(fd, dmmd->deltas);
 				if (fd->flags & FD_FLAGS_SWITCH_ENDIAN) {
-					BLI_endian_switch_float_array((float *)dmmd->deltas, dmmd->boundverts * 3);
+					BLI_endian_switch_float_array((float *)dmmd->deltas, dmmd->positions_num * 3);
 				}
 			}
 			if (dmmd->positions) {
 				dmmd->positions = newdataadr(fd, dmmd->positions);
 				if (fd->flags & FD_FLAGS_SWITCH_ENDIAN) {
-					BLI_endian_switch_float_array((float *)dmmd->positions, dmmd->boundverts * 3);
+					BLI_endian_switch_float_array((float *)dmmd->positions, dmmd->positions_num * 3);
 				}
 			}
 		}
