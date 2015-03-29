@@ -177,10 +177,12 @@ static void find_boundaries(DerivedMesh *dm, short *adjacent_counts)
 
 typedef struct SmoothingData {
 	float delta[3];
-	float edge_lengths;
 } SmoothingData;
 
-
+/**
+ * \note This is called many times.
+ * take care when editing this function since minor changes may impact speed.
+ */
 static void smooth_iter(
         DeltaMushModifierData *dmmd, DerivedMesh *dm,
         float(*vertexCos)[3], unsigned int numVerts,
@@ -197,30 +199,29 @@ static void smooth_iter(
 		SmoothingData *sd_v1;
 		SmoothingData *sd_v2;
 		float edge_dir[3];
-		float edge_dist;
+		float co1[3];
+		float co2[3];
 
-		sub_v3_v3v3(edge_dir, vertexCos[edges[i].v2], vertexCos[edges[i].v1]);
-		edge_dist = len_v3(edge_dir);
-		mul_v3_fl(edge_dir, edge_dist);
+		sub_v3_v3v3(edge_dir, vertexCos[edges[i].v1], vertexCos[edges[i].v2]);
 
+
+		interp_v3_v3v3(co1, vertexCos[edges[i].v1], vertexCos[edges[i].v2], lambda);
+		interp_v3_v3v3(co2, vertexCos[edges[i].v2], vertexCos[edges[i].v1], lambda);
 
 		sd_v1 = &smooth_data[edges[i].v1];
 		sd_v2 = &smooth_data[edges[i].v2];
 
-		add_v3_v3(sd_v1->delta, edge_dir);
-		sub_v3_v3(sd_v2->delta, edge_dir);
-
-		sd_v1->edge_lengths += edge_dist;
-		sd_v2->edge_lengths += edge_dist;
+		add_v3_v3(sd_v1->delta, co1);
+		add_v3_v3(sd_v2->delta, co2);
 	}
 
 	if ((dmmd->smooth_weights == NULL) && (boundaries == NULL)) {
 		/* fast-path */
 		for (i = 0; i < numVerts; i++) {
 			SmoothingData *sd = &smooth_data[i];
-			float div = sd->edge_lengths * vertex_edge_count[i];
+			float div = vertex_edge_count[i];
 			if (div > eps) {
-				madd_v3_v3fl(vertexCos[i], sd->delta, lambda / div);
+				mul_v3_v3fl(vertexCos[i], sd->delta, 1.0f / div);
 			}
 			/* zero for the next iteration (saves memset on entire array) */
 			memset(sd, 0, sizeof(*sd));
@@ -230,10 +231,10 @@ static void smooth_iter(
 
 		for (i = 0; i < numVerts; i++) {
 			SmoothingData *sd = &smooth_data[i];
-			float div = sd->edge_lengths * vertex_edge_count[i];
+			float div = vertex_edge_count[i];
 
 			if (div > eps) {
-				float lambda_alt = lambda;
+				float lambda_alt = 1.0;
 
 				if (dmmd->smooth_weights) {
 					lambda_alt *= dmmd->smooth_weights[i];
@@ -243,7 +244,8 @@ static void smooth_iter(
 					lambda_alt *= (boundaries[i] != 0 ? 0.0f : 1.0f);
 				}
 
-				madd_v3_v3fl(vertexCos[i], sd->delta, lambda_alt / div);
+				mul_v3_fl(sd->delta, 1.0f / div);
+				interp_v3_v3v3(vertexCos[i], vertexCos[i], sd->delta, lambda_alt);
 			}
 
 			memset(sd, 0, sizeof(*sd));
