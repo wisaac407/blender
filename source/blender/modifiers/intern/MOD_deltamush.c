@@ -74,9 +74,9 @@ static void initData(ModifierData *md)
 	DeltaMushModifierData *dmmd = (DeltaMushModifierData *)md;
 
 	dmmd->flag = MOD_DELTAMUSH_PIN_BOUNDARY;
-	dmmd->deltas = NULL;
 	dmmd->positions = NULL;
 	dmmd->positions_num = 0;
+	dmmd->positions_delta_cache = NULL;
 	dmmd->lambda = 0.5f;
 	dmmd->repeat = 5;
 	dmmd->defgrp_name[0] = '\0';
@@ -90,27 +90,16 @@ static void copyData(ModifierData *md, ModifierData *target)
 
 	modifier_copyData_generic(md, target);
 
-	if (dmmd->deltas) {
-		t_dmmd->deltas = MEM_dupallocN(dmmd->deltas);
-	}
-
 	if (dmmd->positions) {
 		t_dmmd->positions = MEM_dupallocN(dmmd->positions);
 	}
 }
 
 
-static void freeBind(DeltaMushModifierData * dmmd)
+static void freeBind(DeltaMushModifierData *dmmd)
 {
-	if (dmmd->deltas) {
-		MEM_freeN(dmmd->deltas);
-		dmmd->deltas = NULL;
-	}
-
-	if (dmmd->positions) {
-		MEM_freeN(dmmd->positions);
-		dmmd->positions = NULL;
-	}
+	MEM_SAFE_FREE(dmmd->positions);
+	MEM_SAFE_FREE(dmmd->positions_delta_cache);
 
 	dmmd->positions_num = 0;
 }
@@ -611,8 +600,8 @@ static void calc_deltas(
 	tangent_spaces = MEM_callocN((size_t)(numVerts) * sizeof(float[3][3]), "delta mush tangents");
 	dmmd->positions_num = numVerts;
 	/* allocate deltas if they have not yet been allocated, otheriwse we will just write over them */
-	if (!dmmd->deltas) {
-		dmmd->deltas = MEM_mallocN((size_t)numVerts * sizeof(float[3]), "delta mush deltas");
+	if (!dmmd->positions_delta_cache) {
+		dmmd->positions_delta_cache = MEM_mallocN((size_t)numVerts * sizeof(float[3]), "delta mush deltas");
 	}
 
 	smooth_verts(dmmd, dm, dvert, defgrp_index, smooth_vertex_cos, numVerts);
@@ -630,7 +619,7 @@ static void calc_deltas(
 		if (UNLIKELY(!invert_m3_m3(imat, tangent_spaces[i]))) {
 			transpose_m3_m3(imat, tangent_spaces[i]);
 		}
-		mul_v3_m3v3(dmmd->deltas[i], imat, delta);
+		mul_v3_m3v3(dmmd->positions_delta_cache[i], imat, delta);
 	}
 
 	MEM_freeN(smooth_vertex_cos);
@@ -668,17 +657,17 @@ static void deltamushmodifier_do(
 	/* If the number of verts has changed, the bind is invalid, so we do nothing */
 	if (dmmd->positions_num != numVerts) {
 		modifier_setError(md, "Verts changed from %d to %d", dmmd->positions_num, numVerts);
-		MEM_SAFE_FREE(dmmd->deltas);
+		MEM_SAFE_FREE(dmmd->positions_delta_cache);
 		return;
 	}
 
 	/* check to see if our deltas are still valid */
-	if (!dmmd->deltas) {
+	if (!dmmd->positions_delta_cache) {
 		calc_deltas(dmmd, dm, dvert, defgrp_index, dmmd->positions, numVerts);
 	}
 
 	/* this could be a check, but at this point it _must_ be valid */
-	BLI_assert(dmmd->positions_num == numVerts && dmmd->deltas);
+	BLI_assert(dmmd->positions_num == numVerts && dmmd->positions_delta_cache);
 
 
 #ifdef DEBUG_TIME
@@ -705,7 +694,7 @@ static void deltamushmodifier_do(
 			calc_tangent_ortho(tangent_spaces[i]);
 #endif
 
-			mul_v3_m3v3(delta, tangent_spaces[i], dmmd->deltas[i]);
+			mul_v3_m3v3(delta, tangent_spaces[i], dmmd->positions_delta_cache[i]);
 			add_v3_v3(vertexCos[i], delta);
 		}
 

@@ -1042,10 +1042,9 @@ static EnumPropertyItem *rna_DataTransferModifier_mix_mode_itemf(bContext *C, Po
 static void rna_DeltaMushModifier_update(Main *bmain, Scene *scene, PointerRNA *ptr)
 {
 	DeltaMushModifierData *dmmd = (DeltaMushModifierData *)ptr->data;
-	if(dmmd->deltas) {
-		MEM_freeN(dmmd->deltas);
-		dmmd->deltas = NULL;
-	}
+
+	MEM_SAFE_FREE(dmmd->positions_delta_cache);
+
 	rna_Modifier_update(bmain, scene, ptr);
 }
 

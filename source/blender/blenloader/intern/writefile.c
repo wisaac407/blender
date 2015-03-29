@@ -1623,9 +1623,6 @@ static void write_modifiers(WriteData *wd, ListBase *modbase)
 		else if (md->type == eModifierType_DeltaMush) {
 			DeltaMushModifierData *dmmd = (DeltaMushModifierData*)md;
 
-			if (dmmd->deltas) {
-				writedata(wd, DATA, sizeof(float[3]) * dmmd->positions_num, dmmd->deltas);
-			}
 			if (dmmd->positions) {
 				writedata(wd, DATA, sizeof(float[3]) * dmmd->positions_num, dmmd->positions);
 			}

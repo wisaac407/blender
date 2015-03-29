@@ -1292,13 +1292,16 @@ enum {
 
 typedef struct DeltaMushModifierData {
 	ModifierData modifier;
-	float (*deltas)[3];
 	float (*positions)[3];
 	float lambda;
 	char defgrp_name[64];  /* MAX_VGROUP_NAME */
 	short repeat, flag;
 
 	unsigned int positions_num, pad;
+
+	/* runtime-only cache (delta's between),
+	 * delta's between the original positions and the smoothed positions */
+	float (*positions_delta_cache)[3];
 } DeltaMushModifierData;
 
 /* Delta Mush modifier flags */
