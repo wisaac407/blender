@@ -186,13 +186,12 @@ typedef struct SmoothingData {
 static void smooth_iter(
         DeltaMushModifierData *dmmd, DerivedMesh *dm,
         float(*vertexCos)[3], unsigned int numVerts,
-        const short *boundaries, const float *vertex_edge_count,
+        const short *boundaries, const float *vertex_edge_count_idiv,
         SmoothingData *smooth_data)
 {
 	const unsigned int numEdges = (unsigned int)dm->getNumEdges(dm);
 	const MEdge *edges = dm->getEdgeArray(dm);
 	const float lambda = dmmd->lambda;
-	const float eps = FLT_EPSILON * 10.0f;
 	unsigned int i;
 
 	for (i = 0; i < numEdges; i++) {
@@ -219,10 +218,7 @@ static void smooth_iter(
 		/* fast-path */
 		for (i = 0; i < numVerts; i++) {
 			SmoothingData *sd = &smooth_data[i];
-			float div = vertex_edge_count[i];
-			if (div > eps) {
-				mul_v3_v3fl(vertexCos[i], sd->delta, 1.0f / div);
-			}
+			mul_v3_v3fl(vertexCos[i], sd->delta, vertex_edge_count_idiv[i]);
 			/* zero for the next iteration (saves memset on entire array) */
 			memset(sd, 0, sizeof(*sd));
 		}
@@ -231,22 +227,19 @@ static void smooth_iter(
 
 		for (i = 0; i < numVerts; i++) {
 			SmoothingData *sd = &smooth_data[i];
-			float div = vertex_edge_count[i];
 
-			if (div > eps) {
-				float lambda_alt = 1.0;
+			float lambda_alt = 1.0;
 
-				if (dmmd->smooth_weights) {
-					lambda_alt *= dmmd->smooth_weights[i];
-				}
-
-				if (boundaries) {
-					lambda_alt *= (boundaries[i] != 0 ? 0.0f : 1.0f);
-				}
-
-				mul_v3_fl(sd->delta, 1.0f / div);
-				interp_v3_v3v3(vertexCos[i], vertexCos[i], sd->delta, lambda_alt);
+			if (dmmd->smooth_weights) {
+				lambda_alt *= dmmd->smooth_weights[i];
 			}
+
+			if (boundaries) {
+				lambda_alt *= (boundaries[i] != 0 ? 0.0f : 1.0f);
+			}
+
+			mul_v3_fl(sd->delta, vertex_edge_count_idiv[i]);
+			interp_v3_v3v3(vertexCos[i], vertexCos[i], sd->delta, lambda_alt);
 
 			memset(sd, 0, sizeof(*sd));
 		}
@@ -276,6 +269,10 @@ static void smooth_verts(
 	for (i = 0; i < numEdges; i++) {
 		vertex_edge_count[edges[i].v1] += 1.0f;
 		vertex_edge_count[edges[i].v2] += 1.0f;
+	}
+
+	for (i = 0; i < numVerts; i++) {
+		vertex_edge_count[i] = vertex_edge_count[i] ? (1.0f / vertex_edge_count[i]) : 1.0f;
 	}
 
 	smooth_data = MEM_callocN((size_t)numVerts * sizeof(SmoothingData), "delta mush smoothing data");
