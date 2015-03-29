@@ -2150,6 +2150,11 @@ static void rna_def_modifier_deltamush(BlenderRNA *brna)
 	RNA_def_property_ui_text(prop, "Repeat", "");
 	RNA_def_property_update(prop, 0, "rna_DeltaMushModifier_update");
 
+	prop = RNA_def_property(srna, "invert_vertex_group", PROP_BOOLEAN, PROP_NONE);
+	RNA_def_property_boolean_sdna(prop, NULL, "flag", MOD_DELTAMUSH_INVERT_VGROUP);
+	RNA_def_property_ui_text(prop, "Invert", "Invert vertex group influence");
+	RNA_def_property_update(prop, 0, "rna_DeltaMushModifier_update");
+
 	prop = RNA_def_property(srna, "vertex_group", PROP_STRING, PROP_NONE);
 	RNA_def_property_string_sdna(prop, NULL, "defgrp_name");
 	RNA_def_property_ui_text(prop, "Vertex Group",

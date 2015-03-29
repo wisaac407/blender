@@ -138,7 +138,7 @@ static CustomDataMask requiredDataMask(Object *UNUSED(ob), ModifierData *md)
 /* check individual weights for changes and cache values */
 static float *dm_get_weights(
         MDeformVert *dvert, const int defgrp_index,
-        const unsigned int numVerts)
+        const unsigned int numVerts, const bool use_invert_vgroup)
 {
 	if (dvert) {
 		unsigned int i;
@@ -148,7 +148,13 @@ static float *dm_get_weights(
 
 		for (i = 0; i < numVerts; i++, dvert++) {
 			const float w = defvert_find_weight(dvert, defgrp_index);
-			smooth_weights[i] = w;
+
+			if (use_invert_vgroup == false) {
+				smooth_weights[i] = w;
+			}
+			else {
+				smooth_weights[i] = 1.0f - w;
+			}
 		}
 
 		return smooth_weights;
@@ -461,7 +467,9 @@ static void smooth_verts(
 	float *smooth_weights = NULL;
 	short *boundaries = NULL;
 
-	smooth_weights = dm_get_weights(dvert, defgrp_index, numVerts);
+	smooth_weights = dm_get_weights(
+	        dvert, defgrp_index,
+	        numVerts, (dmmd->flag & MOD_DELTAMUSH_INVERT_VGROUP) != 0);
 
 	if (dmmd->flag & MOD_DELTAMUSH_PIN_BOUNDARY) {
 		boundaries = dm_get_boundaries(dm);

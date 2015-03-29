@@ -1303,6 +1303,7 @@ typedef struct DeltaMushModifierData {
 
 /* Delta Mush modifier flags */
 enum {
+	MOD_DELTAMUSH_INVERT_VGROUP = (1 << 0),
 	MOD_DELTAMUSH_BIND = (1 << 1),
 	MOD_DELTAMUSH_ONLY_SMOOTH = (1 << 2),
 	MOD_DELTAMUSH_PIN_BOUNDARY = (1 << 3),

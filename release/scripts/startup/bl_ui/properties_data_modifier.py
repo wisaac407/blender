@@ -1395,7 +1395,9 @@ class DATA_PT_modifiers(ModifierButtonsPanel, Panel):
         layout.prop(md, "iterations")
         layout.prop(md, "lambda_factor", text="Factor")
         layout.label(text="Vertex Group:")
-        layout.prop_search(md, "vertex_group", ob, "vertex_groups", text="")
+        sub = layout.row(align=True)
+        sub.prop_search(md, "vertex_group", ob, "vertex_groups", text="")
+        sub.prop(md, "invert_vertex_group", text="", icon='ARROW_LEFTRIGHT')
 
 
 if __name__ == "__main__":  # only for live edit.
