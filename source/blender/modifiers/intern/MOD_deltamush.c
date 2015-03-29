@@ -73,7 +73,7 @@ static void initData(ModifierData *md)
 {
 	DeltaMushModifierData *dmmd = (DeltaMushModifierData *)md;
 
-	dmmd->dm_flags = MOD_DELTAMUSH_PINBOUNDS;
+	dmmd->flag = MOD_DELTAMUSH_PIN_BOUNDARY;
 	dmmd->boundverts = 0;
 	dmmd->deltas = NULL;
 	dmmd->positions = NULL;
@@ -142,11 +142,11 @@ static CustomDataMask requiredDataMask(Object *UNUSED(ob), ModifierData *md)
 static void update_weights(Object *ob, DeltaMushModifierData *dmmd, DerivedMesh *dm)
 {
 	MDeformVert *dvert = NULL;
-	float w;
-	int defgrp_index, i;
-	int numVerts = dm->getNumVerts(dm);
+	int defgrp_index;
+	const unsigned int numVerts = (unsigned int)dm->getNumVerts(dm);
 
 	modifier_get_vgroup(ob, dm, dmmd->defgrp_name, &dvert, &defgrp_index);
+
 	if (!dmmd->smooth_weights && dvert) {
 		dmmd->smooth_weights = MEM_callocN(sizeof(float) * (size_t) numVerts, "delta mush weight cache");
 	}
@@ -154,9 +154,11 @@ static void update_weights(Object *ob, DeltaMushModifierData *dmmd, DerivedMesh 
 		MEM_freeN(dmmd->smooth_weights);
 		dmmd->smooth_weights = NULL;
 	}
+
 	if (dmmd->smooth_weights && dvert) {
+		unsigned int i;
 		for (i = 0; i < numVerts; i++, dvert++) {
-			w = defvert_find_weight(dvert, defgrp_index);
+			const float w = defvert_find_weight(dvert, defgrp_index);
 			if (dmmd->smooth_weights[i] != w) {
 				dmmd->smooth_weights[i] = w;
 				if (dmmd->deltas) {
@@ -171,25 +173,26 @@ static void update_weights(Object *ob, DeltaMushModifierData *dmmd, DerivedMesh 
 
 static void find_boundaries(DerivedMesh *dm, short *adjacent_counts)
 {
-	MPoly *polys = dm->getPolyArray(dm);
-	MLoop *loops = dm->getLoopArray(dm);
-	MEdge *edges = dm->getEdgeArray(dm);
-	int numFaces, numLoops, numEdges, i, j;
-	numEdges = dm->getNumEdges(dm);
-	numFaces = dm->getNumPolys(dm);
+	const MPoly *mpoly = dm->getPolyArray(dm);
+	const MLoop *mloop = dm->getLoopArray(dm);
+	const MEdge *medge = dm->getEdgeArray(dm);
+	unsigned int mpoly_num, medge_num, i;
+	medge_num = (unsigned int)dm->getNumEdges(dm);
+	mpoly_num = (unsigned int)dm->getNumPolys(dm);
 	/* count the number of adjacent faces */
-	for (i = 0; i < numFaces; i++) {
-		MPoly *p = &polys[i];
-		numLoops = p->totloop;
-		for (j = 0; j < numLoops; j++) {
-			adjacent_counts[loops[p->loopstart + j].v]++;
+	for (i = 0; i < mpoly_num; i++) {
+		const MPoly *p = &mpoly[i];
+		const int totloop = p->totloop;
+		int j;
+		for (j = 0; j < totloop; j++) {
+			adjacent_counts[mloop[p->loopstart + j].v]++;
 		}
 	}
 	/* subtract one from the count for each connected edge - if th count ends up as zero, edge is not a boundary */
 	/* this may also consider some other non-manifold edges as boundaries */
-	for (i = 0; i < numEdges; i++) {
-		adjacent_counts[edges[i].v1]--;
-		adjacent_counts[edges[i].v2]--;
+	for (i = 0; i < medge_num; i++) {
+		adjacent_counts[medge[i].v1]--;
+		adjacent_counts[medge[i].v2]--;
 	}
 }
 
@@ -460,7 +463,7 @@ static void smooth_verts(
 {
 	short *boundaries = NULL;
 
-	if (dmmd->dm_flags & MOD_DELTAMUSH_PINBOUNDS) {
+	if (dmmd->flag & MOD_DELTAMUSH_PIN_BOUNDARY) {
 		boundaries = MEM_callocN((size_t)numVerts * sizeof(short), "delta mush boundary data");
 		find_boundaries(dm, boundaries);
 	}
@@ -597,7 +600,7 @@ static void calc_deltas(
 	dmmd->boundverts = numVerts;
 	/* allocate deltas if they have not yet been allocated, otheriwse we will just write over them */
 	if (!dmmd->deltas) {
-		dmmd->deltas = MEM_mallocN((size_t)(numVerts * 3) * sizeof(float), "delta mush deltas");
+		dmmd->deltas = MEM_mallocN((size_t)numVerts * sizeof(float[3]), "delta mush deltas");
 	}
 
 	smooth_verts(dmmd, dm, smooth_vertex_cos, numVerts);
@@ -628,8 +631,8 @@ static void deltamushmodifier_do(
         float(*vertexCos)[3], unsigned int numVerts)
 {
 	DeltaMushModifierData *dmmd = (DeltaMushModifierData *)md;
-	const bool use_bind = (dmmd->dm_flags & MOD_DELTAMUSH_BIND) != 0;
-	const bool use_only_smooth = (dmmd->dm_flags & MOD_DELTAMUSH_SHOWSMOOTH)  != 0;
+	const bool use_bind = (dmmd->flag & MOD_DELTAMUSH_BIND) != 0;
+	const bool use_only_smooth = (dmmd->flag & MOD_DELTAMUSH_ONLY_SMOOTH)  != 0;
 
 	if (UNLIKELY(use_bind == false)) {
 		freeBind(dmmd);

@@ -1387,12 +1387,10 @@ class DATA_PT_modifiers(ModifierButtonsPanel, Panel):
         sub.prop(md, "use_invert_vertex_group", text="", icon='ARROW_LEFTRIGHT')
 
     def DELTAMUSH(self, layout, ob, md):
-        if md.bind:
-            layout.operator("object.deltamush_bind", text="Unbind")
-        else:
-            layout.operator("object.deltamush_bind", text="Bind")
-        layout.prop(md, "only_smooth");
-        layout.prop(md, "pin_bounds");
+        is_bind = md.is_bind
+        layout.operator("object.deltamush_bind", text="Unbind" if is_bind else "Bind")
+        layout.prop(md, "use_only_smooth");
+        layout.prop(md, "use_pin_boundary");
         layout.label(text="Smoothing Details")
         layout.prop(md, "iterations")
         layout.prop(md, "lambda_factor", text="Factor")

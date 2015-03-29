@@ -2157,19 +2157,20 @@ static void rna_def_modifier_deltamush(BlenderRNA *brna)
 	RNA_def_property_string_funcs(prop, NULL, NULL, "rna_DeltaMushModifier_defgrp_name_set");
 	RNA_def_property_update(prop, 0, "rna_DeltaMushModifier_update");
 
-	prop = RNA_def_property(srna, "bind", PROP_BOOLEAN, PROP_NONE);
-	RNA_def_property_boolean_sdna(prop, NULL, "dm_flags", MOD_DELTAMUSH_BIND);
+	prop = RNA_def_property(srna, "is_bind", PROP_BOOLEAN, PROP_NONE);
+	RNA_def_property_boolean_sdna(prop, NULL, "flag", MOD_DELTAMUSH_BIND);
 	RNA_def_property_ui_text(prop, "Bind current shape", "");
+	RNA_def_property_clear_flag(prop, PROP_EDITABLE);
 	RNA_def_property_update(prop, 0, "rna_Modifier_update");
 
-	prop = RNA_def_property(srna, "only_smooth", PROP_BOOLEAN, PROP_NONE);
-	RNA_def_property_boolean_sdna(prop, NULL, "dm_flags", MOD_DELTAMUSH_SHOWSMOOTH);
+	prop = RNA_def_property(srna, "use_only_smooth", PROP_BOOLEAN, PROP_NONE);
+	RNA_def_property_boolean_sdna(prop, NULL, "flag", MOD_DELTAMUSH_ONLY_SMOOTH);
 	RNA_def_property_ui_text(prop, "Display Smoothing Only", 
 		"Display the effects of smoothing without reconstructing the surface");
 	RNA_def_property_update(prop, 0, "rna_Modifier_update");
 
-	prop = RNA_def_property(srna, "pin_bounds", PROP_BOOLEAN, PROP_NONE);
-	RNA_def_property_boolean_sdna(prop, NULL, "dm_flags", MOD_DELTAMUSH_PINBOUNDS);
+	prop = RNA_def_property(srna, "use_pin_boundary", PROP_BOOLEAN, PROP_NONE);
+	RNA_def_property_boolean_sdna(prop, NULL, "flag", MOD_DELTAMUSH_PIN_BOUNDARY);
 	RNA_def_property_ui_text(prop, "Pin Boundaries",
 		"Excludes vertices on a mesh boundary from being smoothed");
 	RNA_def_property_update(prop, 0, "rna_DeltaMushModifier_update");

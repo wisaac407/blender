@@ -1297,7 +1297,7 @@ typedef struct DeltaMushModifierData {
 	float *smooth_weights;
 	float lambda;
 	char defgrp_name[64];  /* MAX_VGROUP_NAME */
-	short repeat, dm_flags;
+	short repeat, flag;
 
 	unsigned int boundverts, pad;
 } DeltaMushModifierData;
@@ -1305,8 +1305,8 @@ typedef struct DeltaMushModifierData {
 /* Delta Mush modifier flags */
 enum {
 	MOD_DELTAMUSH_BIND = (1 << 1),
-	MOD_DELTAMUSH_SHOWSMOOTH = (1 << 2),
-	MOD_DELTAMUSH_PINBOUNDS = (1 << 3),
+	MOD_DELTAMUSH_ONLY_SMOOTH = (1 << 2),
+	MOD_DELTAMUSH_PIN_BOUNDARY = (1 << 3),
 };
 
 typedef struct UVWarpModifierData {

@@ -1832,7 +1832,7 @@ static int deltamush_bind_exec(bContext *C, wmOperator *op)
 		return OPERATOR_CANCELLED;
 	}
 
-	mmd->dm_flags = mmd->dm_flags ^ MOD_DELTAMUSH_BIND;
+	mmd->flag ^= MOD_DELTAMUSH_BIND;
 	DAG_id_tag_update(&ob->id, OB_RECALC_DATA);
 	WM_event_add_notifier(C, NC_OBJECT | ND_MODIFIER, ob);
 
