@@ -178,14 +178,6 @@ static void dm_get_boundaries(DerivedMesh *dm, float *smooth_weights)
 	MEM_freeN(boundaries);
 }
 
-
-typedef struct SmoothingData {
-	float delta[3];
-#if (SMOOTH_METHOD == SMOOTH_METHOD_SQUAREDLENGTH) || (SMOOTH_METHOD == SMOOTH_METHOD_LOOPWEIGHT)
-	float edge_lengths;
-#endif
-} SmoothingData;
-
 /**
  * \note This is called many times.
  * take care when editing this function since minor changes may impact speed.
@@ -199,7 +191,12 @@ static void smooth_iter(
 	const float lambda = dmmd->lambda;
 	unsigned int i;
 
-	SmoothingData *smooth_data  = MEM_callocN((size_t)numVerts * sizeof(SmoothingData), "delta mush smoothing data");
+	struct SmoothingData {
+		float delta[3];
+#if (SMOOTH_METHOD == SMOOTH_METHOD_SQUAREDLENGTH) || (SMOOTH_METHOD == SMOOTH_METHOD_LOOPWEIGHT)
+		float edge_lengths;
+#endif
+	} *smooth_data = MEM_callocN((size_t)numVerts * sizeof(*smooth_data), __func__);
 
 
 #if (SMOOTH_METHOD == SMOOTH_METHOD_SIMPLE)
@@ -225,8 +222,8 @@ static void smooth_iter(
 
 	while (iterations--) {
 		for (i = 0; i < numEdges; i++) {
-			SmoothingData *sd_v1;
-			SmoothingData *sd_v2;
+			struct SmoothingData *sd_v1;
+			struct SmoothingData *sd_v2;
 			float edge_dir[3];
 			float co1[3];
 			float co2[3];
@@ -246,7 +243,7 @@ static void smooth_iter(
 		if (smooth_weights == NULL) {
 			/* fast-path */
 			for (i = 0; i < numVerts; i++) {
-				SmoothingData *sd = &smooth_data[i];
+				struct SmoothingData *sd = &smooth_data[i];
 				mul_v3_v3fl(vertexCos[i], sd->delta, vertex_edge_count_div[i]);
 				/* zero for the next iteration (saves memset on entire array) */
 				memset(sd, 0, sizeof(*sd));
@@ -255,16 +252,11 @@ static void smooth_iter(
 		else {
 
 			for (i = 0; i < numVerts; i++) {
-				SmoothingData *sd = &smooth_data[i];
+				struct SmoothingData *sd = &smooth_data[i];
 
-				float lambda_alt = 1.0;
-
-				if (smooth_weights) {
-					lambda_alt *= smooth_weights[i];
-				}
-
+				float lambda_w = lambda * smooth_weights[i];
 				mul_v3_fl(sd->delta, vertex_edge_count_div[i]);
-				interp_v3_v3v3(vertexCos[i], vertexCos[i], sd->delta, lambda_alt);
+				interp_v3_v3v3(vertexCos[i], vertexCos[i], sd->delta, lambda_w);
 
 				memset(sd, 0, sizeof(*sd));
 			}
@@ -282,7 +274,6 @@ static void smooth_iter(
 
 	float *vertex_edge_count;
 
-
 	/* calculate as floats to avoid int->float conversion in #smooth_iter */
 	vertex_edge_count = MEM_callocN((size_t)numVerts * sizeof(float), __func__);
 	for (i = 0; i < numEdges; i++) {
@@ -296,13 +287,15 @@ static void smooth_iter(
 
 	while (iterations--) {
 		for (i = 0; i < numEdges; i++) {
-			SmoothingData *sd_v1;
-			SmoothingData *sd_v2;
+			struct SmoothingData *sd_v1;
+			struct SmoothingData *sd_v2;
 			float edge_dir[3];
 			float edge_dist;
 
 			sub_v3_v3v3(edge_dir, vertexCos[edges[i].v2], vertexCos[edges[i].v1]);
 			edge_dist = len_v3(edge_dir);
+
+			/* weight by distance */
 			mul_v3_fl(edge_dir, edge_dist);
 
 
@@ -319,10 +312,19 @@ static void smooth_iter(
 		if (smooth_weights == NULL) {
 			/* fast-path */
 			for (i = 0; i < numVerts; i++) {
-				SmoothingData *sd = &smooth_data[i];
-				float div = sd->edge_lengths * vertex_edge_count[i];
+				struct SmoothingData *sd = &smooth_data[i];
+				/* divide by sum of all neighbour distances (weighted) and amount of neighbours, (mean average) */
+				const float div = sd->edge_lengths * vertex_edge_count[i];
 				if (div > eps) {
+#if 0
+					/* first calculate the new location */
+					mul_v3_fl(sd->delta, 1.0f / div);
+					/* then interpolate */
+					madd_v3_v3fl(vertexCos[i], sd->delta, lambda);
+#else
+					/* do this in one step */
 					madd_v3_v3fl(vertexCos[i], sd->delta, lambda / div);
+#endif
 				}
 				/* zero for the next iteration (saves memset on entire array) */
 				memset(sd, 0, sizeof(*sd));
@@ -330,17 +332,11 @@ static void smooth_iter(
 		}
 		else {
 			for (i = 0; i < numVerts; i++) {
-				SmoothingData *sd = &smooth_data[i];
-				float div = sd->edge_lengths * vertex_edge_count[i];
-
+				struct SmoothingData *sd = &smooth_data[i];
+				const float div = sd->edge_lengths * vertex_edge_count[i];
 				if (div > eps) {
-					float lambda_alt = lambda;
-
-					if (smooth_weights) {
-						lambda_alt *= smooth_weights[i];
-					}
-
-					madd_v3_v3fl(vertexCos[i], sd->delta, lambda_alt / div);
+					const float lambda_w = lambda * smooth_weights[i];
+					madd_v3_v3fl(vertexCos[i], sd->delta, lambda_w / div);
 				}
 
 				memset(sd, 0, sizeof(*sd));
@@ -378,7 +374,7 @@ static void smooth_iter(
 					const float *co_curr = vertexCos[v_curr];
 					const float *co_next = vertexCos[v_next];
 					float angle = angle_v3v3v3(co_prev, co_curr, co_next);
-					SmoothingData *sd = &smooth_data[v_curr];
+					struct SmoothingData *sd = &smooth_data[v_curr];
 					float co_mid[3];
 
 					mid_v3_v3v3(co_mid, co_prev, co_next);
@@ -391,7 +387,7 @@ static void smooth_iter(
 		if (smooth_weights == NULL) {
 			/* fast-path */
 			for (i = 0; i < numVerts; i++) {
-				SmoothingData *sd = &smooth_data[i];
+				struct SmoothingData *sd = &smooth_data[i];
 				if (sd->edge_lengths > eps) {
 					mul_v3_fl(sd->delta, 1.0f / sd->edge_lengths);
 					interp_v3_v3v3(vertexCos[i], vertexCos[i], sd->delta, lambda);
@@ -406,14 +402,9 @@ static void smooth_iter(
 				SmoothingData *sd = &smooth_data[i];
 
 				if (sd->edge_lengths > eps) {
-					float lambda_alt = 1.0;
-
-					if (smooth_weights) {
-						lambda_alt *= smooth_weights[i];
-					}
-
+					float lambda_w = smooth_weights[i];
 					mul_v3_fl(sd->delta, 1.0f / sd->edge_lengths);
-					interp_v3_v3v3(vertexCos[i], vertexCos[i], sd->delta, lambda_alt);
+					interp_v3_v3v3(vertexCos[i], vertexCos[i], sd->delta, lambda_w);
 				}
 
 				memset(sd, 0, sizeof(*sd));

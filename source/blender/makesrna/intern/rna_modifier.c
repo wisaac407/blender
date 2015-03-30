@@ -2157,7 +2157,7 @@ static void rna_def_modifier_deltamush(BlenderRNA *brna)
 	prop = RNA_def_property(srna, "vertex_group", PROP_STRING, PROP_NONE);
 	RNA_def_property_string_sdna(prop, NULL, "defgrp_name");
 	RNA_def_property_ui_text(prop, "Vertex Group",
-		"Name of Vertex Group which determines influence of modifier per point");
+	                         "Name of Vertex Group which determines influence of modifier per point");
 	RNA_def_property_string_funcs(prop, NULL, NULL, "rna_DeltaMushModifier_defgrp_name_set");
 	RNA_def_property_update(prop, 0, "rna_DeltaMushModifier_update");
 
@@ -2169,8 +2169,8 @@ static void rna_def_modifier_deltamush(BlenderRNA *brna)
 
 	prop = RNA_def_property(srna, "use_only_smooth", PROP_BOOLEAN, PROP_NONE);
 	RNA_def_property_boolean_sdna(prop, NULL, "flag", MOD_DELTAMUSH_ONLY_SMOOTH);
-	RNA_def_property_ui_text(prop, "Display Smoothing Only", 
-		"Display the effects of smoothing without reconstructing the surface");
+	RNA_def_property_ui_text(prop, "Only Smooth",
+	                         "Apply smoothing without reconstructing the surface");
 	RNA_def_property_update(prop, 0, "rna_Modifier_update");
 
 	prop = RNA_def_property(srna, "use_pin_boundary", PROP_BOOLEAN, PROP_NONE);
