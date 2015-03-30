@@ -1295,13 +1295,13 @@ typedef struct CorrectiveSmoothModifierData {
 
 	/* positions set during 'bind' operator */
 	float (*positions)[3];
+	unsigned int positions_num;
 
 	float lambda;
-	char defgrp_name[64];  /* MAX_VGROUP_NAME */
-
-	unsigned int positions_num;
 	short repeat, flag;
 	char smooth_type, pad[3];
+
+	char defgrp_name[64];  /* MAX_VGROUP_NAME */
 
 	/* runtime-only cache (delta's between),
 	 * delta's between the original positions and the smoothed positions */

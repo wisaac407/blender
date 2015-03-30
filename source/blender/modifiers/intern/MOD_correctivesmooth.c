@@ -41,6 +41,7 @@
 
 #include "BLI_strict_flags.h"
 
+
 #define DEBUG_TIME
 
 #include "PIL_time.h"
@@ -55,13 +56,17 @@ static void initData(ModifierData *md)
 {
 	CorrectiveSmoothModifierData *dmmd = (CorrectiveSmoothModifierData *)md;
 
-	dmmd->flag = MOD_CORRECTIVESMOOTH_PIN_BOUNDARY;
 	dmmd->positions = NULL;
 	dmmd->positions_num = 0;
-	dmmd->positions_delta_cache = NULL;
+
 	dmmd->lambda = 0.5f;
 	dmmd->repeat = 5;
+	dmmd->flag = 0;
+	dmmd->smooth_type = MOD_CORRECTIVESMOOTH_SMOOTH_SIMPLE;
+
 	dmmd->defgrp_name[0] = '\0';
+
+	dmmd->positions_delta_cache = NULL;
 }
 
 
