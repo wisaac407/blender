@@ -1392,10 +1392,13 @@ class DATA_PT_modifiers(ModifierButtonsPanel, Panel):
         layout.prop(md, "iterations")
         layout.prop(md, "lambda_factor", text="Factor")
 
-        layout.label(text="Smoothing Details")
         row = layout.row()
-        row.prop(md, "use_only_smooth");
-        row.prop(md, "use_pin_boundary");
+        row.label(text="Smoothing Details")
+        row.prop(md, "smooth_type", text="")
+
+        row = layout.row()
+        row.prop(md, "use_only_smooth")
+        row.prop(md, "use_pin_boundary")
 
         layout.label(text="Vertex Group:")
         sub = layout.row(align=True)

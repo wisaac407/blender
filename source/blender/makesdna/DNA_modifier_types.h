@@ -1298,14 +1298,20 @@ typedef struct DeltaMushModifierData {
 
 	float lambda;
 	char defgrp_name[64];  /* MAX_VGROUP_NAME */
-	short repeat, flag;
 
-	unsigned int positions_num, pad;
+	unsigned int positions_num;
+	short repeat, flag;
+	char smooth_type, pad[3];
 
 	/* runtime-only cache (delta's between),
 	 * delta's between the original positions and the smoothed positions */
 	float (*positions_delta_cache)[3];
 } DeltaMushModifierData;
+
+enum {
+	MOD_DELTAMUSH_SMOOTH_SIMPLE         = 0,
+	MOD_DELTAMUSH_SMOOTH_EDGE_WEIGHT    = 1,
+};
 
 /* Delta Mush modifier flags */
 enum {

@@ -2131,6 +2131,14 @@ static void rna_def_modifier_deltamush(BlenderRNA *brna)
 	StructRNA *srna;
 	PropertyRNA *prop;
 
+	static EnumPropertyItem modifier_smooth_type_items[] = {
+		{MOD_DELTAMUSH_SMOOTH_SIMPLE, "SIMPLE", 0, "Simple",
+		 "Use the average of adjacent vertices"},
+		{MOD_DELTAMUSH_SMOOTH_EDGE_WEIGHT, "LENGTH_WEIGHTED", 0, "Length Weight",
+		 "Use the average of adjacent vertices weighted by the length"},
+		{0, NULL, 0, NULL, NULL}
+	};
+
 	srna = RNA_def_struct(brna, "DeltaMushModifier", "Modifier");
 	RNA_def_struct_ui_text(srna, "Delta Mush Modifier", "Deformation Relaxation modifier");
 	RNA_def_struct_sdna(srna, "DeltaMushModifierData");
@@ -2147,6 +2155,12 @@ static void rna_def_modifier_deltamush(BlenderRNA *brna)
 	RNA_def_property_int_sdna(prop, NULL, "repeat");
 	RNA_def_property_ui_range(prop, 0, 200, 1, -1);
 	RNA_def_property_ui_text(prop, "Repeat", "");
+	RNA_def_property_update(prop, 0, "rna_DeltaMushModifier_update");
+
+	prop = RNA_def_property(srna, "smooth_type", PROP_ENUM, PROP_NONE);
+	RNA_def_property_enum_sdna(prop, NULL, "smooth_type");
+	RNA_def_property_enum_items(prop, modifier_smooth_type_items);
+	RNA_def_property_ui_text(prop, "Smooth Type", "");
 	RNA_def_property_update(prop, 0, "rna_DeltaMushModifier_update");
 
 	prop = RNA_def_property(srna, "invert_vertex_group", PROP_BOOLEAN, PROP_NONE);
