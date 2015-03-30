@@ -1620,11 +1620,11 @@ static void write_modifiers(WriteData *wd, ListBase *modbase)
 
 			writedata(wd, DATA, sizeof(float)*lmd->total_verts * 3, lmd->vertexco);
 		}
-		else if (md->type == eModifierType_DeltaMush) {
-			DeltaMushModifierData *dmmd = (DeltaMushModifierData*)md;
+		else if (md->type == eModifierType_CorrectiveSmooth) {
+			CorrectiveSmoothModifierData *csmd = (CorrectiveSmoothModifierData *)md;
 
-			if (dmmd->positions) {
-				writedata(wd, DATA, sizeof(float[3]) * dmmd->positions_num, dmmd->positions);
+			if (csmd->positions) {
+				writedata(wd, DATA, sizeof(float[3]) * csmd->positions_num, csmd->positions);
 			}
 		}
 	}

@@ -1817,46 +1817,46 @@ void OBJECT_OT_skin_armature_create(wmOperatorType *ot)
 }
 /************************ delta mush bind operator *********************/
 
-static int deltamush_poll(bContext *C)
+static int correctivesmooth_poll(bContext *C)
 {
-	return edit_modifier_poll_generic(C, &RNA_DeltaMushModifier, 0);
+	return edit_modifier_poll_generic(C, &RNA_CorrectiveSmoothModifier, 0);
 }
 
-static int deltamush_bind_exec(bContext *C, wmOperator *op)
+static int correctivesmooth_bind_exec(bContext *C, wmOperator *op)
 {
 	Object *ob = ED_object_active_context(C);
-	DeltaMushModifierData *mmd = (DeltaMushModifierData *)edit_modifier_property_get(op, ob, eModifierType_DeltaMush);
+	CorrectiveSmoothModifierData *mmd = (CorrectiveSmoothModifierData *)edit_modifier_property_get(op, ob, eModifierType_CorrectiveSmooth);
 
 	if (!mmd) {
 		return OPERATOR_CANCELLED;
 	}
 
-	mmd->flag ^= MOD_DELTAMUSH_BIND;
+	mmd->flag ^= MOD_CORRECTIVESMOOTH_BIND;
 	DAG_id_tag_update(&ob->id, OB_RECALC_DATA);
 	WM_event_add_notifier(C, NC_OBJECT | ND_MODIFIER, ob);
 
 	return OPERATOR_FINISHED;
 }
 
-static int deltamush_bind_invoke(bContext *C, wmOperator *op, const wmEvent *UNUSED(event))
+static int correctivesmooth_bind_invoke(bContext *C, wmOperator *op, const wmEvent *UNUSED(event))
 {
 	if (edit_modifier_invoke_properties(C, op))
-		return deltamush_bind_exec(C, op);
+		return correctivesmooth_bind_exec(C, op);
 	else
 		return OPERATOR_CANCELLED;
 }
 
-void OBJECT_OT_deltamush_bind(wmOperatorType *ot)
+void OBJECT_OT_correctivesmooth_bind(wmOperatorType *ot)
 {
 	/* identifiers */
-	ot->name = "Delta Mush Bind";
+	ot->name = "Corrective Smooth Bind";
 	ot->description = "Bind base pose in delta mush modifier";
-	ot->idname = "OBJECT_OT_deltamush_bind";
+	ot->idname = "OBJECT_OT_correctivesmooth_bind";
 
 	/* api callbacks */
-	ot->poll = deltamush_poll;
-	ot->invoke = deltamush_bind_invoke;
-	ot->exec = deltamush_bind_exec;
+	ot->poll = correctivesmooth_poll;
+	ot->invoke = correctivesmooth_bind_invoke;
+	ot->exec = correctivesmooth_bind_exec;
 
 	/* flags */
 	ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO | OPTYPE_INTERNAL;

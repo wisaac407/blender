@@ -1386,7 +1386,7 @@ class DATA_PT_modifiers(ModifierButtonsPanel, Panel):
         sub.active = has_vgroup
         sub.prop(md, "use_invert_vertex_group", text="", icon='ARROW_LEFTRIGHT')
 
-    def DELTAMUSH(self, layout, ob, md):
+    def CORRECTIVE_SMOOTH(self, layout, ob, md):
         is_bind = md.is_bind
 
         layout.prop(md, "iterations")
@@ -1405,7 +1405,7 @@ class DATA_PT_modifiers(ModifierButtonsPanel, Panel):
         sub.prop_search(md, "vertex_group", ob, "vertex_groups", text="")
         sub.prop(md, "invert_vertex_group", text="", icon='ARROW_LEFTRIGHT')
 
-        layout.operator("object.deltamush_bind", text="Unbind" if is_bind else "Bind")
+        layout.operator("object.correctivesmooth_bind", text="Unbind" if is_bind else "Bind")
 
 
 if __name__ == "__main__":  # only for live edit.

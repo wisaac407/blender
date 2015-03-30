@@ -84,7 +84,7 @@ typedef enum ModifierType {
 	eModifierType_Wireframe         = 48,
 	eModifierType_DataTransfer      = 49,
 	eModifierType_NormalEdit        = 50,
-	eModifierType_DeltaMush			= 51,
+	eModifierType_CorrectiveSmooth  = 51,
 	NUM_MODIFIER_TYPES
 } ModifierType;
 
@@ -1290,7 +1290,7 @@ enum {
 };
 
 
-typedef struct DeltaMushModifierData {
+typedef struct CorrectiveSmoothModifierData {
 	ModifierData modifier;
 
 	/* positions set during 'bind' operator */
@@ -1306,19 +1306,19 @@ typedef struct DeltaMushModifierData {
 	/* runtime-only cache (delta's between),
 	 * delta's between the original positions and the smoothed positions */
 	float (*positions_delta_cache)[3];
-} DeltaMushModifierData;
+} CorrectiveSmoothModifierData;
 
 enum {
-	MOD_DELTAMUSH_SMOOTH_SIMPLE         = 0,
-	MOD_DELTAMUSH_SMOOTH_EDGE_WEIGHT    = 1,
+	MOD_CORRECTIVESMOOTH_SMOOTH_SIMPLE         = 0,
+	MOD_CORRECTIVESMOOTH_SMOOTH_EDGE_WEIGHT    = 1,
 };
 
-/* Delta Mush modifier flags */
+/* Corrective Smooth modifier flags */
 enum {
-	MOD_DELTAMUSH_INVERT_VGROUP         = (1 << 0),
-	MOD_DELTAMUSH_BIND                  = (1 << 1),
-	MOD_DELTAMUSH_ONLY_SMOOTH           = (1 << 2),
-	MOD_DELTAMUSH_PIN_BOUNDARY          = (1 << 3),
+	MOD_CORRECTIVESMOOTH_INVERT_VGROUP         = (1 << 0),
+	MOD_CORRECTIVESMOOTH_BIND                  = (1 << 1),
+	MOD_CORRECTIVESMOOTH_ONLY_SMOOTH           = (1 << 2),
+	MOD_CORRECTIVESMOOTH_PIN_BOUNDARY          = (1 << 3),
 };
 
 typedef struct UVWarpModifierData {

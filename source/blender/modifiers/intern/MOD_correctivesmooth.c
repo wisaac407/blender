@@ -53,9 +53,9 @@
 
 static void initData(ModifierData *md)
 {
-	DeltaMushModifierData *dmmd = (DeltaMushModifierData *)md;
+	CorrectiveSmoothModifierData *dmmd = (CorrectiveSmoothModifierData *)md;
 
-	dmmd->flag = MOD_DELTAMUSH_PIN_BOUNDARY;
+	dmmd->flag = MOD_CORRECTIVESMOOTH_PIN_BOUNDARY;
 	dmmd->positions = NULL;
 	dmmd->positions_num = 0;
 	dmmd->positions_delta_cache = NULL;
@@ -67,8 +67,8 @@ static void initData(ModifierData *md)
 
 static void copyData(ModifierData *md, ModifierData *target)
 {
-	DeltaMushModifierData *dmmd = (DeltaMushModifierData *)md;
-	DeltaMushModifierData *t_dmmd = (DeltaMushModifierData *)target;
+	CorrectiveSmoothModifierData *dmmd = (CorrectiveSmoothModifierData *)md;
+	CorrectiveSmoothModifierData *t_dmmd = (CorrectiveSmoothModifierData *)target;
 
 	modifier_copyData_generic(md, target);
 
@@ -78,7 +78,7 @@ static void copyData(ModifierData *md, ModifierData *target)
 }
 
 
-static void freeBind(DeltaMushModifierData *dmmd)
+static void freeBind(CorrectiveSmoothModifierData *dmmd)
 {
 	MEM_SAFE_FREE(dmmd->positions);
 	MEM_SAFE_FREE(dmmd->positions_delta_cache);
@@ -89,14 +89,14 @@ static void freeBind(DeltaMushModifierData *dmmd)
 
 static void freeData(ModifierData *md)
 {
-	DeltaMushModifierData *dmmd = (DeltaMushModifierData *) md;
+	CorrectiveSmoothModifierData *dmmd = (CorrectiveSmoothModifierData *)md;
 	freeBind(dmmd);
 }
 
 
 static CustomDataMask requiredDataMask(Object *UNUSED(ob), ModifierData *md)
 {
-	DeltaMushModifierData *dmmd = (DeltaMushModifierData *) md;
+	CorrectiveSmoothModifierData *dmmd = (CorrectiveSmoothModifierData *)md;
 	CustomDataMask dataMask = 0;
 	/* ask for vertex groups if we need them */
 	if (dmmd->defgrp_name[0]) {
@@ -166,7 +166,7 @@ static void dm_get_boundaries(DerivedMesh *dm, float *smooth_weights)
  */
 
 static void smooth_iter__simple(
-        DeltaMushModifierData *dmmd, DerivedMesh *dm,
+        CorrectiveSmoothModifierData *dmmd, DerivedMesh *dm,
         float(*vertexCos)[3], unsigned int numVerts,
         const float *smooth_weights,
         unsigned int iterations)
@@ -251,7 +251,7 @@ static void smooth_iter__simple(
  */
 
 static void smooth_iter__length_weight(
-        DeltaMushModifierData *dmmd, DerivedMesh *dm,
+        CorrectiveSmoothModifierData *dmmd, DerivedMesh *dm,
         float(*vertexCos)[3], unsigned int numVerts,
         const float *smooth_weights,
         unsigned int iterations)
@@ -345,17 +345,17 @@ static void smooth_iter__length_weight(
 
 
 static void smooth_iter(
-        DeltaMushModifierData *dmmd, DerivedMesh *dm,
+        CorrectiveSmoothModifierData *dmmd, DerivedMesh *dm,
         float(*vertexCos)[3], unsigned int numVerts,
         const float *smooth_weights,
         unsigned int iterations)
 {
 	switch (dmmd->smooth_type) {
-		case MOD_DELTAMUSH_SMOOTH_EDGE_WEIGHT:
+		case MOD_CORRECTIVESMOOTH_SMOOTH_EDGE_WEIGHT:
 			smooth_iter__length_weight(dmmd, dm, vertexCos, numVerts, smooth_weights, iterations);
 			break;
 
-		/* case MOD_DELTAMUSH_SMOOTH_SIMPLE: */
+		/* case MOD_CORRECTIVESMOOTH_SMOOTH_SIMPLE: */
 		default:
 			smooth_iter__simple(dmmd, dm, vertexCos, numVerts, smooth_weights, iterations);
 			break;
@@ -363,27 +363,27 @@ static void smooth_iter(
 }
 
 static void smooth_verts(
-        DeltaMushModifierData *dmmd, DerivedMesh *dm,
+        CorrectiveSmoothModifierData *dmmd, DerivedMesh *dm,
         MDeformVert *dvert, const int defgrp_index,
         float(*vertexCos)[3], unsigned int numVerts)
 {
 	float *smooth_weights = NULL;
 
-	if (dvert || (dmmd->flag & MOD_DELTAMUSH_PIN_BOUNDARY)) {
+	if (dvert || (dmmd->flag & MOD_CORRECTIVESMOOTH_PIN_BOUNDARY)) {
 
 		smooth_weights = MEM_mallocN(sizeof(float) * numVerts, "delta mush weight cache");
 
 		if (dvert) {
 			dm_get_weights(
 			        dvert, defgrp_index,
-			        numVerts, (dmmd->flag & MOD_DELTAMUSH_INVERT_VGROUP) != 0,
+			        numVerts, (dmmd->flag & MOD_CORRECTIVESMOOTH_INVERT_VGROUP) != 0,
 			        smooth_weights);
 		}
 		else {
 			fill_vn_fl(smooth_weights, (int)numVerts, 1.0f);
 		}
 
-		if (dmmd->flag & MOD_DELTAMUSH_PIN_BOUNDARY) {
+		if (dmmd->flag & MOD_CORRECTIVESMOOTH_PIN_BOUNDARY) {
 			dm_get_boundaries(dm, smooth_weights);
 		}
 	}
@@ -508,7 +508,7 @@ static void calc_tangent_spaces(
 
 
 static void calc_deltas(
-        DeltaMushModifierData *dmmd, DerivedMesh *dm,
+        CorrectiveSmoothModifierData *dmmd, DerivedMesh *dm,
         MDeformVert *dvert, const int defgrp_index,
         float(*vertexCos)[3], unsigned int numVerts)
 {
@@ -546,13 +546,13 @@ static void calc_deltas(
 }
 
 
-static void deltamushmodifier_do(
+static void correctivesmooth_modifier_do(
         ModifierData *md, Object *ob, DerivedMesh *dm,
         float(*vertexCos)[3], unsigned int numVerts)
 {
-	DeltaMushModifierData *dmmd = (DeltaMushModifierData *)md;
-	const bool use_bind = (dmmd->flag & MOD_DELTAMUSH_BIND) != 0;
-	const bool use_only_smooth = (dmmd->flag & MOD_DELTAMUSH_ONLY_SMOOTH)  != 0;
+	CorrectiveSmoothModifierData *dmmd = (CorrectiveSmoothModifierData *)md;
+	const bool use_bind = (dmmd->flag & MOD_CORRECTIVESMOOTH_BIND) != 0;
+	const bool use_only_smooth = (dmmd->flag & MOD_CORRECTIVESMOOTH_ONLY_SMOOTH)  != 0;
 	MDeformVert *dvert = NULL;
 	int defgrp_index;
 
@@ -590,7 +590,7 @@ static void deltamushmodifier_do(
 
 
 #ifdef DEBUG_TIME
-	TIMEIT_START(delta_mush);
+	TIMEIT_START(corrective_smooth);
 #endif
 
 	/* do the actual delta mush */
@@ -621,7 +621,7 @@ static void deltamushmodifier_do(
 	}
 
 #ifdef DEBUG_TIME
-	TIMEIT_END(delta_mush);
+	TIMEIT_END(corrective_smooth);
 #endif
 }
 
@@ -632,7 +632,7 @@ static void deformVerts(
 {
 	DerivedMesh *dm = get_dm(ob, NULL, derivedData, NULL, false, false);
 
-	deltamushmodifier_do(md, ob, dm, vertexCos, (unsigned int)numVerts);
+	correctivesmooth_modifier_do(md, ob, dm, vertexCos, (unsigned int)numVerts);
 
 	if (dm != derivedData) {
 		dm->release(dm);
@@ -646,7 +646,7 @@ static void deformVertsEM(
 {
 	DerivedMesh *dm = get_dm(ob, editData, derivedData, NULL, false, false);
 
-	deltamushmodifier_do(md, ob, dm, vertexCos, (unsigned int)numVerts);
+	correctivesmooth_modifier_do(md, ob, dm, vertexCos, (unsigned int)numVerts);
 
 	if (dm != derivedData) {
 		dm->release(dm);
@@ -654,10 +654,10 @@ static void deformVertsEM(
 }
 
 
-ModifierTypeInfo modifierType_DeltaMush = {
-		/* name */              "DeltaMush",
-		/* structName */        "DeltaMushModifierData",
-		/* structSize */        sizeof(DeltaMushModifierData),
+ModifierTypeInfo modifierType_CorrectiveSmooth = {
+		/* name */              "CorrectiveSmooth",
+		/* structName */        "CorrectiveSmoothModifierData",
+		/* structSize */        sizeof(CorrectiveSmoothModifierData),
 		/* type */              eModifierTypeType_OnlyDeform,
 		/* flags */             eModifierTypeFlag_AcceptsMesh |
 		                        eModifierTypeFlag_SupportsEditmode,
