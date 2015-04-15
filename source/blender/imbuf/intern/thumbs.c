@@ -45,6 +45,8 @@
 #include "IMB_thumbs.h"
 #include "IMB_metadata.h"
 
+#include "../../editors/include/UI_interface_icons.h"
+
 #include <ctype.h>
 #include <string.h>
 #include <time.h>
@@ -309,10 +311,10 @@ static ImBuf *thumb_create_ex(
 
 	switch (size) {
 		case THB_NORMAL:
-			tsize = 128;
+			tsize = PREVIEW_RENDER_DEFAULT_HEIGHT;
 			break;
 		case THB_LARGE:
-			tsize = 256;
+			tsize = PREVIEW_RENDER_DEFAULT_HEIGHT * 2;
 			break;
 		case THB_FAIL:
 			tsize = 1;

@@ -904,8 +904,8 @@ void UI_icons_init(int first_dyn_id)
 static int preview_render_size(enum eIconSizes size)
 {
 	switch (size) {
-		case ICON_SIZE_ICON:    return 32;
-		case ICON_SIZE_PREVIEW: return PREVIEW_DEFAULT_HEIGHT;
+		case ICON_SIZE_ICON:    return ICON_RENDER_DEFAULT_HEIGHT;
+		case ICON_SIZE_PREVIEW: return PREVIEW_RENDER_DEFAULT_HEIGHT;
 	}
 	return 0;
 }
@@ -937,6 +937,11 @@ static void icon_set_image(
 	if (!prv_img) {
 		if (G.debug & G_DEBUG)
 			printf("%s: no preview image for this ID: %s\n", __func__, id->name);
+		return;
+	}
+
+	if (prv_img->user_edited[size]) {
+		/* user-edited preview, do not auto-update! */
 		return;
 	}
 
