@@ -551,14 +551,6 @@ static void rna_Preview_icon_pixels_set(PointerRNA *ptr, const int *values)
 	rna_Preview_pixels_set(ptr, values, ICON_SIZE_ICON);
 }
 
-static PointerRNA rna_IDPreview_get(PointerRNA *ptr)
-{
-	ID *id = (ID *)ptr->data;
-	PreviewImage *prv_img = BKE_previewimg_get(id);
-
-	return rna_pointer_inherit_refine(ptr, &RNA_Preview, prv_img);
-}
-
 #else
 
 static void rna_def_ID_properties(BlenderRNA *brna)
@@ -720,6 +712,10 @@ static void rna_def_preview(BlenderRNA *brna)
 	RNA_def_property_ui_text(prop, "Icon Pixels", "Icon pixels, as bytes (always RGBA 32bits)");
 	RNA_def_property_dynamic_array_funcs(prop, "rna_Preview_icon_pixels_get_length");
 	RNA_def_property_int_funcs(prop, "rna_Preview_icon_pixels_get", "rna_Preview_icon_pixels_set", NULL);
+
+	prop = RNA_def_int(srna, "icon_id", 0, INT_MIN, INT_MAX, "Icon ID",
+	                   "Unique integer identifying this preview as an icon (zero means invalid)", INT_MIN, INT_MAX);
+	RNA_def_property_clear_flag(prop, PROP_EDITABLE);
 }
 
 static void rna_def_ID(BlenderRNA *brna)

@@ -128,7 +128,7 @@ ImBuf *get_brush_icon(Brush *brush)
 				}
 
 				if (brush->icon_imbuf)
-					BKE_icon_changed(BKE_icon_getid(&brush->id));
+					BKE_icon_changed(BKE_icon_id_get(&brush->id));
 			}
 		}
 	}

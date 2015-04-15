@@ -344,7 +344,7 @@ static void rna_Brush_reset_icon(Brush *br, const char *UNUSED(type))
 		return;
 
 	if (id->icon_id >= BIFICONID_LAST) {
-		BKE_icon_delete(id);
+		BKE_icon_id_delete(id);
 		BKE_previewimg_free_id(id);
 	}
 
@@ -418,7 +418,7 @@ static void rna_Brush_icon_update(Main *UNUSED(bmain), Scene *UNUSED(scene), Poi
 
 	if (br->flag & BRUSH_CUSTOM_ICON) {
 		BKE_previewimg_get(&br->id);
-		BKE_icon_changed(BKE_icon_getid(&br->id));
+		BKE_icon_changed(BKE_icon_id_get(&br->id));
 	}
 
 	WM_main_add_notifier(NC_BRUSH | NA_EDITED, br);

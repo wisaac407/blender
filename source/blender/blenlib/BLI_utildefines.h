@@ -674,6 +674,11 @@ extern void BLI_system_backtrace(FILE *fp);
 #  define UNLIKELY(x)     (x)
 #endif
 
+/* XXX Find a better place for that? DNA?
+ *     Thing is, we need those defines in IMB, BKE, editors... */
+#define ICON_RENDER_DEFAULT_HEIGHT 32
+#define PREVIEW_RENDER_DEFAULT_HEIGHT 128
+
 #ifdef __cplusplus
 }
 #endif

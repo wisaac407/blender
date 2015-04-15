@@ -53,7 +53,9 @@ enum eIconSizes;
 void BKE_icons_init(int first_dyn_id);
 
 /* return icon id for library object or create new icon if not found */
-int BKE_icon_getid(struct ID *id);
+int BKE_icon_id_get(struct ID *id);
+
+int BKE_icon_preview_get(struct PreviewImage *preview);
 
 /* retrieve icon for id */
 struct Icon *BKE_icon_get(int icon_id);
@@ -62,8 +64,10 @@ struct Icon *BKE_icon_get(int icon_id);
 /* used for inserting the internal icons */
 void BKE_icon_set(int icon_id, struct Icon *icon);
 
-/* remove icon and free date if library object becomes invalid */
-void BKE_icon_delete(struct ID *id);
+/* remove icon and free data if library object becomes invalid */
+void BKE_icon_id_delete(struct ID *id);
+
+void BKE_icon_delete(int icon_id);
 
 /* report changes - icon needs to be recalculated */
 void BKE_icon_changed(int icon_id);
@@ -85,6 +89,8 @@ void BKE_previewimg_free_id(struct ID *id);
 
 /* create a new preview image */
 struct PreviewImage *BKE_previewimg_create(void);
+
+struct PreviewImage *BKE_previewimg_thumbnail_create(const char *path, int source);
 
 /* create a copy of the preview image */
 struct PreviewImage *BKE_previewimg_copy(struct PreviewImage *prv);

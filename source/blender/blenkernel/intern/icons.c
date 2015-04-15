@@ -53,6 +53,10 @@
 
 #include "GPU_extensions.h"
 
+#include "IMB_imbuf.h"
+#include "IMB_imbuf_types.h"
+#include "IMB_thumbs.h"
+
 /* GLOBALS */
 
 static GHash *gIcons = NULL;
@@ -72,6 +76,10 @@ static void icon_free(void *val)
 		}
 		else if (icon->drawinfo) {
 			MEM_freeN(icon->drawinfo);
+		}
+		if (!icon->type && icon->obj) {
+			/* 'preview' icons own preview data too. */
+			BKE_previewimg_freefunc(icon->obj);
 		}
 		MEM_freeN(icon);
 	}
@@ -127,6 +135,45 @@ PreviewImage *BKE_previewimg_create(void)
 		prv_img->changed_timestamp[i] = 0;
 	}
 	return prv_img;
+}
+
+/**
+ * Generate a PreviewImage from given file path, using thumbnails management.
+ */
+PreviewImage *BKE_previewimg_thumbnail_create(const char *path, int source)
+{
+	PreviewImage *prv = BKE_previewimg_create();
+	int icon_w, icon_h;
+
+	ImBuf *thumb = IMB_thumb_manage(path, THB_NORMAL, source);
+
+	if (thumb) {
+		prv->w[ICON_SIZE_PREVIEW] = thumb->x;
+		prv->h[ICON_SIZE_PREVIEW] = thumb->y;
+		prv->rect[ICON_SIZE_PREVIEW] = MEM_dupallocN(thumb->rect);
+		prv->changed[ICON_SIZE_PREVIEW] = 0;
+
+		if (thumb->x > thumb->y) {
+			icon_w = ICON_RENDER_DEFAULT_HEIGHT;
+			icon_h = (thumb->y * icon_w) / thumb->x + 1;
+		}
+		else if (thumb->x < thumb->y) {
+			icon_h = ICON_RENDER_DEFAULT_HEIGHT;
+			icon_w = (thumb->x * icon_h) / thumb->y + 1;
+		}
+		else {
+			icon_w = icon_h = ICON_RENDER_DEFAULT_HEIGHT;
+		}
+
+		IMB_scaleImBuf(thumb, icon_w, icon_h);
+		prv->w[ICON_SIZE_ICON] = icon_w;
+		prv->h[ICON_SIZE_ICON] = icon_h;
+		prv->rect[ICON_SIZE_ICON] = MEM_dupallocN(thumb->rect);
+		prv->changed[ICON_SIZE_ICON] = 0;
+
+		IMB_freeImBuf(thumb);
+	}
+	return prv;
 }
 
 void BKE_previewimg_freefunc(void *link)
@@ -278,7 +325,7 @@ void BKE_icon_changed(int id)
 	}
 }
 
-int BKE_icon_getid(struct ID *id)
+int BKE_icon_id_get(struct ID *id)
 {
 	Icon *new_icon = NULL;
 
@@ -291,11 +338,11 @@ int BKE_icon_getid(struct ID *id)
 	id->icon_id = get_next_free_id();
 
 	if (!id->icon_id) {
-		printf("BKE_icon_getid: Internal error - not enough IDs\n");
+		printf("%s: Internal error - not enough IDs\n", __func__);
 		return 0;
 	}
 
-	new_icon = MEM_callocN(sizeof(Icon), "texicon");
+	new_icon = MEM_mallocN(sizeof(Icon), __func__);
 
 	new_icon->obj = id;
 	new_icon->type = GS(id->name);
@@ -309,6 +356,41 @@ int BKE_icon_getid(struct ID *id)
 	return id->icon_id;
 }
 
+/**
+ * Return icon id of given preview, or create new icon if not found.
+ * Note it takes ownership of given peview data!
+ */
+int BKE_icon_preview_get(PreviewImage *preview)
+{
+	Icon *new_icon = NULL;
+
+	if (!preview || G.background)
+		return 0;
+
+	if (preview->icon_id)
+		return preview->icon_id;
+
+	preview->icon_id = get_next_free_id();
+
+	if (!preview->icon_id) {
+		printf("%s: Internal error - not enough IDs\n", __func__);
+		return 0;
+	}
+
+	new_icon = MEM_mallocN(sizeof(Icon), __func__);
+
+	new_icon->obj = preview;
+	new_icon->type = 0;  /* Special, tags as non-ID icon/preview. */
+
+	/* next two lines make sure image gets created */
+	new_icon->drawinfo = NULL;
+	new_icon->drawinfo_free = NULL;
+
+	BLI_ghash_insert(gIcons, SET_INT_IN_POINTER(preview->icon_id), new_icon);
+
+	return preview->icon_id;
+}
+
 Icon *BKE_icon_get(int icon_id)
 {
 	Icon *icon = NULL;
@@ -316,7 +398,7 @@ Icon *BKE_icon_get(int icon_id)
 	icon = BLI_ghash_lookup(gIcons, SET_INT_IN_POINTER(icon_id));
 	
 	if (!icon) {
-		printf("BKE_icon_get: Internal error, no icon for icon ID: %d\n", icon_id);
+		printf("%s: Internal error, no icon for icon ID: %d\n", __func__, icon_id);
 		return NULL;
 	}
 
@@ -328,18 +410,36 @@ void BKE_icon_set(int icon_id, struct Icon *icon)
 	void **val_p;
 
 	if (BLI_ghash_ensure_p(gIcons, SET_INT_IN_POINTER(icon_id), &val_p)) {
-		printf("BKE_icon_set: Internal error, icon already set: %d\n", icon_id);
+		printf("%s: Internal error, icon already set: %d\n", __func__, icon_id);
 		return;
 	}
 
 	*val_p = icon;
 }
 
-void BKE_icon_delete(struct ID *id)
+void BKE_icon_id_delete(struct ID *id)
 {
-
 	if (!id->icon_id) return;  /* no icon defined for library object */
 
 	BLI_ghash_remove(gIcons, SET_INT_IN_POINTER(id->icon_id), NULL, icon_free);
 	id->icon_id = 0;
+}
+
+/**
+ * Remove icon and free data (including preview if this is a 'preview icon').
+ */
+void BKE_icon_delete(int icon_id)
+{
+	Icon *icon;
+
+	if (!icon_id) return;  /* no icon defined for library object */
+
+	icon = BLI_ghash_popkey(gIcons, SET_INT_IN_POINTER(icon_id), NULL);
+
+	if (icon) {
+		if (icon->type) {
+			((ID *)(icon->obj))->icon_id = 0;
+		}
+		icon_free(icon);
+	}
 }

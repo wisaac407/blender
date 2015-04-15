@@ -965,23 +965,29 @@ PreviewImage *UI_icon_to_preview(int icon_id)
 	Icon *icon = BKE_icon_get(icon_id);
 	
 	if (icon) {
-		DrawInfo *di = (DrawInfo *)icon->drawinfo;
-		if (di && di->data.buffer.image) {
-			ImBuf *bbuf;
-			
-			bbuf = IMB_ibImageFromMemory(di->data.buffer.image->datatoc_rect, di->data.buffer.image->datatoc_size, IB_rect, NULL, "<matcap buffer>");
-			if (bbuf) {
-				PreviewImage *prv = BKE_previewimg_create();
-				
-				prv->rect[0] = bbuf->rect;
+		if (icon->type == 0 && icon->obj) {
+			return BKE_previewimg_copy(icon->obj);
+		}
+		else {
+			DrawInfo *di = (DrawInfo *)icon->drawinfo;
+			if (di && di->data.buffer.image) {
+				ImBuf *bbuf;
 
-				prv->w[0] = bbuf->x;
-				prv->h[0] = bbuf->y;
-				
-				bbuf->rect = NULL;
-				IMB_freeImBuf(bbuf);
-				
-				return prv;
+				bbuf = IMB_ibImageFromMemory(di->data.buffer.image->datatoc_rect, di->data.buffer.image->datatoc_size,
+				                             IB_rect, NULL, __func__);
+				if (bbuf) {
+					PreviewImage *prv = BKE_previewimg_create();
+
+					prv->rect[0] = bbuf->rect;
+
+					prv->w[0] = bbuf->x;
+					prv->h[0] = bbuf->y;
+
+					bbuf->rect = NULL;
+					IMB_freeImBuf(bbuf);
+
+					return prv;
+				}
 			}
 		}
 	}
@@ -1150,7 +1156,7 @@ static void icon_draw_size(float x, float y, int icon_id, float aspect, float al
 		glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 	}
 	else if (di->type == ICON_TYPE_PREVIEW) {
-		PreviewImage *pi = BKE_previewimg_get((ID *)icon->obj);
+		PreviewImage *pi = icon->type ? BKE_previewimg_get((ID *)icon->obj) : icon->obj;
 
 		if (pi) {
 			/* no create icon on this level in code */
@@ -1211,7 +1217,7 @@ static int ui_id_brush_get_icon(const bContext *C, ID *id)
 	Brush *br = (Brush *)id;
 
 	if (br->flag & BRUSH_CUSTOM_ICON) {
-		BKE_icon_getid(id);
+		BKE_icon_id_get(id);
 		ui_id_brush_render(C, id);
 	}
 	else {
@@ -1273,7 +1279,7 @@ int ui_id_icon_get(const bContext *C, ID *id, const bool big)
 		case ID_IM: /* fall through */
 		case ID_WO: /* fall through */
 		case ID_LA: /* fall through */
-			iconid = BKE_icon_getid(id);
+			iconid = BKE_icon_id_get(id);
 			/* checks if not exists, or changed */
 			UI_id_icon_render(C, NULL, id, big, true);
 			break;
