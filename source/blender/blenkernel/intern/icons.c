@@ -131,7 +131,7 @@ PreviewImage *BKE_previewimg_create(void)
 	prv_img = MEM_callocN(sizeof(PreviewImage), "img_prv");
 
 	for (i = 0; i < NUM_ICON_SIZES; ++i) {
-		prv_img->changed[i] = 1;
+		prv_img->flag[i] |= CHANGED;
 		prv_img->changed_timestamp[i] = 0;
 	}
 	return prv_img;
@@ -151,7 +151,7 @@ PreviewImage *BKE_previewimg_thumbnail_create(const char *path, int source)
 		prv->w[ICON_SIZE_PREVIEW] = thumb->x;
 		prv->h[ICON_SIZE_PREVIEW] = thumb->y;
 		prv->rect[ICON_SIZE_PREVIEW] = MEM_dupallocN(thumb->rect);
-		prv->changed[ICON_SIZE_PREVIEW] = 0;
+		prv->flag[ICON_SIZE_PREVIEW] &= ~CHANGED;
 
 		if (thumb->x > thumb->y) {
 			icon_w = ICON_RENDER_DEFAULT_HEIGHT;
@@ -169,7 +169,7 @@ PreviewImage *BKE_previewimg_thumbnail_create(const char *path, int source)
 		prv->w[ICON_SIZE_ICON] = icon_w;
 		prv->h[ICON_SIZE_ICON] = icon_h;
 		prv->rect[ICON_SIZE_ICON] = MEM_dupallocN(thumb->rect);
-		prv->changed[ICON_SIZE_ICON] = 0;
+		prv->flag[ICON_SIZE_ICON] &= ~CHANGED;
 
 		IMB_freeImBuf(thumb);
 	}
@@ -213,7 +213,7 @@ void BKE_previewimg_clear(struct PreviewImage *prv, enum eIconSizes size)
 		GPU_texture_free(prv->gputexture[size]);
 	}
 	prv->h[size] = prv->w[size] = 0;
-	prv->changed[size] = true;
+	prv->flag[size] |= CHANGED;
 	prv->changed_timestamp[size] = 0;
 }
 
@@ -318,7 +318,7 @@ void BKE_icon_changed(int id)
 		if (prv) {
 			int i;
 			for (i = 0; i < NUM_ICON_SIZES; ++i) {
-				prv->changed[i] = 1;
+				prv->flag[i] |= CHANGED;
 				prv->changed_timestamp[i]++;
 			}
 		}

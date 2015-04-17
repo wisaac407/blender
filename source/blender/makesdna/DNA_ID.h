@@ -159,14 +159,20 @@ enum eIconSizes {
 };
 #define NUM_ICON_SIZES (ICON_SIZE_PREVIEW + 1)
 
+/* for PreviewImage->flag */
+enum ePreviewImage_Flag {
+	CHANGED          = (1 << 0),
+	USER_EDITED      = (1 << 1),  /* if user-edited, do not auto-update this anymore! */
+};
+
 typedef struct PreviewImage {
 	/* All values of 2 are really NUM_ICON_SIZES */
 	unsigned int w[2];
 	unsigned int h[2];
-	short changed[2];
+	short flag[2];
 	short changed_timestamp[2];
-	short user_edited[2];  /* if user-edited, do not auto-update this anymore! */
 	int icon_id;  /* Used by previews outside of ID context. */
+	int pad;
 	unsigned int *rect[2];
 	struct GPUTexture *gputexture[2];
 } PreviewImage;

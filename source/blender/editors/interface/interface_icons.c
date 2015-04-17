@@ -923,7 +923,7 @@ static void icon_create_rect(struct PreviewImage *prv_img, enum eIconSizes size)
 	else if (!prv_img->rect[size]) {
 		prv_img->w[size] = render_size;
 		prv_img->h[size] = render_size;
-		prv_img->changed[size] = 1;
+		prv_img->flag[size] |= CHANGED;
 		prv_img->changed_timestamp[size] = 0;
 		prv_img->rect[size] = MEM_callocN(render_size * render_size * sizeof(unsigned int), "prv_rect");
 	}
@@ -940,7 +940,7 @@ static void icon_set_image(
 		return;
 	}
 
-	if (prv_img->user_edited[size]) {
+	if (prv_img->flag[size] & USER_EDITED) {
 		/* user-edited preview, do not auto-update! */
 		return;
 	}
@@ -1173,11 +1173,11 @@ static void icon_draw_size(float x, float y, int icon_id, float aspect, float al
 static void ui_id_preview_image_render_size(
         const bContext *C, Scene *scene, ID *id, PreviewImage *pi, int size, const bool use_job)
 {
-	if ((pi->changed[size] || !pi->rect[size])) { /* changed only ever set by dynamic icons */
+	if ((pi->flag[size] & CHANGED || !pi->rect[size])) { /* changed only ever set by dynamic icons */
 		/* create the rect if necessary */
 		icon_set_image(C, scene, id, pi, size, use_job);
 
-		pi->changed[size] = 0;
+		pi->flag[size] &= ~CHANGED;
 	}
 }
 
@@ -1204,9 +1204,9 @@ static void ui_id_brush_render(const bContext *C, ID *id)
 	for (i = 0; i < NUM_ICON_SIZES; i++) {
 		/* check if rect needs to be created; changed
 		 * only set by dynamic icons */
-		if ((pi->changed[i] || !pi->rect[i])) {
+		if ((pi->flag[i] & CHANGED || !pi->rect[i])) {
 			icon_set_image(C, NULL, id, pi, i, true);
-			pi->changed[i] = 0;
+			pi->flag[i] &= ~CHANGED;
 		}
 	}
 }
