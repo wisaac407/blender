@@ -90,7 +90,7 @@ void BKE_previewimg_free_id(struct ID *id);
 /* create a new preview image */
 struct PreviewImage *BKE_previewimg_create(void);
 
-struct PreviewImage *BKE_previewimg_thumbnail_create(const char *path, int source);
+struct PreviewImage *BKE_previewimg_thumbnail_create(const char *path, const int source, bool force_update);
 
 /* create a copy of the preview image */
 struct PreviewImage *BKE_previewimg_copy(struct PreviewImage *prv);

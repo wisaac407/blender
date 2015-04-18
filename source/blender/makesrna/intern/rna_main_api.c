@@ -123,13 +123,12 @@ static int rna_Main_thumbnail_ensure(const char *path, int source)
 	return thumb != NULL;
 }
 
-static PreviewImage *rna_Main_thumbnail_preview(const char *path, int source)
+static PreviewImage *rna_Main_thumbnail_preview(const char *path, int source, int force_update)
 {
-	PreviewImage *prv = BKE_previewimg_thumbnail_create(path, source);
+	PreviewImage *prv = BKE_previewimg_thumbnail_create(path, source, (force_update != 0));
 
-	if (!BKE_icon_preview_get(prv)) {
-		BKE_previewimg_free(&prv);
-	}
+	BKE_icon_preview_get(prv);
+
 	return prv;
 }
 
@@ -852,6 +851,8 @@ void RNA_api_main(StructRNA *srna)
 	RNA_def_function_ui_description(func, "Generate a Preview with icon_id from thumbnail of given file");
 	RNA_def_string_file_path(func, "path", NULL, FILE_MAX_LIBEXTRA, "", "Path of the file to ensure thumbnail from");
 	RNA_def_enum(func, "type", main_thumbtypes, THB_SOURCE_IMAGE, "", "Type of file to generate thumbnail from");
+	RNA_def_boolean(func, "force_update", false, "",
+	                "Force to re-run thumbnail manager on this path, even if its preview is already cached");
 	parm = RNA_def_pointer(func, "preview", "Preview", "", "Preview generated (None if failure)");
 	RNA_def_function_return(func, parm);
 

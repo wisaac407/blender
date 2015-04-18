@@ -65,6 +65,7 @@ static int gNextIconId = 1;
 
 static int gFirstIconId = 1;
 
+static GHash *gFilePreviews = NULL;
 
 static void icon_free(void *val)
 {
@@ -76,10 +77,6 @@ static void icon_free(void *val)
 		}
 		else if (icon->drawinfo) {
 			MEM_freeN(icon->drawinfo);
-		}
-		if (!icon->type && icon->obj) {
-			/* 'preview' icons own preview data too. */
-			BKE_previewimg_freefunc(icon->obj);
 		}
 		MEM_freeN(icon);
 	}
@@ -113,14 +110,24 @@ void BKE_icons_init(int first_dyn_id)
 	gFirstIconId = first_dyn_id;
 
 	if (!gIcons)
-		gIcons = BLI_ghash_int_new("icons_init gh");
+		gIcons = BLI_ghash_int_new(__func__);
+
+	if (!gFilePreviews) {
+		gFilePreviews = BLI_ghash_str_new(__func__);
+	}
 }
 
 void BKE_icons_free(void)
 {
-	if (gIcons)
+	if (gIcons) {
 		BLI_ghash_free(gIcons, NULL, icon_free);
-	gIcons = NULL;
+		gIcons = NULL;
+	}
+
+	if (gFilePreviews) {
+		BLI_ghash_free(gFilePreviews, NULL, BKE_previewimg_freefunc);
+		gFilePreviews = NULL;
+	}
 }
 
 PreviewImage *BKE_previewimg_create(void)
@@ -140,39 +147,66 @@ PreviewImage *BKE_previewimg_create(void)
 /**
  * Generate a PreviewImage from given file path, using thumbnails management.
  */
-PreviewImage *BKE_previewimg_thumbnail_create(const char *path, int source)
+PreviewImage *BKE_previewimg_thumbnail_create(const char *path, const int source, bool force_update)
 {
-	PreviewImage *prv = BKE_previewimg_create();
+	PreviewImage *prv = NULL;
+	void **prv_v;
 	int icon_w, icon_h;
 
-	ImBuf *thumb = IMB_thumb_manage(path, THB_NORMAL, source);
+	prv_v = BLI_ghash_lookup_p(gFilePreviews, path);
 
-	if (thumb) {
-		prv->w[ICON_SIZE_PREVIEW] = thumb->x;
-		prv->h[ICON_SIZE_PREVIEW] = thumb->y;
-		prv->rect[ICON_SIZE_PREVIEW] = MEM_dupallocN(thumb->rect);
-		prv->flag[ICON_SIZE_PREVIEW] &= ~CHANGED;
+	if (prv_v) {
+		prv = *prv_v;
+		BLI_assert(prv);
+	}
 
-		if (thumb->x > thumb->y) {
-			icon_w = ICON_RENDER_DEFAULT_HEIGHT;
-			icon_h = (thumb->y * icon_w) / thumb->x + 1;
+	if (prv && force_update) {
+		BKE_previewimg_clear(prv, ICON_SIZE_ICON);
+		BKE_previewimg_clear(prv, ICON_SIZE_PREVIEW);
+	}
+	else if (!prv) {
+		prv = BKE_previewimg_create();
+		force_update = true;
+	}
+
+	if (force_update) {
+		ImBuf *thumb = IMB_thumb_manage(path, THB_NORMAL, source);
+
+		if (thumb) {
+			prv->w[ICON_SIZE_PREVIEW] = thumb->x;
+			prv->h[ICON_SIZE_PREVIEW] = thumb->y;
+			prv->rect[ICON_SIZE_PREVIEW] = MEM_dupallocN(thumb->rect);
+			prv->flag[ICON_SIZE_PREVIEW] &= ~(CHANGED | USER_EDITED);
+
+			if (thumb->x > thumb->y) {
+				icon_w = ICON_RENDER_DEFAULT_HEIGHT;
+				icon_h = (thumb->y * icon_w) / thumb->x + 1;
+			}
+			else if (thumb->x < thumb->y) {
+				icon_h = ICON_RENDER_DEFAULT_HEIGHT;
+				icon_w = (thumb->x * icon_h) / thumb->y + 1;
+			}
+			else {
+				icon_w = icon_h = ICON_RENDER_DEFAULT_HEIGHT;
+			}
+
+			IMB_scaleImBuf(thumb, icon_w, icon_h);
+			prv->w[ICON_SIZE_ICON] = icon_w;
+			prv->h[ICON_SIZE_ICON] = icon_h;
+			prv->rect[ICON_SIZE_ICON] = MEM_dupallocN(thumb->rect);
+			prv->flag[ICON_SIZE_ICON] &= ~(CHANGED | USER_EDITED);
+
+			IMB_freeImBuf(thumb);
 		}
-		else if (thumb->x < thumb->y) {
-			icon_h = ICON_RENDER_DEFAULT_HEIGHT;
-			icon_w = (thumb->x * icon_h) / thumb->y + 1;
+
+		if (prv_v) {
+			*prv_v = prv;
 		}
 		else {
-			icon_w = icon_h = ICON_RENDER_DEFAULT_HEIGHT;
+			BLI_ghash_insert(gFilePreviews, (void *)path, prv);
 		}
-
-		IMB_scaleImBuf(thumb, icon_w, icon_h);
-		prv->w[ICON_SIZE_ICON] = icon_w;
-		prv->h[ICON_SIZE_ICON] = icon_h;
-		prv->rect[ICON_SIZE_ICON] = MEM_dupallocN(thumb->rect);
-		prv->flag[ICON_SIZE_ICON] &= ~CHANGED;
-
-		IMB_freeImBuf(thumb);
 	}
+
 	return prv;
 }
 
@@ -358,7 +392,6 @@ int BKE_icon_id_get(struct ID *id)
 
 /**
  * Return icon id of given preview, or create new icon if not found.
- * Note it takes ownership of given peview data!
  */
 int BKE_icon_preview_get(PreviewImage *preview)
 {
