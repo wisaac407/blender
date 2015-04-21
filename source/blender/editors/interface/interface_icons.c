@@ -1173,7 +1173,7 @@ static void icon_draw_size(float x, float y, int icon_id, float aspect, float al
 static void ui_id_preview_image_render_size(
         const bContext *C, Scene *scene, ID *id, PreviewImage *pi, int size, const bool use_job)
 {
-	if ((pi->flag[size] & CHANGED || !pi->rect[size])) { /* changed only ever set by dynamic icons */
+	if (((pi->flag[size] & CHANGED) || !pi->rect[size])) { /* changed only ever set by dynamic icons */
 		/* create the rect if necessary */
 		icon_set_image(C, scene, id, pi, size, use_job);
 
@@ -1204,7 +1204,7 @@ static void ui_id_brush_render(const bContext *C, ID *id)
 	for (i = 0; i < NUM_ICON_SIZES; i++) {
 		/* check if rect needs to be created; changed
 		 * only set by dynamic icons */
-		if ((pi->flag[i] & CHANGED || !pi->rect[i])) {
+		if (((pi->flag[i] & CHANGED) || !pi->rect[i])) {
 			icon_set_image(C, NULL, id, pi, i, true);
 			pi->flag[i] &= ~CHANGED;
 		}

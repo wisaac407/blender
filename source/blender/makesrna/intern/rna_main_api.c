@@ -833,7 +833,7 @@ void RNA_api_main(StructRNA *srna)
 		{THB_SOURCE_IMAGE, "IMAGE", 0, "Image", ""},
 		{THB_SOURCE_MOVIE, "MOVIE", 0, "Movie", ""},
 		{THB_SOURCE_BLEND, "BLEND", 0, "Blend File", ""},
-	    {THB_SOURCE_FONT, "FONT", 0, "Font", ""},
+		{THB_SOURCE_FONT, "FONT", 0, "Font", ""},
 		{0, NULL, 0, NULL, NULL}
 	};
 

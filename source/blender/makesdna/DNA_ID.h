@@ -155,9 +155,10 @@ typedef struct Library {
 
 enum eIconSizes {
 	ICON_SIZE_ICON = 0,
-	ICON_SIZE_PREVIEW = 1
+	ICON_SIZE_PREVIEW = 1,
+
+	NUM_ICON_SIZES
 };
-#define NUM_ICON_SIZES (ICON_SIZE_PREVIEW + 1)
 
 /* for PreviewImage->flag */
 enum ePreviewImage_Flag {
@@ -172,7 +173,7 @@ typedef struct PreviewImage {
 	short flag[2];
 	short changed_timestamp[2];
 	int icon_id;  /* Used by previews outside of ID context. */
-	int pad;
+	int pad_i1;
 	unsigned int *rect[2];
 	struct GPUTexture *gputexture[2];
 } PreviewImage;

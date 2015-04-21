@@ -459,7 +459,7 @@ void BKE_icon_id_delete(struct ID *id)
 }
 
 /**
- * Remove icon and free data (including preview if this is a 'preview icon').
+ * Remove icon and free data.
  */
 void BKE_icon_delete(int icon_id)
 {
@@ -472,6 +472,9 @@ void BKE_icon_delete(int icon_id)
 	if (icon) {
 		if (icon->type) {
 			((ID *)(icon->obj))->icon_id = 0;
+		}
+		else {
+			((PreviewImage *)(icon->obj))->icon_id = 0;
 		}
 		icon_free(icon);
 	}
