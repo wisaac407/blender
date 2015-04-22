@@ -1634,7 +1634,7 @@ static uiBlock *ui_icon_view_menu_cb(bContext *C, ARegion *ar, void *arg_litem)
 	static RNAUpdateCb cb;
 	uiBlock *block;
 	uiBut *but;
-	int icon;
+	int icon, value;
 	EnumPropertyItem *item;
 	int a;
 	bool free;
@@ -1659,7 +1659,9 @@ static uiBlock *ui_icon_view_menu_cb(bContext *C, ARegion *ar, void *arg_litem)
 		y = (a / 8) * UI_UNIT_X * 5;
 		
 		icon = item[a].icon;
-		but = uiDefIconButR_prop(block, UI_BTYPE_ROW, 0, icon, x, y, UI_UNIT_X * 5, UI_UNIT_Y * 5, &cb.ptr, cb.prop, -1, 0, icon, -1, -1, NULL);
+		value = item[a].value;
+		but = uiDefIconButR_prop(block, UI_BTYPE_ROW, 0, icon, x, y, UI_UNIT_X * 5, UI_UNIT_Y * 5,
+		                         &cb.ptr, cb.prop, -1, 0, value, -1, -1, NULL);
 		UI_but_flag_enable(but, UI_HAS_ICON | UI_BUT_ICON_PREVIEW);
 	}
 
