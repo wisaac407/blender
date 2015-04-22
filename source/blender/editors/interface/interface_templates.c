@@ -1677,16 +1677,22 @@ void uiTemplateIconView(uiLayout *layout, PointerRNA *ptr, const char *propname)
 {
 	PropertyRNA *prop = RNA_struct_find_property(ptr, propname);
 	RNAUpdateCb *cb;
+	EnumPropertyItem *items;
 	uiBlock *block;
 	uiBut *but;
 //	rctf rect;  /* UNUSED */
-	int icon;
+	int value, icon = ICON_NONE, tot_items;
+	bool free_items;
 	
 	if (!prop || RNA_property_type(prop) != PROP_ENUM)
 		return;
-	
-	icon = RNA_property_enum_get(ptr, prop);
-	
+
+	block = uiLayoutAbsoluteBlock(layout);
+
+	RNA_property_enum_items(block->evil_C, ptr, prop, &items, &tot_items, &free_items);
+	value = RNA_property_enum_get(ptr, prop);
+	RNA_enum_icon_from_value(items, value, &icon);
+
 	cb = MEM_callocN(sizeof(RNAUpdateCb), "RNAUpdateCb");
 	cb->ptr = *ptr;
 	cb->prop = prop;
@@ -1694,8 +1700,6 @@ void uiTemplateIconView(uiLayout *layout, PointerRNA *ptr, const char *propname)
 //	rect.xmin = 0; rect.xmax = 10.0f * UI_UNIT_X;
 //	rect.ymin = 0; rect.ymax = 10.0f * UI_UNIT_X;
 	
-	block = uiLayoutAbsoluteBlock(layout);
-
 	but = uiDefBlockButN(block, ui_icon_view_menu_cb, MEM_dupallocN(cb), "", 0, 0, UI_UNIT_X * 6, UI_UNIT_Y * 6, "");
 
 	
@@ -1707,6 +1711,9 @@ void uiTemplateIconView(uiLayout *layout, PointerRNA *ptr, const char *propname)
 	UI_but_funcN_set(but, rna_update_cb, MEM_dupallocN(cb), NULL);
 	
 	MEM_freeN(cb);
+	if (free_items) {
+		MEM_freeN(items);
+	}
 }
 
 /********************* Histogram Template ************************/
