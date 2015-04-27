@@ -343,7 +343,7 @@ static void rna_Brush_reset_icon(Brush *br, const char *UNUSED(type))
 
 	if (id->icon_id >= BIFICONID_LAST) {
 		BKE_icon_id_delete(id);
-		BKE_previewimg_free_id(id);
+		BKE_previewimg_id_free(id);
 	}
 
 	id->icon_id = 0;

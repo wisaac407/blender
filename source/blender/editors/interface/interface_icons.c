@@ -904,10 +904,13 @@ void UI_icons_init(int first_dyn_id)
 static int preview_render_size(enum eIconSizes size)
 {
 	switch (size) {
-		case ICON_SIZE_ICON:    return ICON_RENDER_DEFAULT_HEIGHT;
-		case ICON_SIZE_PREVIEW: return PREVIEW_RENDER_DEFAULT_HEIGHT;
+		case ICON_SIZE_ICON:
+			return ICON_RENDER_DEFAULT_HEIGHT;
+		case ICON_SIZE_PREVIEW:
+			return PREVIEW_RENDER_DEFAULT_HEIGHT;
+		default:
+			return 0;
 	}
-	return 0;
 }
 
 /* Create rect for the icon
@@ -1091,10 +1094,13 @@ static void icon_draw_texture(float x, float y, float w, float h, int ix, int iy
 static int get_draw_size(enum eIconSizes size)
 {
 	switch (size) {
-		case ICON_SIZE_ICON: return ICON_DEFAULT_HEIGHT;
-		case ICON_SIZE_PREVIEW: return PREVIEW_DEFAULT_HEIGHT;
+		case ICON_SIZE_ICON:
+			return ICON_DEFAULT_HEIGHT;
+		case ICON_SIZE_PREVIEW:
+			return PREVIEW_DEFAULT_HEIGHT;
+		default:
+			return 0;
 	}
-	return 0;
 }
 
 

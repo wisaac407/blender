@@ -66,7 +66,7 @@ static int gNextIconId = 1;
 
 static int gFirstIconId = 1;
 
-static GHash *gFilePreviews = NULL;
+static GHash *gCachedPreviews = NULL;
 
 static void icon_free(void *val)
 {
@@ -113,8 +113,8 @@ void BKE_icons_init(int first_dyn_id)
 	if (!gIcons)
 		gIcons = BLI_ghash_int_new(__func__);
 
-	if (!gFilePreviews) {
-		gFilePreviews = BLI_ghash_str_new(__func__);
+	if (!gCachedPreviews) {
+		gCachedPreviews = BLI_ghash_str_new(__func__);
 	}
 }
 
@@ -125,9 +125,9 @@ void BKE_icons_free(void)
 		gIcons = NULL;
 	}
 
-	if (gFilePreviews) {
-		BLI_ghash_free(gFilePreviews, MEM_freeN, BKE_previewimg_freefunc);
-		gFilePreviews = NULL;
+	if (gCachedPreviews) {
+		BLI_ghash_free(gCachedPreviews, MEM_freeN, BKE_previewimg_freefunc);
+		gCachedPreviews = NULL;
 	}
 }
 
@@ -206,7 +206,7 @@ PreviewImage *BKE_previewimg_copy(PreviewImage *prv)
 	return prv_img;
 }
 
-void BKE_previewimg_free_id(ID *id) 
+void BKE_previewimg_id_free(ID *id)
 {
 	if (GS(id->name) == ID_MA) {
 		Material *mat = (Material *)id;
@@ -234,15 +234,53 @@ void BKE_previewimg_free_id(ID *id)
 	}
 }
 
+PreviewImage *BKE_previewimg_id_get(ID *id)
+{
+	PreviewImage *prv_img = NULL;
+
+	if (GS(id->name) == ID_MA) {
+		Material *mat = (Material *)id;
+		if (!mat->preview) mat->preview = BKE_previewimg_create();
+		prv_img = mat->preview;
+	}
+	else if (GS(id->name) == ID_TE) {
+		Tex *tex = (Tex *)id;
+		if (!tex->preview) tex->preview = BKE_previewimg_create();
+		prv_img = tex->preview;
+	}
+	else if (GS(id->name) == ID_WO) {
+		World *wo = (World *)id;
+		if (!wo->preview) wo->preview = BKE_previewimg_create();
+		prv_img = wo->preview;
+	}
+	else if (GS(id->name) == ID_LA) {
+		Lamp *la  = (Lamp *)id;
+		if (!la->preview) la->preview = BKE_previewimg_create();
+		prv_img = la->preview;
+	}
+	else if (GS(id->name) == ID_IM) {
+		Image *img  = (Image *)id;
+		if (!img->preview) img->preview = BKE_previewimg_create();
+		prv_img = img->preview;
+	}
+	else if (GS(id->name) == ID_BR) {
+		Brush *br  = (Brush *)id;
+		if (!br->preview) br->preview = BKE_previewimg_create();
+		prv_img = br->preview;
+	}
+
+	return prv_img;
+}
+
 /**
  * Generate an empty PreviewImage, if not yet existing.
  */
-PreviewImage *BKE_previewimg_name_get(const char *name)
+PreviewImage *BKE_previewimg_cached_get(const char *name)
 {
 	PreviewImage *prv = NULL;
 	void **prv_v;
 
-	prv_v = BLI_ghash_lookup_p(gFilePreviews, name);
+	prv_v = BLI_ghash_lookup_p(gCachedPreviews, name);
 
 	if (prv_v) {
 		prv = *prv_v;
@@ -257,7 +295,7 @@ PreviewImage *BKE_previewimg_name_get(const char *name)
 		*prv_v = prv;
 	}
 	else {
-		BLI_ghash_insert(gFilePreviews, (void *)BLI_strdup(name), prv);
+		BLI_ghash_insert(gCachedPreviews, (void *)BLI_strdup(name), prv);
 	}
 
 	return prv;
@@ -266,13 +304,14 @@ PreviewImage *BKE_previewimg_name_get(const char *name)
 /**
  * Generate a PreviewImage from given file path, using thumbnails management, if not yet existing.
  */
-PreviewImage *BKE_previewimg_thumbnail_get(const char *name, const char *path, const int source, bool force_update)
+PreviewImage *BKE_previewimg_cached_thumbnail_get(
+        const char *name, const char *path, const int source, bool force_update)
 {
 	PreviewImage *prv = NULL;
 	void **prv_v;
 	int icon_w, icon_h;
 
-	prv_v = BLI_ghash_lookup_p(gFilePreviews, name);
+	prv_v = BLI_ghash_lookup_p(gCachedPreviews, name);
 
 	if (prv_v) {
 		prv = *prv_v;
@@ -322,16 +361,16 @@ PreviewImage *BKE_previewimg_thumbnail_get(const char *name, const char *path, c
 			*prv_v = prv;
 		}
 		else {
-			BLI_ghash_insert(gFilePreviews, (void *)BLI_strdup(name), prv);
+			BLI_ghash_insert(gCachedPreviews, (void *)BLI_strdup(name), prv);
 		}
 	}
 
 	return prv;
 }
 
-void BKE_previewimg_name_release(const char *name)
+void BKE_previewimg_cached_release(const char *name)
 {
-	PreviewImage *prv = BLI_ghash_popkey(gFilePreviews, (void *)name, MEM_freeN);
+	PreviewImage *prv = BLI_ghash_popkey(gCachedPreviews, (void *)name, MEM_freeN);
 
 	if (prv) {
 		if (prv->icon_id) {
@@ -339,44 +378,6 @@ void BKE_previewimg_name_release(const char *name)
 		}
 		BKE_previewimg_freefunc(prv);
 	}
-}
-
-PreviewImage *BKE_previewimg_id_get(ID *id)
-{
-	PreviewImage *prv_img = NULL;
-
-	if (GS(id->name) == ID_MA) {
-		Material *mat = (Material *)id;
-		if (!mat->preview) mat->preview = BKE_previewimg_create();
-		prv_img = mat->preview;
-	}
-	else if (GS(id->name) == ID_TE) {
-		Tex *tex = (Tex *)id;
-		if (!tex->preview) tex->preview = BKE_previewimg_create();
-		prv_img = tex->preview;
-	}
-	else if (GS(id->name) == ID_WO) {
-		World *wo = (World *)id;
-		if (!wo->preview) wo->preview = BKE_previewimg_create();
-		prv_img = wo->preview;
-	}
-	else if (GS(id->name) == ID_LA) {
-		Lamp *la  = (Lamp *)id;
-		if (!la->preview) la->preview = BKE_previewimg_create();
-		prv_img = la->preview;
-	}
-	else if (GS(id->name) == ID_IM) {
-		Image *img  = (Image *)id;
-		if (!img->preview) img->preview = BKE_previewimg_create();
-		prv_img = img->preview;
-	}
-	else if (GS(id->name) == ID_BR) {
-		Brush *br  = (Brush *)id;
-		if (!br->preview) br->preview = BKE_previewimg_create();
-		prv_img = br->preview;
-	}
-
-	return prv_img;
 }
 
 void BKE_icon_changed(int id)

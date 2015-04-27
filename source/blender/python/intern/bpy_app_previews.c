@@ -67,7 +67,6 @@ PyDoc_STRVAR(app_previews_meth_new_doc,
 "\n"
 "   Generate a new empty preview, or return existing one matching ``name``.\n"
 "\n"
-"\n"
 "   :arg name: The name (unique id) identifying the preview.\n"
 "   :type name: string\n"
 "   :return: The Preview matching given name, or a new empty one.\n"
@@ -85,7 +84,7 @@ static PyObject *app_previews_meth_new(PyObject *UNUSED(self), PyObject *args, P
 		return NULL;
 	}
 
-	prv = BKE_previewimg_name_get(name);
+	prv = BKE_previewimg_cached_get(name);
 	RNA_pointer_create(NULL, &RNA_Preview, prv, &ptr);
 
 	return (PyObject *)pyrna_struct_CreatePyObject(&ptr);
@@ -94,13 +93,18 @@ static PyObject *app_previews_meth_new(PyObject *UNUSED(self), PyObject *args, P
 PyDoc_STRVAR(app_previews_meth_load_doc,
 ".. method:: load(name, path, path_type, force_reload)\n"
 "\n"
-"   Unregisters an addon's UI translations.\n"
+"   Generate a new preview from given file path, or return existing one matching ``name``.\n"
 "\n"
-"   .. note::\n"
-"       Does nothing when Blender is built without internationalization support.\n"
-"\n"
-"   :arg module_name: The name identifying the addon.\n"
-"   :type module_name: string\n"
+"   :arg name: The name (unique id) identifying the preview.\n"
+"   :type name: string\n"
+"   :arg path: The file path to generate the preview from.\n"
+"   :type path: string\n"
+"   :arg path_type: The type of file, needed to generate the preview ('IMAGE', 'MOVIE', 'BLEND' or 'FONT').\n"
+"   :type path_type: string\n"
+"   :arg force_reload: If True, force running thumbnail manager even if preview already exists in cache.\n"
+"   :type force_reload: bool\n"
+"   :return: The Preview matching given name, or a new empty one.\n"
+"   :type return: Preview\n"
 "\n"
 );
 static PyObject *app_previews_meth_load(PyObject *UNUSED(self), PyObject *args, PyObject *kw)
@@ -137,7 +141,7 @@ static PyObject *app_previews_meth_load(PyObject *UNUSED(self), PyObject *args, 
 		return NULL;
 	}
 
-	prv = BKE_previewimg_thumbnail_get(name, path, path_type, force_reload);
+	prv = BKE_previewimg_cached_thumbnail_get(name, path, path_type, force_reload);
 	RNA_pointer_create(NULL, &RNA_Preview, prv, &ptr);
 
 	return (PyObject *)pyrna_struct_CreatePyObject(&ptr);
@@ -163,7 +167,7 @@ static PyObject *app_previews_meth_release(PyObject *UNUSED(self), PyObject *arg
 		return NULL;
 	}
 
-	BKE_previewimg_name_release((const char *)name);
+	BKE_previewimg_cached_release((const char *)name);
 
 	Py_RETURN_NONE;
 }
@@ -195,8 +199,8 @@ static void app_previews_free(void *obj)
 }
 
 PyDoc_STRVAR(app_previews_doc,
-"This object contains some data/methods regarding internationalization in Blender, and allows every py script\n"
-"to feature translations for its own UI messages.\n"
+"This object contains basic static methods to handle cached (non-ID) previews in Blender (low-level API, \n"
+"not exposed to final users).\n"
 "\n"
 );
 static PyTypeObject BlenderAppPreviewsType = {

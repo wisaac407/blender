@@ -704,9 +704,10 @@ def make_rna_paths(struct_name, prop_name, enum_name):
 # High-level previews manager.
 class BPyPreviewsManager:
     """
-    Fake module like class.
+    High-level 'cached' previews manager.
 
-    bpy.app.previews_manager
+    This allows addons to generate their own previews, and use them as icons in UI widgets
+    ('icon_value' of UILayout functions).
     """
     __slots__ = ('_previews_collections',)
 
@@ -726,17 +727,23 @@ class BPyPreviewsManager:
         return self._previews_collections.pop(name, None)
 
     def delete(self, name):
+        """
+        Delete specified previews collection.
+        """
         pcoll = self._remove(name)
         if pcoll is not None:
             del pcoll
 
     def clear(self):
+        """
+        Delete all previews collections.
+        """
         for pcoll in self._previews_collections.values():
             del pcoll
         self._previews_collections.clear()
 
     def __repr__(self):
-        return "<module like class 'bpy.app.previews_manager'>"
+        return "<module like class 'bpy.utils.previews'>"
 
 
 class BPyPreviewsCollection:
@@ -756,32 +763,61 @@ class BPyPreviewsCollection:
         return self._coll_name + name
 
     def new(self, name):
-        """
-        Return a new empty preview, or existing one if 'name' already exists.
-        """
         return self._previews.setdefault(name, app._previews.new(self._gen_key(name)))
+    new.__doc__ = app._previews.new.__doc__
 
     def load(self, name, path, path_type, force_reload=False):
-        """
-        Return a new preview from given file path, or existing one if 'name' already exists.
-        """
         pkey = self._gen_key(name)
         if force_reload:
             self._previews[name] = p = app._previews.load(pkey, path, path_type, True)
             return p
         else:
             return self._previews.setdefault(name, app._previews.load(pkey, path, path_type, False))
+    load.__doc__ = app._previews.load.__doc__
 
     def release(self, name):
         p = self._previews.pop(name, None)
         if p is not None:
             del p
             app._previews.release(self._gen_key(name))
+    release.__doc__ = app._previews.release.__doc__
+
+    def __repr__(self):
+        return "<PreviewsCollection '%s'>\n\tPreviews: %s" % (self._coll_name, repr(self._previews))
+
+    # Readonly dict-like API.
+    def __len__(self):
+        return len(self._previews)
+
+    def __getitem__(self, key):
+        return self.new(key)
+
+    # no __setitem__!
+
+    def __delitem__(self, key):
+        return self.release(key)
+
+    def __contains__(self, key):
+        return key in self._previews
+
+    def keys(self):
+        return self._previews.keys()
+
+    def values(self):
+        return self._previews.values()
+
+    def items(self):
+        return self._previews.items()
+
+    def get(self, key, default=None):
+        return self._previews.get(key, default)
 
     def clear(self):
         for name in self._previews.keys():
             _previews.release(self._gen_key(name))
         self._previews.clear()
 
-previews = BPyPreviewsManager()
+    # No setdefault(), pop(), popitem(), copy(), nor update()
 
+
+previews = BPyPreviewsManager()
