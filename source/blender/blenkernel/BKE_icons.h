@@ -90,12 +90,16 @@ void BKE_previewimg_free_id(struct ID *id);
 /* create a new preview image */
 struct PreviewImage *BKE_previewimg_create(void);
 
-struct PreviewImage *BKE_previewimg_thumbnail_create(const char *path, const int source, bool force_update);
-
 /* create a copy of the preview image */
 struct PreviewImage *BKE_previewimg_copy(struct PreviewImage *prv);
 
+struct PreviewImage *BKE_previewimg_name_get(const char *name);
+
+struct PreviewImage *BKE_previewimg_thumbnail_get(const char *name, const char *path, const int source, bool force_update);
+
+void BKE_previewimg_name_release(const char *name);
+
 /* retrieve existing or create new preview image */
-struct PreviewImage *BKE_previewimg_get(struct ID *id);
+struct PreviewImage *BKE_previewimg_id_get(struct ID *id);
 
 #endif /*  __BKE_ICONS_H__ */

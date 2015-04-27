@@ -38,6 +38,7 @@ __all__ = (
     "unregister_manual_map",
     "make_rna_paths",
     "manual_map",
+    "previews",
     "resource_path",
     "script_path_user",
     "script_path_pref",
@@ -51,6 +52,7 @@ __all__ = (
     )
 
 from _bpy import (
+        app,
         escape_identifier,
         register_class,
         unregister_class,
@@ -697,3 +699,89 @@ def make_rna_paths(struct_name, prop_name, enum_name):
         else:
             src = src_rna = struct_name
     return src, src_rna, src_enum
+
+
+# High-level previews manager.
+class BPyPreviewsManager:
+    """
+    Fake module like class.
+
+    bpy.app.previews_manager
+    """
+    __slots__ = ('_previews_collections',)
+
+    def __init__(self):
+        self._previews_collections = {}
+
+    def __del__(self):
+        self.clear()
+
+    def new(self, name):
+        """
+        Return a new preview collection, or existing one if 'name' already exists.
+        """
+        return self._previews_collections.setdefault(name, BPyPreviewsCollection(name))
+
+    def _remove(self, name):
+        return self._previews_collections.pop(name, None)
+
+    def delete(self, name):
+        pcoll = self._remove(name)
+        if pcoll is not None:
+            del pcoll
+
+    def clear(self):
+        for pcoll in self._previews_collections.values():
+            del pcoll
+        self._previews_collections.clear()
+
+    def __repr__(self):
+        return "<module like class 'bpy.app.previews_manager'>"
+
+
+class BPyPreviewsCollection:
+    """
+    Fake dict-like class of previews.
+    """
+    __slots__ = ('_previews', '_coll_name')
+
+    def __init__(self, name):
+        self._previews = {}
+        self._coll_name = name
+
+    def __del__(self):
+        self.clear()
+
+    def _gen_key(self, name):
+        return self._coll_name + name
+
+    def new(self, name):
+        """
+        Return a new empty preview, or existing one if 'name' already exists.
+        """
+        return self._previews.setdefault(name, app._previews.new(self._gen_key(name)))
+
+    def load(self, name, path, path_type, force_reload=False):
+        """
+        Return a new preview from given file path, or existing one if 'name' already exists.
+        """
+        pkey = self._gen_key(name)
+        if force_reload:
+            self._previews[name] = p = app._previews.load(pkey, path, path_type, True)
+            return p
+        else:
+            return self._previews.setdefault(name, app._previews.load(pkey, path, path_type, False))
+
+    def release(self, name):
+        p = self._previews.pop(name, None)
+        if p is not None:
+            del p
+            app._previews.release(self._gen_key(name))
+
+    def clear(self):
+        for name in self._previews.keys():
+            _previews.release(self._gen_key(name))
+        self._previews.clear()
+
+previews = BPyPreviewsManager()
+

@@ -44,10 +44,6 @@
 #include "RNA_access.h"
 #include "RNA_enum_types.h"
 
-#include "IMB_imbuf.h"
-#include "IMB_imbuf_types.h"
-#include "IMB_thumbs.h"
-
 #include "rna_internal.h"
 
 #ifdef RNA_RUNTIME
@@ -114,28 +110,6 @@
 #ifdef WITH_PYTHON
 #  include "BPY_extern.h"
 #endif
-
-static int rna_Main_thumbnail_ensure(const char *path, int source)
-{
-	ImBuf *thumb = IMB_thumb_manage(path, THB_NORMAL, source);
-	IMB_freeImBuf(thumb);
-
-	return thumb != NULL;
-}
-
-static PreviewImage *rna_Main_thumbnail_preview(const char *path, int source, int force_update)
-{
-	PreviewImage *prv = BKE_previewimg_thumbnail_create(path, source, (force_update != 0));
-
-	BKE_icon_preview_get(prv);
-
-	return prv;
-}
-
-static void rna_Main_thumbnail_preview_delete(int icon_id)
-{
-	BKE_icon_delete(icon_id);
-}
 
 static Camera *rna_Main_cameras_new(Main *bmain, const char *name)
 {
@@ -814,11 +788,12 @@ static int rna_Main_linestyle_is_updated_get(PointerRNA *ptr) { return DAG_id_ty
 
 #else
 
-void RNA_api_main(StructRNA *srna)
+void RNA_api_main(StructRNA *UNUSED(srna))
 {
+#if 0
 	FunctionRNA *func;
 	PropertyRNA *parm;
-#if 0
+
 	/* maybe we want to add functions in 'bpy.data' still?
 	 * for now they are all in collections bpy.data.images.new(...) */
 	func = RNA_def_function(srna, "add_image", "rna_Main_add_image");
@@ -828,38 +803,6 @@ void RNA_api_main(StructRNA *srna)
 	parm = RNA_def_pointer(func, "image", "Image", "", "New image");
 	RNA_def_function_return(func, parm);
 #endif
-
-	static EnumPropertyItem main_thumbtypes[] = {
-		{THB_SOURCE_IMAGE, "IMAGE", 0, "Image", ""},
-		{THB_SOURCE_MOVIE, "MOVIE", 0, "Movie", ""},
-		{THB_SOURCE_BLEND, "BLEND", 0, "Blend File", ""},
-		{THB_SOURCE_FONT, "FONT", 0, "Font", ""},
-		{0, NULL, 0, NULL, NULL}
-	};
-
-	/* thumbnail/preview/icon handling (added here because a few should work even in background mode). */
-	func = RNA_def_function(srna, "thumbnail_ensure", "rna_Main_thumbnail_ensure");
-	RNA_def_function_flag(func, FUNC_NO_SELF);
-	RNA_def_function_ui_description(func, "Ensure there is a thumbnail for given file (generates or updates if needed)");
-	RNA_def_string_file_path(func, "path", NULL, FILE_MAX_LIBEXTRA, "", "Path of the file to ensure thumbnail from");
-	RNA_def_enum(func, "type", main_thumbtypes, THB_SOURCE_IMAGE, "", "Type of file to generate thumbnail from");
-	parm = RNA_def_boolean(func, "success", false, "", "True if thumbnail is available");
-	RNA_def_function_return(func, parm);
-
-	func = RNA_def_function(srna, "thumbnail_preview", "rna_Main_thumbnail_preview");
-	RNA_def_function_flag(func, FUNC_NO_SELF);
-	RNA_def_function_ui_description(func, "Generate a Preview with icon_id from thumbnail of given file");
-	RNA_def_string_file_path(func, "path", NULL, FILE_MAX_LIBEXTRA, "", "Path of the file to ensure thumbnail from");
-	RNA_def_enum(func, "type", main_thumbtypes, THB_SOURCE_IMAGE, "", "Type of file to generate thumbnail from");
-	RNA_def_boolean(func, "force_update", false, "",
-	                "Force to re-run thumbnail manager on this path, even if its preview is already cached");
-	parm = RNA_def_pointer(func, "preview", "Preview", "", "Preview generated (None if failure)");
-	RNA_def_function_return(func, parm);
-
-	func = RNA_def_function(srna, "thumbnail_preview_delete", "rna_Main_thumbnail_preview_delete");
-	RNA_def_function_flag(func, FUNC_NO_SELF);
-	RNA_def_function_ui_description(func, "Delete the icon and Preview associated to given icon id");
-	RNA_def_int(func, "icon_id", 0, INT_MIN, INT_MAX, "", "ID of icon to delete", INT_MIN, INT_MAX);
 }
 
 void RNA_def_main_cameras(BlenderRNA *brna, PropertyRNA *cprop)

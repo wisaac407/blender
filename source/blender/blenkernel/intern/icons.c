@@ -45,6 +45,7 @@
 
 #include "BLI_utildefines.h"
 #include "BLI_ghash.h"
+#include "BLI_string.h"
 
 #include "BKE_icons.h"
 #include "BKE_global.h" /* only for G.background test */
@@ -125,7 +126,7 @@ void BKE_icons_free(void)
 	}
 
 	if (gFilePreviews) {
-		BLI_ghash_free(gFilePreviews, NULL, BKE_previewimg_freefunc);
+		BLI_ghash_free(gFilePreviews, MEM_freeN, BKE_previewimg_freefunc);
 		gFilePreviews = NULL;
 	}
 }
@@ -142,72 +143,6 @@ PreviewImage *BKE_previewimg_create(void)
 		prv_img->changed_timestamp[i] = 0;
 	}
 	return prv_img;
-}
-
-/**
- * Generate a PreviewImage from given file path, using thumbnails management.
- */
-PreviewImage *BKE_previewimg_thumbnail_create(const char *path, const int source, bool force_update)
-{
-	PreviewImage *prv = NULL;
-	void **prv_v;
-	int icon_w, icon_h;
-
-	prv_v = BLI_ghash_lookup_p(gFilePreviews, path);
-
-	if (prv_v) {
-		prv = *prv_v;
-		BLI_assert(prv);
-	}
-
-	if (prv && force_update) {
-		BKE_previewimg_clear(prv, ICON_SIZE_ICON);
-		BKE_previewimg_clear(prv, ICON_SIZE_PREVIEW);
-	}
-	else if (!prv) {
-		prv = BKE_previewimg_create();
-		force_update = true;
-	}
-
-	if (force_update) {
-		ImBuf *thumb = IMB_thumb_manage(path, THB_NORMAL, source);
-
-		if (thumb) {
-			prv->w[ICON_SIZE_PREVIEW] = thumb->x;
-			prv->h[ICON_SIZE_PREVIEW] = thumb->y;
-			prv->rect[ICON_SIZE_PREVIEW] = MEM_dupallocN(thumb->rect);
-			prv->flag[ICON_SIZE_PREVIEW] &= ~(CHANGED | USER_EDITED);
-
-			if (thumb->x > thumb->y) {
-				icon_w = ICON_RENDER_DEFAULT_HEIGHT;
-				icon_h = (thumb->y * icon_w) / thumb->x + 1;
-			}
-			else if (thumb->x < thumb->y) {
-				icon_h = ICON_RENDER_DEFAULT_HEIGHT;
-				icon_w = (thumb->x * icon_h) / thumb->y + 1;
-			}
-			else {
-				icon_w = icon_h = ICON_RENDER_DEFAULT_HEIGHT;
-			}
-
-			IMB_scaleImBuf(thumb, icon_w, icon_h);
-			prv->w[ICON_SIZE_ICON] = icon_w;
-			prv->h[ICON_SIZE_ICON] = icon_h;
-			prv->rect[ICON_SIZE_ICON] = MEM_dupallocN(thumb->rect);
-			prv->flag[ICON_SIZE_ICON] &= ~(CHANGED | USER_EDITED);
-
-			IMB_freeImBuf(thumb);
-		}
-
-		if (prv_v) {
-			*prv_v = prv;
-		}
-		else {
-			BLI_ghash_insert(gFilePreviews, (void *)path, prv);
-		}
-	}
-
-	return prv;
 }
 
 void BKE_previewimg_freefunc(void *link)
@@ -299,7 +234,114 @@ void BKE_previewimg_free_id(ID *id)
 	}
 }
 
-PreviewImage *BKE_previewimg_get(ID *id)
+/**
+ * Generate an empty PreviewImage, if not yet existing.
+ */
+PreviewImage *BKE_previewimg_name_get(const char *name)
+{
+	PreviewImage *prv = NULL;
+	void **prv_v;
+
+	prv_v = BLI_ghash_lookup_p(gFilePreviews, name);
+
+	if (prv_v) {
+		prv = *prv_v;
+		BLI_assert(prv);
+	}
+
+	if (!prv) {
+		prv = BKE_previewimg_create();
+	}
+
+	if (prv_v) {
+		*prv_v = prv;
+	}
+	else {
+		BLI_ghash_insert(gFilePreviews, (void *)BLI_strdup(name), prv);
+	}
+
+	return prv;
+}
+
+/**
+ * Generate a PreviewImage from given file path, using thumbnails management, if not yet existing.
+ */
+PreviewImage *BKE_previewimg_thumbnail_get(const char *name, const char *path, const int source, bool force_update)
+{
+	PreviewImage *prv = NULL;
+	void **prv_v;
+	int icon_w, icon_h;
+
+	prv_v = BLI_ghash_lookup_p(gFilePreviews, name);
+
+	if (prv_v) {
+		prv = *prv_v;
+		BLI_assert(prv);
+	}
+
+	if (prv && force_update) {
+		BKE_previewimg_clear(prv, ICON_SIZE_ICON);
+		BKE_previewimg_clear(prv, ICON_SIZE_PREVIEW);
+	}
+	else if (!prv) {
+		prv = BKE_previewimg_create();
+		force_update = true;
+	}
+
+	if (force_update) {
+		ImBuf *thumb = IMB_thumb_manage(path, THB_NORMAL, source);
+
+		if (thumb) {
+			prv->w[ICON_SIZE_PREVIEW] = thumb->x;
+			prv->h[ICON_SIZE_PREVIEW] = thumb->y;
+			prv->rect[ICON_SIZE_PREVIEW] = MEM_dupallocN(thumb->rect);
+			prv->flag[ICON_SIZE_PREVIEW] &= ~(CHANGED | USER_EDITED);
+
+			if (thumb->x > thumb->y) {
+				icon_w = ICON_RENDER_DEFAULT_HEIGHT;
+				icon_h = (thumb->y * icon_w) / thumb->x + 1;
+			}
+			else if (thumb->x < thumb->y) {
+				icon_h = ICON_RENDER_DEFAULT_HEIGHT;
+				icon_w = (thumb->x * icon_h) / thumb->y + 1;
+			}
+			else {
+				icon_w = icon_h = ICON_RENDER_DEFAULT_HEIGHT;
+			}
+
+			IMB_scaleImBuf(thumb, icon_w, icon_h);
+			prv->w[ICON_SIZE_ICON] = icon_w;
+			prv->h[ICON_SIZE_ICON] = icon_h;
+			prv->rect[ICON_SIZE_ICON] = MEM_dupallocN(thumb->rect);
+			prv->flag[ICON_SIZE_ICON] &= ~(CHANGED | USER_EDITED);
+
+			IMB_freeImBuf(thumb);
+		}
+
+		if (prv_v) {
+			*prv_v = prv;
+		}
+		else {
+			BLI_ghash_insert(gFilePreviews, (void *)BLI_strdup(name), prv);
+		}
+	}
+
+	return prv;
+}
+
+void BKE_previewimg_name_release(const char *name)
+{
+	PreviewImage *prv = BLI_ghash_popkey(gFilePreviews, (void *)name, MEM_freeN);
+
+	if (prv) {
+		if (prv->icon_id) {
+			BKE_icon_delete(prv->icon_id);
+		}
+		BKE_previewimg_freefunc(prv);
+	}
+}
+
+PreviewImage *BKE_previewimg_id_get(ID *id)
 {
 	PreviewImage *prv_img = NULL;
 
@@ -346,7 +388,7 @@ void BKE_icon_changed(int id)
 	icon = BLI_ghash_lookup(gIcons, SET_INT_IN_POINTER(id));
 	
 	if (icon) {
-		PreviewImage *prv = BKE_previewimg_get((ID *)icon->obj);
+		PreviewImage *prv = BKE_previewimg_id_get((ID *)icon->obj);
 
 		/* all previews changed */
 		if (prv) {

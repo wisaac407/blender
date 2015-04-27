@@ -1156,7 +1156,7 @@ static void icon_draw_size(float x, float y, int icon_id, float aspect, float al
 		glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 	}
 	else if (di->type == ICON_TYPE_PREVIEW) {
-		PreviewImage *pi = icon->type ? BKE_previewimg_get((ID *)icon->obj) : icon->obj;
+		PreviewImage *pi = icon->type ? BKE_previewimg_id_get((ID *)icon->obj) : icon->obj;
 
 		if (pi) {
 			/* no create icon on this level in code */
@@ -1183,7 +1183,7 @@ static void ui_id_preview_image_render_size(
 
 void UI_id_icon_render(const bContext *C, Scene *scene, ID *id, const bool big, const bool use_job)
 {
-	PreviewImage *pi = BKE_previewimg_get(id);
+	PreviewImage *pi = BKE_previewimg_id_get(id);
 
 	if (pi) {
 		if (big)
@@ -1195,7 +1195,7 @@ void UI_id_icon_render(const bContext *C, Scene *scene, ID *id, const bool big, 
 
 static void ui_id_brush_render(const bContext *C, ID *id)
 {
-	PreviewImage *pi = BKE_previewimg_get(id); 
+	PreviewImage *pi = BKE_previewimg_id_get(id);
 	enum eIconSizes i;
 	
 	if (!pi)
