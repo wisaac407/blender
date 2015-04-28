@@ -705,8 +705,7 @@ class BPyPreviewsCollection:
     """
     Fake dict-like class of previews.
     """
-    from _bpy import app
-    __slots__ = ('_previews', '_coll_name')
+    from _bpy import app as _app
 
     def __init__(self, name):
         self._previews = {}
@@ -719,27 +718,27 @@ class BPyPreviewsCollection:
         return self._coll_name + name
 
     def new(self, name):
-        from _bpy import app
+        app = self.__class__._app
         return self._previews.setdefault(name, app._previews.new(self._gen_key(name)))
-    new.__doc__ = app._previews.new.__doc__
+    new.__doc__ = _app._previews.new.__doc__
 
     def load(self, name, path, path_type, force_reload=False):
-        from _bpy import app
+        app = self.__class__._app
         pkey = self._gen_key(name)
         if force_reload:
             self._previews[name] = p = app._previews.load(pkey, path, path_type, True)
             return p
         else:
             return self._previews.setdefault(name, app._previews.load(pkey, path, path_type, False))
-    load.__doc__ = app._previews.load.__doc__
+    load.__doc__ = _app._previews.load.__doc__
 
     def release(self, name):
-        from _bpy import app
+        app = self.__class__._app
         p = self._previews.pop(name, None)
         if p is not None:
             del p
             app._previews.release(self._gen_key(name))
-    release.__doc__ = app._previews.release.__doc__
+    release.__doc__ = _app._previews.release.__doc__
 
     def __repr__(self):
         return "<PreviewsCollection '%s'>\n\tPreviews: %s" % (self._coll_name, repr(self._previews))
@@ -772,7 +771,7 @@ class BPyPreviewsCollection:
         return self._previews.get(key, default)
 
     def clear(self):
-        from _bpy import app
+        app = self.__class__._app
         for name in self._previews.keys():
             app._previews.release(self._gen_key(name))
         self._previews.clear()

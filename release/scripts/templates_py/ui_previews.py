@@ -20,12 +20,18 @@ import bpy
 
 
 def get_previews_from_folder(self, context):
-
     enum_items = []
     folder_path = context.window_manager.my_previews_folderpath
-    print("rescanning folder: %s" % folder_path)
 
-    if folder_path:
+    # gets the already existing preview collection (defined in register func).
+    pcoll = bpy.utils.previews.new("PreviewsInDirectory")
+
+    if folder_path == pcoll.my_previews_folderpath:
+        return pcoll.my_previews
+
+    print("Scanning folder: %s" % folder_path)
+
+    if folder_path and os.path.exists(folder_path):
         # scan the directory for png files
         dir_contents = os.listdir(folder_path)
         image_paths = []
@@ -33,18 +39,17 @@ def get_previews_from_folder(self, context):
             if c.endswith(".png") or c.endswith(".PNG"):
                 image_paths.append(c)
 
-        # gets the already existing preview collection, otherwise it is created
-        prevs = bpy.utils.previews.new("PreviewsInDirectory")
-
         for idx, img_name in enumerate(image_paths):
             # generates a thumbnail preview for a file.
             # Also works with previews for 'MOVIE', 'BLEND' and 'FONT'
-            thumb = prevs.load(img_name, folder_path + img_name, 'IMAGE')
-            enum_items.append(
-                # enum item: (identifier, name, description, icon, number)
-                (img_name, img_name, img_name, int(thumb.icon_id), idx+1))
+            path = folder_path + img_name
+            thumb = pcoll.load(path, path, 'IMAGE')
+            # enum item: (identifier, name, description, icon, number)
+            enum_items.append((img_name, img_name, img_name, int(thumb.icon_id), idx))
 
-    return enum_items
+    pcoll.my_previews = tuple(enum_items)
+    pcoll.my_previews_folderpath = folder_path
+    return pcoll.my_previews
 
 
 class PreviewsExamplePanel(bpy.types.Panel):
@@ -77,7 +82,15 @@ def register():
     bpy.types.WindowManager.my_previews = \
         bpy.props.EnumProperty(items=get_previews_from_folder)
 
-    bpy.utils.previews.new("PreviewsInDirectory")
+    # Note that preview collections returned by bpy.utils.previews are regular py objects - you can use them
+    # to store custom data.
+    # This is especially useful here, since:
+    #     * It avoids us regenerating the whole enum over and over.
+    #     * It can store enumitems' strings (remember you have to keep those strings somewhere in py, else they get
+    #       freed and blender references invalid memory!).
+    pcoll = bpy.utils.previews.new("PreviewsInDirectory")
+    pcoll.my_previews_folderpath = ""
+    pcoll.my_previews = ()
 
     bpy.utils.register_class(PreviewsExamplePanel)
 
