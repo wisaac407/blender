@@ -814,7 +814,7 @@ class BPyPreviewsCollection:
 
     def clear(self):
         for name in self._previews.keys():
-            self.release(self._gen_key(name))
+            app._previews.release(self._gen_key(name))
         self._previews.clear()
 
     # No setdefault(), pop(), popitem(), copy(), nor update()
