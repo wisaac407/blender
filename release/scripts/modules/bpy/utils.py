@@ -52,7 +52,6 @@ __all__ = (
     )
 
 from _bpy import (
-        app,
         escape_identifier,
         register_class,
         unregister_class,
@@ -702,54 +701,11 @@ def make_rna_paths(struct_name, prop_name, enum_name):
 
 
 # High-level previews manager.
-class BPyPreviewsManager:
-    """
-    High-level 'cached' previews manager.
-
-    This allows addons to generate their own previews, and use them as icons in UI widgets
-    ('icon_value' of UILayout functions).
-    """
-    __slots__ = ('_previews_collections',)
-
-    def __init__(self):
-        self._previews_collections = {}
-
-    def __del__(self):
-        self.clear()
-
-    def new(self, name):
-        """
-        Return a new preview collection, or existing one if 'name' already exists.
-        """
-        return self._previews_collections.setdefault(name, BPyPreviewsCollection(name))
-
-    def _remove(self, name):
-        return self._previews_collections.pop(name, None)
-
-    def delete(self, name):
-        """
-        Delete specified previews collection.
-        """
-        pcoll = self._remove(name)
-        if pcoll is not None:
-            del pcoll
-
-    def clear(self):
-        """
-        Delete all previews collections.
-        """
-        for pcoll in self._previews_collections.values():
-            del pcoll
-        self._previews_collections.clear()
-
-    def __repr__(self):
-        return "<module like class 'bpy.utils.previews'>"
-
-
 class BPyPreviewsCollection:
     """
     Fake dict-like class of previews.
     """
+    from _bpy import app
     __slots__ = ('_previews', '_coll_name')
 
     def __init__(self, name):
@@ -763,10 +719,12 @@ class BPyPreviewsCollection:
         return self._coll_name + name
 
     def new(self, name):
+        from _bpy import app
         return self._previews.setdefault(name, app._previews.new(self._gen_key(name)))
     new.__doc__ = app._previews.new.__doc__
 
     def load(self, name, path, path_type, force_reload=False):
+        from _bpy import app
         pkey = self._gen_key(name)
         if force_reload:
             self._previews[name] = p = app._previews.load(pkey, path, path_type, True)
@@ -776,6 +734,7 @@ class BPyPreviewsCollection:
     load.__doc__ = app._previews.load.__doc__
 
     def release(self, name):
+        from _bpy import app
         p = self._previews.pop(name, None)
         if p is not None:
             del p
@@ -813,6 +772,7 @@ class BPyPreviewsCollection:
         return self._previews.get(key, default)
 
     def clear(self):
+        from _bpy import app
         for name in self._previews.keys():
             app._previews.release(self._gen_key(name))
         self._previews.clear()
@@ -820,4 +780,53 @@ class BPyPreviewsCollection:
     # No setdefault(), pop(), popitem(), copy(), nor update()
 
 
+class BPyPreviewsManager:
+    """
+    High-level 'cached' previews manager.
+
+    This allows addons to generate their own previews, and use them as icons in UI widgets
+    ('icon_value' of UILayout functions).
+    """
+    __slots__ = ('_previews_collections',)
+
+    _preview_coll_type = BPyPreviewsCollection
+
+    def __init__(self):
+        self._previews_collections = {}
+
+    def __del__(self):
+        self.clear()
+
+    def new(self, name):
+        """
+        Return a new preview collection, or existing one if 'name' already exists.
+        """
+        return self._previews_collections.setdefault(name, self.__class__._preview_coll_type(name))
+
+    def _remove(self, name):
+        return self._previews_collections.pop(name, None)
+
+    def delete(self, name):
+        """
+        Delete specified previews collection.
+        """
+        pcoll = self._remove(name)
+        if pcoll is not None:
+            del pcoll
+
+    def clear(self):
+        """
+        Delete all previews collections.
+        """
+        for pcoll in self._previews_collections.values():
+            del pcoll
+        self._previews_collections.clear()
+
+    def __repr__(self):
+        return "<module like class 'bpy.utils.previews'>"
+
+
 previews = BPyPreviewsManager()
+
+# __all__ is not much useful actually :/
+del BPyPreviewsManager, BPyPreviewsCollection
