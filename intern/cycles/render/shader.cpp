@@ -21,6 +21,7 @@
 #include "light.h"
 #include "mesh.h"
 #include "nodes.h"
+#include "object.h"
 #include "osl.h"
 #include "scene.h"
 #include "shader.h"
@@ -30,6 +31,9 @@
 #include "util_foreach.h"
 
 CCL_NAMESPACE_BEGIN
+
+vector<float> ShaderManager::blackbody_table;
+vector<float> ShaderManager::beckmann_table;
 
 /* Beckmann sampling precomputed table, see bsdf_microfacet.h */
 
@@ -150,6 +154,7 @@ Shader::Shader()
 	has_displacement = false;
 	has_bssrdf_bump = false;
 	has_heterogeneous_volume = false;
+	has_object_dependency = false;
 
 	used = false;
 
@@ -194,6 +199,7 @@ void Shader::tag_update(Scene *scene)
 	 * e.g. surface attributes when there is only a volume shader. this could
 	 * be more fine grained but it's better than nothing */
 	OutputNode *output = graph->output();
+	bool prev_has_volume = has_volume;
 	has_surface = has_surface || output->input("Surface")->link;
 	has_volume = has_volume || output->input("Volume")->link;
 	has_displacement = has_displacement || output->input("Displacement")->link;
@@ -214,6 +220,11 @@ void Shader::tag_update(Scene *scene)
 	if(attributes.modified(prev_attributes)) {
 		need_update_attributes = true;
 		scene->mesh_manager->need_update = true;
+	}
+
+	if(has_volume != prev_has_volume) {
+		scene->mesh_manager->need_flags_update = true;
+		scene->object_manager->need_flags_update = true;
 	}
 }
 
@@ -243,6 +254,8 @@ ShaderManager::~ShaderManager()
 ShaderManager *ShaderManager::create(Scene *scene, int shadingsystem)
 {
 	ShaderManager *manager;
+
+	(void)shadingsystem;  /* Ignored when built without OSL. */
 
 #ifdef WITH_OSL
 	if(shadingsystem == SHADINGSYSTEM_OSL)
@@ -313,7 +326,10 @@ void ShaderManager::device_update_shaders_used(Scene *scene)
 		scene->shaders[light->shader]->used = true;
 }
 
-void ShaderManager::device_update_common(Device *device, DeviceScene *dscene, Scene *scene, Progress& progress)
+void ShaderManager::device_update_common(Device *device,
+                                         DeviceScene *dscene,
+                                         Scene *scene,
+                                         Progress& /*progress*/)
 {
 	device->tex_free(dscene->shader_flag);
 	dscene->shader_flag.clear();
@@ -376,12 +392,18 @@ void ShaderManager::device_update_common(Device *device, DeviceScene *dscene, Sc
 
 	device->tex_alloc("__shader_flag", dscene->shader_flag);
 
-	/* blackbody lookup table */
+	/* lookup tables */
 	KernelTables *ktables = &dscene->data.tables;
 	
+	/* blackbody lookup table */
 	if(has_converter_blackbody && blackbody_table_offset == TABLE_OFFSET_INVALID) {
-		vector<float> table = blackbody_table();
-		blackbody_table_offset = scene->lookup_tables->add_table(dscene, table);
+		if(blackbody_table.size() == 0) {
+			thread_scoped_lock lock(lookup_table_mutex);
+			if(blackbody_table.size() == 0) {
+				blackbody_table = blackbody_table_build();
+			}
+		}
+		blackbody_table_offset = scene->lookup_tables->add_table(dscene, blackbody_table);
 		
 		ktables->blackbody_offset = (int)blackbody_table_offset;
 	}
@@ -392,10 +414,13 @@ void ShaderManager::device_update_common(Device *device, DeviceScene *dscene, Sc
 
 	/* beckmann lookup table */
 	if(beckmann_table_offset == TABLE_OFFSET_INVALID) {
-		vector<float> table;
-		beckmann_table_build(table);
-		beckmann_table_offset = scene->lookup_tables->add_table(dscene, table);
-		
+		if(beckmann_table.size() == 0) {
+			thread_scoped_lock lock(lookup_table_mutex);
+			if(beckmann_table.size() == 0) {
+				beckmann_table_build(beckmann_table);
+			}
+		}
+		beckmann_table_offset = scene->lookup_tables->add_table(dscene, beckmann_table);
 		ktables->beckmann_offset = (int)beckmann_table_offset;
 	}
 

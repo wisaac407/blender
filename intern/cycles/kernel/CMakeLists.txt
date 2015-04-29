@@ -1,3 +1,4 @@
+remove_extra_strict_flags()
 
 set(INC
 	.
@@ -137,6 +138,7 @@ set(SRC_UTIL_HEADERS
 	../util/util_color.h
 	../util/util_half.h
 	../util/util_math.h
+	../util/util_math_fast.h
 	../util/util_transform.h
 	../util/util_types.h
 )

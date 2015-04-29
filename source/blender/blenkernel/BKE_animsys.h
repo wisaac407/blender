@@ -56,28 +56,42 @@ bool id_type_can_have_animdata(struct ID *id);
 struct AnimData *BKE_animdata_from_id(struct ID *id);
 
 /* Add AnimData to the given ID-block */
-struct AnimData *BKE_id_add_animdata(struct ID *id);
+struct AnimData *BKE_animdata_add_id(struct ID *id);
 
 /* Set active action used by AnimData from the given ID-block */
 bool BKE_animdata_set_action(struct ReportList *reports, struct ID *id, struct bAction *act);
 
 /* Free AnimData */
-void BKE_free_animdata(struct ID *id);
+void BKE_animdata_free(struct ID *id);
 
 /* Copy AnimData */
-struct AnimData *BKE_copy_animdata(struct AnimData *adt, const bool do_action);
+struct AnimData *BKE_animdata_copy(struct AnimData *adt, const bool do_action);
 
 /* Copy AnimData */
-bool BKE_copy_animdata_id(struct ID *id_to, struct ID *id_from, const bool do_action);
+bool BKE_animdata_copy_id(struct ID *id_to, struct ID *id_from, const bool do_action);
 
 /* Copy AnimData Actions */
-void BKE_copy_animdata_id_action(struct ID *id);
+void BKE_animdata_copy_id_action(struct ID *id);
+
+/* Merge copies of data from source AnimData block */
+typedef enum eAnimData_MergeCopy_Modes {
+	/* Keep destination action */
+	ADT_MERGECOPY_KEEP_DST = 0,
+	
+	/* Use src action (make a new copy) */
+	ADT_MERGECOPY_SRC_COPY = 1,
+	
+	/* Use src action (but just reference the existing version) */
+	ADT_MERGECOPY_SRC_REF  = 2
+} eAnimData_MergeCopy_Modes;
+
+void BKE_animdata_merge_copy(struct ID *dst_id, struct ID *src_id, eAnimData_MergeCopy_Modes action_mode, bool fix_drivers);
 
 /* Make Local */
 void BKE_animdata_make_local(struct AnimData *adt);
 
 /* Re-Assign ID's */
-void BKE_relink_animdata(struct AnimData *adt);
+void BKE_animdata_relink(struct AnimData *adt);
 
 /* ************************************* */
 /* KeyingSets API */
@@ -106,6 +120,10 @@ void BKE_keyingsets_free(struct ListBase *list);
 /* ************************************* */
 /* Path Fixing API */
 
+/* Get a "fixed" version of the given path (oldPath) */
+char *BKE_animsys_fix_rna_path_rename(ID *owner_id, char *old_path, const char *prefix, const char *oldName,
+                                      const char *newName, int oldSubscript, int newSubscript, bool verify_paths);
+
 /* Fix all the paths for the given ID + Action */
 void BKE_action_fix_paths_rename(struct ID *owner_id, struct bAction *act, const char *prefix, const char *oldName,
                                  const char *newName, int oldSubscript, int newSubscript, bool verify_paths);
@@ -116,7 +134,7 @@ void BKE_animdata_fix_paths_rename(struct ID *owner_id, struct AnimData *adt, st
                                    bool verify_paths);
 
 /* Fix all the paths for the entire database... */
-void BKE_all_animdata_fix_paths_rename(ID *ref_id, const char *prefix, const char *oldName, const char *newName);
+void BKE_animdata_fix_paths_rename_all(ID *ref_id, const char *prefix, const char *oldName, const char *newName);
 
 /* Fix the path after removing elements that are not ID (e.g., node) */
 void BKE_animdata_fix_paths_remove(struct ID *id, const char *path);

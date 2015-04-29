@@ -37,15 +37,10 @@ struct Base;
 struct EvaluationContext;
 struct Scene;
 struct Object;
-struct Camera;
 struct BoundBox;
 struct View3D;
 struct SoftBody;
 struct BulletSoftBody;
-struct Group;
-struct bAction;
-struct RenderData;
-struct rctf;
 struct MovieClip;
 struct Main;
 struct RigidBodyWorld;
@@ -57,6 +52,7 @@ void BKE_object_workob_calc_parent(struct Scene *scene, struct Object *ob, struc
 void BKE_object_transform_copy(struct Object *ob_tar, const struct Object *ob_src);
 struct SoftBody *copy_softbody(struct SoftBody *sb, bool copy_caches);
 struct BulletSoftBody *copy_bulletsoftbody(struct BulletSoftBody *sb);
+struct ParticleSystem *BKE_object_copy_particlesystem(struct ParticleSystem *psys);
 void BKE_object_copy_particlesystems(struct Object *obn, struct Object *ob);
 void BKE_object_copy_softbody(struct Object *obn, struct Object *ob);
 void BKE_object_free_particlesystems(struct Object *ob);
@@ -68,6 +64,7 @@ void BKE_object_update_base_layer(struct Scene *scene, struct Object *ob);
 void BKE_object_free(struct Object *ob);
 void BKE_object_free_ex(struct Object *ob, bool do_id_user);
 void BKE_object_free_derived_caches(struct Object *ob);
+void BKE_object_free_caches(struct Object *object);
 
 void BKE_object_modifier_hook_reset(struct Object *ob, struct HookModifierData *hmd);
 
@@ -181,7 +178,9 @@ int BKE_object_obdata_texspace_get(struct Object *ob, short **r_texflag, float *
 
 int BKE_object_insert_ptcache(struct Object *ob);
 void BKE_object_delete_ptcache(struct Object *ob, int index);
-struct KeyBlock *BKE_object_insert_shape_key(struct Scene *scene, struct Object *ob, const char *name, const bool from_mix);
+struct KeyBlock *BKE_object_insert_shape_key(struct Object *ob, const char *name, const bool from_mix);
+
+bool BKE_object_flag_test_recursive(const struct Object *ob, short flag);
 
 bool BKE_object_is_child_recursive(struct Object *ob_parent, struct Object *ob_child);
 bool BKE_object_is_animated(struct Scene *scene, struct Object *ob);

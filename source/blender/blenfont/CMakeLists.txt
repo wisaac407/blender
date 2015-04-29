@@ -47,6 +47,7 @@ set(SRC
 	intern/blf_font.c
 	intern/blf_glyph.c
 	intern/blf_lang.c
+	intern/blf_thumbs.c
 	intern/blf_translation.c
 	intern/blf_util.c
 
@@ -55,6 +56,12 @@ set(SRC
 	intern/blf_internal.h
 	intern/blf_internal_types.h
 )
+
+if(WIN32)
+	list(APPEND SRC
+		intern/blf_font_win32_compat.c
+	)
+endif()
 
 if(WITH_INTERNATIONAL)
 	add_definitions(-DWITH_INTERNATIONAL)

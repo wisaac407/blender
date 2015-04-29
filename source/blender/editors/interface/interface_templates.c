@@ -273,8 +273,11 @@ static void template_id_cb(bContext *C, void *arg_litem, void *arg_event)
 			RNA_property_pointer_set(&template->ptr, template->prop, idptr);
 			RNA_property_update(C, &template->ptr, template->prop);
 
-			if (id && CTX_wm_window(C)->eventstate->shift) /* useful hidden functionality, */
+			if (id && CTX_wm_window(C)->eventstate->shift) {
+				/* only way to force-remove data (on save) */
+				id->flag &= ~LIB_FAKEUSER;
 				id->us = 0;
+			}
 
 			break;
 		case UI_ID_FAKE_USER:
@@ -823,7 +826,7 @@ static int modifier_is_simulation(ModifierData *md)
 static uiLayout *draw_modifier(uiLayout *layout, Scene *scene, Object *ob,
                                ModifierData *md, int index, int cageIndex, int lastCageIndex)
 {
-	ModifierTypeInfo *mti = modifierType_getInfo(md->type);
+	const ModifierTypeInfo *mti = modifierType_getInfo(md->type);
 	PointerRNA ptr;
 	uiBut *but;
 	uiBlock *block;
@@ -1095,7 +1098,7 @@ static void constraint_active_func(bContext *UNUSED(C), void *ob_v, void *con_v)
 static uiLayout *draw_constraint(uiLayout *layout, Object *ob, bConstraint *con)
 {
 	bPoseChannel *pchan = BKE_pose_channel_active(ob);
-	bConstraintTypeInfo *cti;
+	const bConstraintTypeInfo *cti;
 	uiBlock *block;
 	uiLayout *result = NULL, *col, *box, *row;
 	PointerRNA ptr;
@@ -1558,6 +1561,7 @@ static void colorband_buttons_layout(uiLayout *layout, uiBlock *block, ColorBand
 			row = uiLayoutRow(split, false);
 			uiItemR(row, &ptr, "position", 0, IFACE_("Pos"), ICON_NONE);
 			bt = block->buttons.last;
+			bt->a1 = 1.0f; /* gives a bit more precision for modifying position */
 			UI_but_func_set(bt, colorband_update_cb, bt, coba);
 
 			row = uiLayoutRow(layout, false);
@@ -1575,6 +1579,7 @@ static void colorband_buttons_layout(uiLayout *layout, uiBlock *block, ColorBand
 			row = uiLayoutRow(subsplit, false);
 			uiItemR(row, &ptr, "position", UI_ITEM_R_SLIDER, IFACE_("Pos"), ICON_NONE);
 			bt = block->buttons.last;
+			bt->a1 = 1.0f; /* gives a bit more precision for modifying position */
 			UI_but_func_set(bt, colorband_update_cb, bt, coba);
 
 			row = uiLayoutRow(split, false);
@@ -1629,7 +1634,7 @@ static uiBlock *ui_icon_view_menu_cb(bContext *C, ARegion *ar, void *arg_litem)
 	static RNAUpdateCb cb;
 	uiBlock *block;
 	uiBut *but;
-	int icon;
+	int icon, value;
 	EnumPropertyItem *item;
 	int a;
 	bool free;
@@ -1654,7 +1659,9 @@ static uiBlock *ui_icon_view_menu_cb(bContext *C, ARegion *ar, void *arg_litem)
 		y = (a / 8) * UI_UNIT_X * 5;
 		
 		icon = item[a].icon;
-		but = uiDefIconButR_prop(block, UI_BTYPE_ROW, 0, icon, x, y, UI_UNIT_X * 5, UI_UNIT_Y * 5, &cb.ptr, cb.prop, -1, 0, icon, -1, -1, NULL);
+		value = item[a].value;
+		but = uiDefIconButR_prop(block, UI_BTYPE_ROW, 0, icon, x, y, UI_UNIT_X * 5, UI_UNIT_Y * 5,
+		                         &cb.ptr, cb.prop, -1, 0, value, -1, -1, NULL);
 		UI_but_flag_enable(but, UI_HAS_ICON | UI_BUT_ICON_PREVIEW);
 	}
 
@@ -1672,16 +1679,22 @@ void uiTemplateIconView(uiLayout *layout, PointerRNA *ptr, const char *propname)
 {
 	PropertyRNA *prop = RNA_struct_find_property(ptr, propname);
 	RNAUpdateCb *cb;
+	EnumPropertyItem *items;
 	uiBlock *block;
 	uiBut *but;
 //	rctf rect;  /* UNUSED */
-	int icon;
+	int value, icon = ICON_NONE, tot_items;
+	bool free_items;
 	
 	if (!prop || RNA_property_type(prop) != PROP_ENUM)
 		return;
-	
-	icon = RNA_property_enum_get(ptr, prop);
-	
+
+	block = uiLayoutAbsoluteBlock(layout);
+
+	RNA_property_enum_items(block->evil_C, ptr, prop, &items, &tot_items, &free_items);
+	value = RNA_property_enum_get(ptr, prop);
+	RNA_enum_icon_from_value(items, value, &icon);
+
 	cb = MEM_callocN(sizeof(RNAUpdateCb), "RNAUpdateCb");
 	cb->ptr = *ptr;
 	cb->prop = prop;
@@ -1689,8 +1702,6 @@ void uiTemplateIconView(uiLayout *layout, PointerRNA *ptr, const char *propname)
 //	rect.xmin = 0; rect.xmax = 10.0f * UI_UNIT_X;
 //	rect.ymin = 0; rect.ymax = 10.0f * UI_UNIT_X;
 	
-	block = uiLayoutAbsoluteBlock(layout);
-
 	but = uiDefBlockButN(block, ui_icon_view_menu_cb, MEM_dupallocN(cb), "", 0, 0, UI_UNIT_X * 6, UI_UNIT_Y * 6, "");
 
 	
@@ -1702,6 +1713,9 @@ void uiTemplateIconView(uiLayout *layout, PointerRNA *ptr, const char *propname)
 	UI_but_funcN_set(but, rna_update_cb, MEM_dupallocN(cb), NULL);
 	
 	MEM_freeN(cb);
+	if (free_items) {
+		MEM_freeN(items);
+	}
 }
 
 /********************* Histogram Template ************************/
@@ -2398,9 +2412,6 @@ void uiTemplatePalette(uiLayout *layout, PointerRNA *ptr, const char *propname, 
 
 	palette = cptr.data;
 
-	/* first delete any pending colors */
-	BKE_palette_cleanup(palette);
-
 	color = palette->colors.first;
 
 	col = uiLayoutColumn(layout, true);
@@ -2833,9 +2844,27 @@ static void uilist_resize_update_cb(bContext *UNUSED(C), void *arg1, void *UNUSE
 	}
 }
 
+static void *uilist_item_use_dynamic_tooltip(PointerRNA *itemptr, const char *propname)
+{
+	if (propname && propname[0] && itemptr && itemptr->data) {
+		PropertyRNA *prop = RNA_struct_find_property(itemptr, propname);
+
+		if (prop && (RNA_property_type(prop) == PROP_STRING)) {
+			return RNA_property_string_get_alloc(itemptr, prop, NULL, 0, NULL);
+		}
+	}
+	return NULL;
+}
+
+static char *uilist_item_tooltip_func(bContext *UNUSED(C), void *argN, const char *tip)
+{
+	char *dyn_tooltip = argN;
+	return BLI_sprintfN("%s - %s", tip, dyn_tooltip);
+}
+
 void uiTemplateList(uiLayout *layout, bContext *C, const char *listtype_name, const char *list_id,
                     PointerRNA *dataptr, const char *propname, PointerRNA *active_dataptr, const char *active_propname,
-                    int rows, int maxrows, int layout_type, int columns)
+                    const char *item_dyntip_propname, int rows, int maxrows, int layout_type, int columns)
 {
 	uiListType *ui_list_type;
 	uiList *ui_list = NULL;
@@ -2862,7 +2891,7 @@ void uiTemplateList(uiLayout *layout, bContext *C, const char *listtype_name, co
 
 	/* validate arguments */
 	/* Forbid default UI_UL_DEFAULT_CLASS_NAME list class without a custom list_id! */
-	if (!strcmp(UI_UL_DEFAULT_CLASS_NAME, listtype_name) && !(list_id && list_id[0])) {
+	if (STREQ(UI_UL_DEFAULT_CLASS_NAME, listtype_name) && !(list_id && list_id[0])) {
 		RNA_warning("template_list using default '%s' UIList class must provide a custom list_id",
 		            UI_UL_DEFAULT_CLASS_NAME);
 		return;
@@ -3049,6 +3078,7 @@ void uiTemplateList(uiLayout *layout, bContext *C, const char *listtype_name, co
 				/* create list items */
 				for (i = layoutdata.start_idx; i < layoutdata.end_idx; i++) {
 					PointerRNA *itemptr = &items_ptr[i].item;
+					void *dyntip_data;
 					int org_i = items_ptr[i].org_idx;
 					int flt_flag = items_ptr[i].flt_flag;
 					subblock = uiLayoutGetBlock(col);
@@ -3061,7 +3091,11 @@ void uiTemplateList(uiLayout *layout, bContext *C, const char *listtype_name, co
 					sub = uiLayoutRow(overlap, false);
 
 					but = uiDefButR_prop(subblock, UI_BTYPE_LISTROW, 0, "", 0, 0, UI_UNIT_X * 10, UI_UNIT_Y,
-					                     active_dataptr, activeprop, 0, 0, org_i, 0, 0, TIP_("Double click to rename"));
+					                     active_dataptr, activeprop, 0, 0, org_i, 0, 0,
+					                     TIP_("Double click to rename"));
+					if ((dyntip_data = uilist_item_use_dynamic_tooltip(itemptr, item_dyntip_propname))) {
+						UI_but_func_tooltip_set(but, uilist_item_tooltip_func, dyntip_data);
+					}
 
 					sub = uiLayoutRow(overlap, false);
 
@@ -3254,17 +3288,18 @@ static void operator_search_cb(const bContext *C, void *UNUSED(arg), const char 
 
 	for (WM_operatortype_iter(&iter); !BLI_ghashIterator_done(&iter); BLI_ghashIterator_step(&iter)) {
 		wmOperatorType *ot = BLI_ghashIterator_getValue(&iter);
+		const char *ot_ui_name = CTX_IFACE_(ot->translation_context, ot->name);
 
 		if ((ot->flag & OPTYPE_INTERNAL) && (G.debug & G_DEBUG_WM) == 0)
 			continue;
 
-		if (BLI_strcasestr(ot->name, str)) {
+		if (BLI_strcasestr(ot_ui_name, str)) {
 			if (WM_operator_poll((bContext *)C, ot)) {
 				char name[256];
-				int len = strlen(ot->name);
+				int len = strlen(ot_ui_name);
 				
 				/* display name for menu, can hold hotkey */
-				BLI_strncpy(name, ot->name, sizeof(name));
+				BLI_strncpy(name, ot_ui_name, sizeof(name));
 				
 				/* check for hotkey */
 				if (len < sizeof(name) - 6) {
@@ -3570,8 +3605,7 @@ void uiTemplateColorspaceSettings(uiLayout *layout, PointerRNA *ptr, const char 
 
 	colorspace_settings_ptr = RNA_property_pointer_get(ptr, prop);
 
-	uiItemL(layout, IFACE_("Input Color Space:"), ICON_NONE);
-	uiItemR(layout, &colorspace_settings_ptr, "name", 0, "", ICON_NONE);
+	uiItemR(layout, &colorspace_settings_ptr, "name", 0, IFACE_("Color Space"), ICON_NONE);
 }
 
 void uiTemplateColormanagedViewSettings(uiLayout *layout, bContext *UNUSED(C), PointerRNA *ptr, const char *propname)

@@ -188,7 +188,8 @@ ccl_device_noinline bool indirect_lamp_emission(KernelGlobals *kg, PathState *st
 		/* use visibility flag to skip lights */
 		if(ls.shader & SHADER_EXCLUDE_ANY) {
 			if(((ls.shader & SHADER_EXCLUDE_DIFFUSE) && (state->flag & PATH_RAY_DIFFUSE)) ||
-			   ((ls.shader & SHADER_EXCLUDE_GLOSSY) && (state->flag & PATH_RAY_GLOSSY)) ||
+			   ((ls.shader & SHADER_EXCLUDE_GLOSSY) &&
+			    ((state->flag & (PATH_RAY_GLOSSY|PATH_RAY_REFLECT)) == (PATH_RAY_GLOSSY|PATH_RAY_REFLECT))) ||
 			   ((ls.shader & SHADER_EXCLUDE_TRANSMIT) && (state->flag & PATH_RAY_TRANSMIT)) ||
 			   ((ls.shader & SHADER_EXCLUDE_SCATTER) && (state->flag & PATH_RAY_VOLUME_SCATTER)))
 				continue;
@@ -232,7 +233,8 @@ ccl_device_noinline float3 indirect_background(KernelGlobals *kg, PathState *sta
 	/* use visibility flag to skip lights */
 	if(shader & SHADER_EXCLUDE_ANY) {
 		if(((shader & SHADER_EXCLUDE_DIFFUSE) && (state->flag & PATH_RAY_DIFFUSE)) ||
-		   ((shader & SHADER_EXCLUDE_GLOSSY) && (state->flag & PATH_RAY_GLOSSY)) ||
+		   ((shader & SHADER_EXCLUDE_GLOSSY) &&
+		    ((state->flag & (PATH_RAY_GLOSSY|PATH_RAY_REFLECT)) == (PATH_RAY_GLOSSY|PATH_RAY_REFLECT))) ||
 		   ((shader & SHADER_EXCLUDE_TRANSMIT) && (state->flag & PATH_RAY_TRANSMIT)) ||
 		   ((shader & SHADER_EXCLUDE_CAMERA) && (state->flag & PATH_RAY_CAMERA)) ||
 		   ((shader & SHADER_EXCLUDE_SCATTER) && (state->flag & PATH_RAY_VOLUME_SCATTER)))
@@ -252,7 +254,7 @@ ccl_device_noinline float3 indirect_background(KernelGlobals *kg, PathState *sta
 	if(!(state->flag & PATH_RAY_MIS_SKIP) && res) {
 		/* multiple importance sampling, get background light pdf for ray
 		 * direction, and compute weight with respect to BSDF pdf */
-		float pdf = background_light_pdf(kg, ray->D);
+		float pdf = background_light_pdf(kg, ray->P, ray->D);
 		float mis_weight = power_heuristic(state->ray_pdf, pdf);
 
 		return L*mis_weight;

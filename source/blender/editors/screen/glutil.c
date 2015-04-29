@@ -839,7 +839,7 @@ void gla2DDrawTranslatePt(gla2DDrawInfo *di, float wo_x, float wo_y, int *r_sc_x
 }
 
 /**
- * Translate the \a world point from world coordiantes into screen space.
+ * Translate the \a world point from world coordinates into screen space.
  */
 void gla2DDrawTranslatePtv(gla2DDrawInfo *di, float world[2], int screen_r[2])
 {
@@ -848,7 +848,7 @@ void gla2DDrawTranslatePtv(gla2DDrawInfo *di, float world[2], int screen_r[2])
 }
 
 /**
- * Restores the previous OpenGL state and free's the auxilary gla data.
+ * Restores the previous OpenGL state and frees the auxiliary gla data.
  */
 void glaEnd2DDraw(gla2DDrawInfo *di)
 {
@@ -991,7 +991,7 @@ void bgl_get_mats(bglMats *mats)
 /**
  * \note \a viewdist is only for ortho at the moment.
  */
-void bglPolygonOffset(float viewdist, float dist) 
+void bglPolygonOffset(float viewdist, float dist)
 {
 	static float winmat[16], offset = 0.0;
 	
@@ -1007,8 +1007,25 @@ void bglPolygonOffset(float viewdist, float dist)
 		
 		/* dist is from camera to center point */
 		
-		if (winmat[15] > 0.5f) offs = 0.00001f * dist * viewdist;  // ortho tweaking
-		else offs = 0.0005f * dist;  // should be clipping value or so...
+		if (winmat[15] > 0.5f) {
+#if 1
+			offs = 0.00001f * dist * viewdist;  // ortho tweaking
+#else
+			static float depth_fac = 0.0f;
+			if (depth_fac == 0.0f) {
+				int depthbits;
+				glGetIntegerv(GL_DEPTH_BITS, &depthbits);
+				depth_fac = 1.0f / (float)((1 << depthbits) - 1);
+			}
+			offs = (-1.0 / winmat[10]) * dist * depth_fac;
+
+			UNUSED_VARS(viewdist);
+#endif
+		}
+		else {
+			/* should be clipping value or so... */
+			offs = 0.0001f * dist;
+		}
 		
 		winmat[14] -= offs;
 		offset += offs;
@@ -1136,9 +1153,9 @@ void glaDrawImBuf_glsl_ctx(const bContext *C, ImBuf *ibuf, float x, float y, int
 
 void cpack(unsigned int x)
 {
-	glColor3ub( ( (x)        & 0xFF),
-	            (((x) >>  8) & 0xFF),
-	            (((x) >> 16) & 0xFF) );
+	glColor3ub(( (x)        & 0xFF),
+	           (((x) >>  8) & 0xFF),
+	           (((x) >> 16) & 0xFF));
 }
 
 void glaDrawBorderCorners(const rcti *border, float zoomx, float zoomy)

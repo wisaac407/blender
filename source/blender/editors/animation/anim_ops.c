@@ -107,7 +107,7 @@ static void change_frame_apply(bContext *C, wmOperator *op)
 	SUBFRA = 0.0f;
 	
 	/* do updates */
-	sound_seek_scene(bmain, scene);
+	BKE_sound_seek_scene(bmain, scene);
 	WM_event_add_notifier(C, NC_SCENE | ND_FRAME, scene);
 }
 
@@ -223,7 +223,7 @@ static int change_frame_modal(bContext *C, wmOperator *op, const wmEvent *event)
 			break;
 	}
 
-	if (ret == OPERATOR_FINISHED) {
+	if (ret != OPERATOR_RUNNING_MODAL) {
 		change_frame_seq_preview_end(C);
 	}
 
@@ -247,7 +247,7 @@ static void ANIM_OT_change_frame(wmOperatorType *ot)
 	ot->poll = change_frame_poll;
 	
 	/* flags */
-	ot->flag = OPTYPE_BLOCKING | OPTYPE_UNDO | OPTYPE_GRAB_POINTER;
+	ot->flag = OPTYPE_BLOCKING | OPTYPE_UNDO | OPTYPE_GRAB_CURSOR;
 
 	/* rna */
 	ot->prop = RNA_def_int(ot->srna, "frame", 0, MINAFRAME, MAXFRAME, "Frame", "", MINAFRAME, MAXFRAME);

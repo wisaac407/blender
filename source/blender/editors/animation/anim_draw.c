@@ -37,6 +37,7 @@
 
 #include "BLI_math.h"
 #include "BLI_timecode.h"
+#include "BLI_utildefines.h"
 
 #include "BKE_context.h"
 #include "BKE_global.h"
@@ -59,6 +60,7 @@
 /* Draw current frame number in a little green box beside the current frame indicator */
 static void draw_cfra_number(Scene *scene, View2D *v2d, const float cfra, const bool time)
 {
+	const uiFontStyle *fstyle = UI_FSTYLE_WIDGET;
 	float xscale, yscale, x, y;
 	char numstr[32] = "    t";  /* t is the character to start replacing from */
 	int slen;
@@ -78,7 +80,8 @@ static void draw_cfra_number(Scene *scene, View2D *v2d, const float cfra, const 
 	else {
 		BLI_timecode_string_from_time_simple(&numstr[4], sizeof(numstr) - 4, 1, cfra);
 	}
-	slen = UI_fontstyle_string_width(numstr) - 1;
+
+	slen = UI_fontstyle_string_width(fstyle, numstr) - 1;
 	
 	/* get starting coordinates for drawing */
 	x = cfra * xscale;
@@ -90,7 +93,7 @@ static void draw_cfra_number(Scene *scene, View2D *v2d, const float cfra, const 
 	
 	/* draw current frame number - black text */
 	UI_ThemeColor(TH_TEXT);
-	UI_draw_string(x - 0.25f * U.widget_unit, y + 0.15f * U.widget_unit, numstr);
+	UI_fontstyle_draw_simple(fstyle, x - 0.25f * U.widget_unit, y + 0.15f * U.widget_unit, numstr);
 	
 	/* restore view transform */
 	glScalef(xscale, 1.0, 1.0);
@@ -171,10 +174,14 @@ AnimData *ANIM_nla_mapping_get(bAnimContext *ac, bAnimListElem *ale)
 	if (G.is_rendering) return NULL;
 	
 	/* handling depends on the type of animation-context we've got */
-	if (ale)
-		return ale->adt;
-	else
-		return NULL;
+	if (ale) {
+		/* NLA Control Curves occur on NLA strips, and shouldn't be subjected to this kind of mapping */
+		if (ale->type != ANIMTYPE_NLACURVE)
+			return ale->adt;
+	}
+	
+	/* cannot handle... */
+	return NULL;
 }
 
 /* ------------------- */
@@ -260,19 +267,26 @@ short ANIM_get_normalization_flags(bAnimContext *ac)
 	return 0;
 }
 
-static float normalzation_factor_get(FCurve *fcu, short flag)
+static float normalization_factor_get(Scene *scene, FCurve *fcu, short flag, float *r_offset)
 {
-	float factor = 1.0f;
+	float factor = 1.0f, offset = 0.0f;
 
 	if (flag & ANIM_UNITCONV_RESTORE) {
+		if (r_offset)
+			*r_offset = fcu->prev_offset;
+
 		return 1.0f / fcu->prev_norm_factor;
 	}
 
 	if (flag & ANIM_UNITCONV_NORMALIZE_FREEZE) {
+		if (r_offset)
+			*r_offset = fcu->prev_offset;
 		return fcu->prev_norm_factor;
 	}
 
 	if (G.moving & G_TRANSFORM_FCURVES) {
+		if (r_offset)
+			*r_offset = fcu->prev_offset;
 		return fcu->prev_norm_factor;
 	}
 
@@ -281,31 +295,64 @@ static float normalzation_factor_get(FCurve *fcu, short flag)
 		BezTriple *bezt;
 		int i;
 		float max_coord = -FLT_MAX;
+		float min_coord = FLT_MAX;
+		float range;
 
 		if (fcu->totvert < 1) {
 			return 1.0f;
 		}
 
-		for (i = 0, bezt = fcu->bezt; i < fcu->totvert; i++, bezt++) {
-			max_coord = max_ff(max_coord, fabsf(bezt->vec[0][1]));
-			max_coord = max_ff(max_coord, fabsf(bezt->vec[1][1]));
-			max_coord = max_ff(max_coord, fabsf(bezt->vec[2][1]));
+		if (PRVRANGEON) {
+			for (i = 0, bezt = fcu->bezt; i < fcu->totvert; i++, bezt++) {
+				if (IN_RANGE_INCL(bezt->vec[1][0], scene->r.psfra, scene->r.pefra)) {
+					max_coord = max_ff(max_coord, bezt->vec[0][1]);
+					max_coord = max_ff(max_coord, bezt->vec[1][1]);
+					max_coord = max_ff(max_coord, bezt->vec[2][1]);
+
+					min_coord = min_ff(min_coord, bezt->vec[0][1]);
+					min_coord = min_ff(min_coord, bezt->vec[1][1]);
+					min_coord = min_ff(min_coord, bezt->vec[2][1]);
+				}
+			}
+		}
+		else {
+			for (i = 0, bezt = fcu->bezt; i < fcu->totvert; i++, bezt++) {
+				max_coord = max_ff(max_coord, bezt->vec[0][1]);
+				max_coord = max_ff(max_coord, bezt->vec[1][1]);
+				max_coord = max_ff(max_coord, bezt->vec[2][1]);
+
+				min_coord = min_ff(min_coord, bezt->vec[0][1]);
+				min_coord = min_ff(min_coord, bezt->vec[1][1]);
+				min_coord = min_ff(min_coord, bezt->vec[2][1]);
+			}
 		}
 
-		if (max_coord > FLT_EPSILON) {
-			factor = 1.0f / max_coord;
+		range = max_coord - min_coord;
+
+		if (range > FLT_EPSILON) {
+			factor = 2.0f / range;
 		}
+		offset = -min_coord - range / 2.0f;
 	}
+
+	if (r_offset) {
+		*r_offset = offset;
+	}
+
 	fcu->prev_norm_factor = factor;
+	fcu->prev_offset = offset;
 	return factor;
 }
 
 /* Get unit conversion factor for given ID + F-Curve */
-float ANIM_unit_mapping_get_factor(Scene *scene, ID *id, FCurve *fcu, short flag)
+float ANIM_unit_mapping_get_factor(Scene *scene, ID *id, FCurve *fcu, short flag, float *r_offset)
 {
 	if (flag & ANIM_UNITCONV_NORMALIZE) {
-		return normalzation_factor_get(fcu, flag);
+		return normalization_factor_get(scene, fcu, flag, r_offset);
 	}
+
+	if (r_offset)
+		*r_offset = 0.0f;
 
 	/* sanity checks */
 	if (id && fcu && fcu->rna_path) {

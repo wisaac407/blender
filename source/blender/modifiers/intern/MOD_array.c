@@ -102,7 +102,9 @@ static void foreachObjectLink(
 }
 
 static void updateDepgraph(ModifierData *md, DagForest *forest,
-                           struct Scene *UNUSED(scene), Object *UNUSED(ob), DagNode *obNode)
+                           struct Main *UNUSED(bmain),
+                           struct Scene *UNUSED(scene),
+                           Object *UNUSED(ob), DagNode *obNode)
 {
 	ArrayModifierData *amd = (ArrayModifierData *) md;
 
@@ -201,7 +203,7 @@ static void dm_mvert_map_doubles(
         const float dist,
         const bool with_follow)
 {
-	const float dist3 = (M_SQRT3 + 0.00005f) * dist;   /* Just above sqrt(3) */
+	const float dist3 = ((float)M_SQRT3 + 0.00005f) * dist;   /* Just above sqrt(3) */
 	int i_source, i_target, i_target_low_bound, target_end, source_end;
 	SortVertsElem *sorted_verts_target, *sorted_verts_source;
 	SortVertsElem *sve_source, *sve_target, *sve_target_low_bound;
@@ -404,7 +406,7 @@ static DerivedMesh *arrayModifier_doArray(
 	int *full_doubles_map = NULL;
 	int tot_doubles;
 
-	const bool use_merge = amd->flags & MOD_ARR_MERGE;
+	const bool use_merge = (amd->flags & MOD_ARR_MERGE) != 0;
 	const bool use_recalc_normals = (dm->dirty & DM_DIRTY_NORMALS) || use_merge;
 	const bool use_offset_ob = ((amd->offset_type & MOD_ARR_OFF_OBJ) && amd->offset_ob);
 	/* allow pole vertices to be used by many faces */
@@ -499,7 +501,7 @@ static DerivedMesh *arrayModifier_doArray(
 		if (dist > eps) {
 			/* this gives length = first copy start to last copy end
 			 * add a tiny offset for floating point rounding errors */
-			count = (length + eps) / dist;
+			count = (length + eps) / dist + 1;
 		}
 		else {
 			/* if the offset has no translation, just make one copy */

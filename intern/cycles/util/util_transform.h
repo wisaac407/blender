@@ -216,12 +216,13 @@ ccl_device_inline Transform transform_rotate(float angle, float3 axis)
 		0.0f, 0.0f, 0.0f, 1.0f);
 }
 
+/* Euler is assumed to be in XYZ order. */
 ccl_device_inline Transform transform_euler(float3 euler)
 {
 	return
-		transform_rotate(euler.x, make_float3(1.0f, 0.0f, 0.0f)) *
+		transform_rotate(euler.z, make_float3(0.0f, 0.0f, 1.0f)) *
 		transform_rotate(euler.y, make_float3(0.0f, 1.0f, 0.0f)) *
-		transform_rotate(euler.z, make_float3(0.0f, 0.0f, 1.0f));
+		transform_rotate(euler.x, make_float3(1.0f, 0.0f, 0.0f));
 }
 
 ccl_device_inline Transform transform_orthographic(float znear, float zfar)
@@ -448,6 +449,8 @@ ccl_device void transform_motion_interpolate(Transform *tfm, const DecompMotionT
 
 #ifndef __KERNEL_GPU__
 
+class BoundBox2D;
+
 ccl_device_inline bool operator==(const MotionTransform& A, const MotionTransform& B)
 {
 	return (A.pre == B.pre && A.post == B.post);
@@ -455,6 +458,7 @@ ccl_device_inline bool operator==(const MotionTransform& A, const MotionTransfor
 
 float4 transform_to_quat(const Transform& tfm);
 void transform_motion_decompose(DecompMotionTransform *decomp, const MotionTransform *motion, const Transform *mid);
+Transform transform_from_viewplane(BoundBox2D& viewplane);
 
 #endif
 

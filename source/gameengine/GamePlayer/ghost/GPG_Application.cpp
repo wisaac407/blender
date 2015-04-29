@@ -250,9 +250,15 @@ bool GPG_Application::startScreenSaverPreview(
 		int windowWidth = rc.right - rc.left;
 		int windowHeight = rc.bottom - rc.top;
 		STR_String title = "";
-							
+		GHOST_GLSettings glSettings = {0};
+
+		if (stereoVisual) {
+			glSettings.flags |= GHOST_glStereoVisual;
+		}
+		glSettings.numOfAASamples = samples;
+
 		m_mainWindow = fSystem->createWindow(title, 0, 0, windowWidth, windowHeight, GHOST_kWindowStateMinimized,
-			GHOST_kDrawingContextTypeOpenGL, stereoVisual, samples);
+		                                     GHOST_kDrawingContextTypeOpenGL, glSettings);
 		if (!m_mainWindow) {
 			printf("error: could not create main window\n");
 			exit(-1);
@@ -323,11 +329,16 @@ bool GPG_Application::startWindow(
         const int stereoMode,
         const GHOST_TUns16 samples)
 {
+	GHOST_GLSettings glSettings = {0};
 	bool success;
 	// Create the main window
 	//STR_String title ("Blender Player - GHOST");
+	if (stereoVisual)
+		glSettings.flags |= GHOST_glStereoVisual;
+	glSettings.numOfAASamples = samples;
+
 	m_mainWindow = fSystem->createWindow(title, windowLeft, windowTop, windowWidth, windowHeight, GHOST_kWindowStateNormal,
-	                                     GHOST_kDrawingContextTypeOpenGL, stereoVisual, false, samples);
+	                                     GHOST_kDrawingContextTypeOpenGL, glSettings);
 	if (!m_mainWindow) {
 		printf("error: could not create main window\n");
 		exit(-1);
@@ -354,10 +365,16 @@ bool GPG_Application::startEmbeddedWindow(
         const GHOST_TUns16 samples)
 {
 	GHOST_TWindowState state = GHOST_kWindowStateNormal;
+	GHOST_GLSettings glSettings = {0};
+
+	if (stereoVisual)
+		glSettings.flags |= GHOST_glStereoVisual;
+	glSettings.numOfAASamples = samples;
+
 	if (parentWindow != 0)
 		state = GHOST_kWindowStateEmbedded;
 	m_mainWindow = fSystem->createWindow(title, 0, 0, 0, 0, state,
-	                                     GHOST_kDrawingContextTypeOpenGL, stereoVisual, false, samples, parentWindow);
+	                                     GHOST_kDrawingContextTypeOpenGL, glSettings, parentWindow);
 
 	if (!m_mainWindow) {
 		printf("error: could not create main window\n");
@@ -567,7 +584,7 @@ bool GPG_Application::initEngine(GHOST_IWindow* window, const int stereoMode)
 		bool frameRate = (SYS_GetCommandLineInt(syshandle, "show_framerate", 0) != 0);
 		bool useLists = (SYS_GetCommandLineInt(syshandle, "displaylists", gm->flag & GAME_DISPLAY_LISTS) != 0) && GPU_display_list_support();
 		bool nodepwarnings = (SYS_GetCommandLineInt(syshandle, "ignore_deprecation_warnings", 1) != 0);
-		bool restrictAnimFPS = gm->flag & GAME_RESTRICT_ANIM_UPDATES;
+		bool restrictAnimFPS = (gm->flag & GAME_RESTRICT_ANIM_UPDATES) != 0;
 
 		if (GLEW_ARB_multitexture && GLEW_VERSION_1_1)
 			m_blendermat = (SYS_GetCommandLineInt(syshandle, "blender_material", 1) != 0);
@@ -619,7 +636,7 @@ bool GPG_Application::initEngine(GHOST_IWindow* window, const int stereoMode)
 		if (!m_networkdevice)
 			goto initFailed;
 			
-		sound_init(m_maggie);
+		BKE_sound_init(m_maggie);
 
 		// create a ketsjisystem (only needed for timing and stuff)
 		m_kxsystem = new GPG_System (m_system);
@@ -655,7 +672,7 @@ bool GPG_Application::initEngine(GHOST_IWindow* window, const int stereoMode)
 
 	return m_engineInitialized;
 initFailed:
-	sound_exit();
+	BKE_sound_exit();
 	delete m_kxsystem;
 	delete m_networkdevice;
 	delete m_mouse;
@@ -830,7 +847,7 @@ void GPG_Application::exitEngine()
 	if (!m_engineInitialized)
 		return;
 
-	sound_exit();
+	BKE_sound_exit();
 	if (m_ketsjiengine)
 	{
 		stopEngine();

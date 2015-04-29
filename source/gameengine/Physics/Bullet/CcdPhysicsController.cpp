@@ -65,7 +65,6 @@ extern bool gDisableDeactivation;
 float gLinearSleepingTreshold;
 float gAngularSleepingTreshold;
 
-
 BlenderBulletCharacterController::BlenderBulletCharacterController(btMotionState *motionState, btPairCachingGhostObject *ghost, btConvexShape* shape, float stepHeight)
 	: btKinematicCharacterController(ghost,shape,stepHeight,2),
 		m_motionState(motionState),
@@ -118,6 +117,18 @@ const btVector3& BlenderBulletCharacterController::getWalkDirection()
 	return m_walkDirection;
 }
 
+bool CleanPairCallback::processOverlap(btBroadphasePair &pair)
+{
+	if ((pair.m_pProxy0 == m_cleanProxy) || (pair.m_pProxy1 == m_cleanProxy)) {
+		m_pairCache->cleanOverlappingPair(pair, m_dispatcher);
+		CcdPhysicsController *ctrl0 = (CcdPhysicsController*)(((btCollisionObject*)pair.m_pProxy0->m_clientObject)->getUserPointer());
+		CcdPhysicsController *ctrl1 = (CcdPhysicsController*)(((btCollisionObject*)pair.m_pProxy1->m_clientObject)->getUserPointer());
+		ctrl0->GetCollisionObject()->activate(false);
+		ctrl1->GetCollisionObject()->activate(false);
+	}
+	return false;
+}
+
 CcdPhysicsController::CcdPhysicsController (const CcdConstructionInfo& ci)
 :m_cci(ci)
 {
@@ -148,9 +159,32 @@ CcdPhysicsController::CcdPhysicsController (const CcdConstructionInfo& ci)
 	m_savedCollisionFilterGroup = 0;
 	m_savedCollisionFilterMask = 0;
 	m_savedMass = 0.0;
+	m_savedDyna = false;
 	m_suspended = false;
 	
 	CreateRigidbody();
+}
+
+void CcdPhysicsController::addCcdConstraintRef(btTypedConstraint* c)
+{
+	int index = m_ccdConstraintRefs.findLinearSearch(c);
+	if (index == m_ccdConstraintRefs.size())
+		m_ccdConstraintRefs.push_back(c);
+}
+
+void CcdPhysicsController::removeCcdConstraintRef(btTypedConstraint* c)
+{
+	m_ccdConstraintRefs.remove(c);
+}
+
+btTypedConstraint* CcdPhysicsController::getCcdConstraintRef(int index)
+{
+	return m_ccdConstraintRefs[index];
+}
+
+int CcdPhysicsController::getNumCcdConstraintRefs() const
+{
+	return m_ccdConstraintRefs.size();
 }
 
 btTransform&	CcdPhysicsController::GetTransformFromMotionState(PHY_IMotionState* motionState)
@@ -207,6 +241,11 @@ btRigidBody* CcdPhysicsController::GetRigidBody()
 {
 	return btRigidBody::upcast(m_object);
 }
+const btRigidBody* CcdPhysicsController::GetRigidBody() const
+{
+	return btRigidBody::upcast(m_object);
+}
+
 btCollisionObject*	CcdPhysicsController::GetCollisionObject()
 {
 	return m_object;
@@ -1054,6 +1093,25 @@ void		CcdPhysicsController::ResolveCombinedVelocities(float linvelX,float linvel
 {
 }
 
+void CcdPhysicsController::RefreshCollisions()
+{
+	// the object is in an inactive layer so it's useless to update it and can cause problems
+	if (!GetPhysicsEnvironment()->IsActiveCcdPhysicsController(this))
+		return;
+
+	btSoftRigidDynamicsWorld *dw = GetPhysicsEnvironment()->GetDynamicsWorld();
+	btBroadphaseProxy *proxy = m_object->getBroadphaseHandle();
+	btDispatcher *dispatcher = dw->getDispatcher();
+	btOverlappingPairCache *pairCache = dw->getPairCache();
+
+	CleanPairCallback cleanPairs(proxy, pairCache, dispatcher);
+	pairCache->processAllOverlappingPairs(&cleanPairs, dispatcher);
+
+	// Forcibly recreate the physics object
+	btBroadphaseProxy* handle = m_object->getBroadphaseHandle();
+	GetPhysicsEnvironment()->UpdateCcdPhysicsController(this, GetMass(), m_object->getCollisionFlags(), handle->m_collisionFilterGroup, handle->m_collisionFilterMask);
+}
+
 void	CcdPhysicsController::SuspendDynamics(bool ghost)
 {
 	btRigidBody *body = GetRigidBody();
@@ -1063,6 +1121,7 @@ void	CcdPhysicsController::SuspendDynamics(bool ghost)
 
 		m_savedCollisionFlags = body->getCollisionFlags();
 		m_savedMass = GetMass();
+		m_savedDyna = m_cci.m_bDyna;
 		m_savedCollisionFilterGroup = handle->m_collisionFilterGroup;
 		m_savedCollisionFilterMask = handle->m_collisionFilterMask;
 		m_suspended = true;
@@ -1071,6 +1130,7 @@ void	CcdPhysicsController::SuspendDynamics(bool ghost)
 			btCollisionObject::CF_STATIC_OBJECT|((ghost)?btCollisionObject::CF_NO_CONTACT_RESPONSE:(m_savedCollisionFlags&btCollisionObject::CF_NO_CONTACT_RESPONSE)),
 			btBroadphaseProxy::StaticFilter,
 			btBroadphaseProxy::AllFilter ^ btBroadphaseProxy::StaticFilter);
+		m_cci.m_bDyna = false;
 	}
 }
 
@@ -1087,6 +1147,7 @@ void	CcdPhysicsController::RestoreDynamics()
 			m_savedCollisionFilterGroup,
 			m_savedCollisionFilterMask);
 		body->activate();
+		m_cci.m_bDyna = m_savedDyna;
 		m_suspended = false;
 	}
 }
@@ -1354,6 +1415,42 @@ void		CcdPhysicsController::Jump()
 void		CcdPhysicsController::SetActive(bool active)
 {
 }
+
+float		CcdPhysicsController::GetLinearDamping() const
+{
+	const btRigidBody* body = GetRigidBody();
+	if (body)
+		return body->getLinearDamping();
+	return 0;
+}
+
+float		CcdPhysicsController::GetAngularDamping() const
+{
+	const	btRigidBody* body = GetRigidBody();
+	if (body)
+		return body->getAngularDamping();
+	return 0;
+}
+
+void		CcdPhysicsController::SetLinearDamping(float damping)
+{
+	SetDamping(damping, GetAngularDamping());
+}
+
+void		CcdPhysicsController::SetAngularDamping(float damping)
+{
+	SetDamping(GetLinearDamping(), damping);
+}
+
+void		CcdPhysicsController::SetDamping(float linear, float angular)
+{
+	btRigidBody* body = GetRigidBody();
+	if (!body) return;
+
+	body->setDamping(linear, angular);
+}
+
+
 		// reading out information from physics
 MT_Vector3		CcdPhysicsController::GetLinearVelocity()
 {
@@ -1671,6 +1768,31 @@ bool CcdPhysicsController::ReinstancePhysicsShape(KX_GameObject *from_gameobj, R
 
 	this->ReplaceControllerShape(bm);
 	return true;
+}
+
+void CcdPhysicsController::ReplicateConstraints(KX_GameObject *replica, std::vector<KX_GameObject*> constobj)
+{
+	if (replica->GetConstraints().size() == 0 || !replica->GetPhysicsController())
+		return;
+		
+	PHY_IPhysicsEnvironment *physEnv = GetPhysicsEnvironment();
+
+	vector<bRigidBodyJointConstraint*> constraints = replica->GetConstraints();
+	vector<bRigidBodyJointConstraint*>::iterator consit;
+
+	/* Object could have some constraints, iterate over all of theme to ensure that every constraint is recreated. */
+	for (consit = constraints.begin(); consit != constraints.end(); ++consit) {
+		/* Try to find the constraint targets in the list of group objects. */
+		bRigidBodyJointConstraint *dat = (*consit);
+		vector<KX_GameObject*>::iterator memit; 
+		for (memit = constobj.begin(); memit != constobj.end(); ++memit) {
+			KX_GameObject *member = (*memit);
+			/* If the group member is the actual target for the constraint. */
+			if (dat->tar->id.name + 2 == member->GetName() && member->GetPhysicsController())
+				physEnv->SetupObjectConstraints(replica, member, dat);
+		}
+	}
+
 }
 
 ///////////////////////////////////////////////////////////

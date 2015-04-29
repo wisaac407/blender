@@ -63,7 +63,7 @@ void BKE_world_free_ex(World *wrld, bool do_id_user)
 	}
 	BKE_previewimg_free(&wrld->preview);
 
-	BKE_free_animdata((ID *)wrld);
+	BKE_animdata_free((ID *)wrld);
 
 	/* is no lib link block, but world extension */
 	if (wrld->nodetree) {
@@ -140,7 +140,11 @@ World *BKE_world_copy(World *wrld)
 		wrldn->preview = BKE_previewimg_copy(wrld->preview);
 
 	BLI_listbase_clear(&wrldn->gpumaterial);
-	
+
+	if (wrld->id.lib) {
+		BKE_id_lib_local_paths(G.main, wrld->id.lib, &wrldn->id);
+	}
+
 	return wrldn;
 }
 

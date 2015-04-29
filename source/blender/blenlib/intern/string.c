@@ -231,6 +231,30 @@ size_t BLI_vsnprintf(char *__restrict buffer, size_t maxncpy, const char *__rest
 }
 
 /**
+ * A version of #BLI_vsnprintf that returns ``strlen(buffer)``
+ */
+size_t BLI_vsnprintf_rlen(char *__restrict buffer, size_t maxncpy, const char *__restrict format, va_list arg)
+{
+	size_t n;
+
+	BLI_assert(buffer != NULL);
+	BLI_assert(maxncpy > 0);
+	BLI_assert(format != NULL);
+
+	n = (size_t)vsnprintf(buffer, maxncpy, format, arg);
+
+	if (n != -1 && n < maxncpy) {
+		/* pass */
+	}
+	else {
+		n = maxncpy - 1;
+	}
+	buffer[n] = '\0';
+
+	return n;
+}
+
+/**
  * Portable replacement for #snprintf
  */
 size_t BLI_snprintf(char *__restrict dst, size_t maxncpy, const char *__restrict format, ...)
@@ -244,6 +268,25 @@ size_t BLI_snprintf(char *__restrict dst, size_t maxncpy, const char *__restrict
 
 	va_start(arg, format);
 	n = BLI_vsnprintf(dst, maxncpy, format, arg);
+	va_end(arg);
+
+	return n;
+}
+
+/**
+ * A version of #BLI_snprintf that returns ``strlen(dst)``
+ */
+size_t BLI_snprintf_rlen(char *__restrict dst, size_t maxncpy, const char *__restrict format, ...)
+{
+	size_t n;
+	va_list arg;
+
+#ifdef DEBUG_STRSIZE
+	memset(dst, 0xff, sizeof(*dst) * maxncpy);
+#endif
+
+	va_start(arg, format);
+	n = BLI_vsnprintf_rlen(dst, maxncpy, format, arg);
 	va_end(arg);
 
 	return n;
@@ -771,6 +814,35 @@ int BLI_str_index_in_array(const char *__restrict str, const char **__restrict s
 		}
 	}
 	return -1;
+}
+
+bool BLI_strn_endswith(const char *__restrict str, const char *__restrict end, size_t slength)
+{
+	size_t elength = strlen(end);
+	
+	if (elength < slength) {
+		const char *iter = &str[slength - elength];
+		while (*iter) {
+			if (*iter++ != *end++) {
+				return false;
+			}
+		}
+		return true;
+	}
+	return false;
+}
+
+/**
+ * Find if a string ends with another string.
+ *
+ * \param str The string to search within.
+ * \param end The string we look for at the end.
+ * \return If str ends with end.
+ */
+bool BLI_str_endswith(const char *__restrict str, const char *end)
+{
+	const size_t slength = strlen(str);
+	return BLI_strn_endswith(str, end, slength);
 }
 
 /**

@@ -65,6 +65,10 @@
 
 #include "BLI_strict_flags.h"
 
+#ifdef WIN32
+#  define FT_New_Face FT_New_Face__win32_compat
+#endif
+
 /* freetype2 handle ONLY for this file!. */
 static FT_Library ft_lib;
 static SpinLock ft_lib_mutex;
@@ -371,8 +375,8 @@ void blf_font_buffer(FontBLF *font, const char *str)
 
 			if (buf_info->cbuf) {
 				int yb = yb_start;
-				for (y = 0; y < height_clip; y++) {
-					for (x = 0; x < width_clip; x++) {
+				for (y = ((chy >= 0) ? 0 : -chy); y < height_clip; y++) {
+					for (x = ((chx >= 0) ? 0 : -chx); x < width_clip; x++) {
 						a = *(g->bitmap + x + (yb * g->pitch)) / 255.0f;
 
 						if (a > 0.0f) {

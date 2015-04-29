@@ -130,6 +130,9 @@ ccl_device_inline float3 motion_triangle_refine(KernelGlobals *kg, ShaderData *s
 
 #ifdef __INTERSECTION_REFINE__
 	if(isect->object != OBJECT_NONE) {
+		if(UNLIKELY(t == 0.0f)) {
+			return P;
+		}
 #ifdef __OBJECT_MOTION__
 		Transform tfm = sd->ob_itfm;
 #else
@@ -233,7 +236,7 @@ ccl_device_inline float3 motion_triangle_refine_subsurface(KernelGlobals *kg, Sh
 ccl_device_noinline void motion_triangle_shader_setup(KernelGlobals *kg, ShaderData *sd, const Intersection *isect, const Ray *ray, bool subsurface)
 {
 	/* get shader */
-	sd->shader =  kernel_tex_fetch(__tri_shader, sd->prim);
+	sd->shader = kernel_tex_fetch(__tri_shader, sd->prim);
 
 	/* get motion info */
 	int numsteps, numverts;

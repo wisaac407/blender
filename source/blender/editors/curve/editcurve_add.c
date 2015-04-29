@@ -121,7 +121,7 @@ Nurb *add_nurbs_primitive(bContext *C, Object *obedit, float mat[4][4], int type
 	const float grid = 1.0f;
 	const int cutype = (type & CU_TYPE); // poly, bezier, nurbs, etc
 	const int stype = (type & CU_PRIMITIVE);
-	const int force_3d = ((Curve *)obedit->data)->flag & CU_3D; /* could be adding to an existing 3D curve */
+	const bool force_3d = (((Curve *)obedit->data)->flag & CU_3D) != 0; /* could be adding to an existing 3D curve */
 
 	unit_m4(umat);
 	unit_m4(viewmat);
@@ -529,11 +529,9 @@ static int curvesurf_prim_add(bContext *C, wmOperator *op, int type, int isSurf)
 	if (newob && enter_editmode)
 		ED_undo_push(C, "Enter Editmode");
 
-	ED_object_new_primitive_matrix(C, obedit, loc, rot, mat, false);
+	ED_object_new_primitive_matrix(C, obedit, loc, rot, mat);
 	dia = RNA_float_get(op->ptr, "radius");
-	mat[0][0] *= dia;
-	mat[1][1] *= dia;
-	mat[2][2] *= dia;
+	mul_mat3_m4_fl(mat, dia);
 
 	nu = add_nurbs_primitive(C, obedit, mat, type, newob);
 	editnurb = object_editcurve_get(obedit);

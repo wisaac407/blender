@@ -447,6 +447,23 @@ public:
 #endif
 };
 
+class CleanPairCallback : public btOverlapCallback
+{
+	btBroadphaseProxy *m_cleanProxy;
+	btOverlappingPairCache *m_pairCache;
+	btDispatcher *m_dispatcher;
+
+public:
+	CleanPairCallback(btBroadphaseProxy *cleanProxy, btOverlappingPairCache *pairCache, btDispatcher *dispatcher)
+		:m_cleanProxy(cleanProxy),
+		m_pairCache(pairCache),
+		m_dispatcher(dispatcher)
+	{
+	}
+
+	virtual bool processOverlap(btBroadphasePair &pair);
+};
+
 ///CcdPhysicsController is a physics object that supports continuous collision detection and time of impact based physics resolution.
 class CcdPhysicsController : public PHY_IPhysicsController
 {
@@ -461,6 +478,7 @@ protected:
 	class CcdShapeConstructionInfo* m_shapeInfo;
 	btCollisionShape* m_bulletChildShape;
 
+	btAlignedObjectArray<btTypedConstraint*> m_ccdConstraintRefs; // keep track of typed constraints referencing this rigid body
 	friend class CcdPhysicsEnvironment;	// needed when updating the controller
 
 	//some book keeping for replication
@@ -480,6 +498,7 @@ protected:
 	short m_savedCollisionFilterGroup;
 	short m_savedCollisionFilterMask;
 	MT_Scalar m_savedMass;
+	bool m_savedDyna;
 	bool m_suspended;
 
 
@@ -495,6 +514,11 @@ protected:
 	bool Unregister() {
 		return (--m_registerCount == 0) ? true : false;
 	}
+
+	void addCcdConstraintRef(btTypedConstraint* c);
+	void removeCcdConstraintRef(btTypedConstraint* c);
+	btTypedConstraint* getCcdConstraintRef(int index);
+	int getNumCcdConstraintRefs() const;
 
 	void SetWorldOrientation(const btMatrix3x3& mat);
 	void ForceWorldTransform(const btMatrix3x3& mat, const btVector3& pos);
@@ -522,6 +546,7 @@ protected:
 
 
 		btRigidBody* GetRigidBody();
+		const btRigidBody*	GetRigidBody() const;
 		btCollisionObject*	GetCollisionObject();
 		btSoftBody* GetSoftBody();
 		btKinematicCharacterController* GetCharacterController();
@@ -573,6 +598,12 @@ protected:
 		virtual void		Jump();
 		virtual void		SetActive(bool active);
 
+		virtual float		GetLinearDamping() const;
+		virtual float		GetAngularDamping() const;
+		virtual void		SetLinearDamping(float damping);
+		virtual void		SetAngularDamping(float damping);
+		virtual void		SetDamping(float linear, float angular);
+
 		// reading out information from physics
 		virtual MT_Vector3	GetLinearVelocity();
 		virtual MT_Vector3	GetAngularVelocity();
@@ -584,7 +615,7 @@ protected:
 
 		
 		virtual void		ResolveCombinedVelocities(float linvelX,float linvelY,float linvelZ,float angVelX,float angVelY,float angVelZ);
-
+		virtual void		RefreshCollisions();
 		virtual void		SuspendDynamics(bool ghost);
 		virtual void		RestoreDynamics();
 
@@ -698,12 +729,20 @@ protected:
 			return GetConstructionInfo().m_bDyna;
 		}
 
+		virtual bool IsSuspended() const
+		{
+			return m_suspended;
+		}
+
 		virtual bool IsCompound()
 		{
 			return GetConstructionInfo().m_shapeInfo->m_shapeType == PHY_SHAPE_COMPOUND;
 		}
 
 		virtual bool ReinstancePhysicsShape(KX_GameObject *from_gameobj, RAS_MeshObject* from_meshobj);
+
+		/* Method to replicate rigid body joint contraints for group instances. */
+		virtual void ReplicateConstraints(KX_GameObject *gameobj, std::vector<KX_GameObject*> constobj);
 
 #ifdef WITH_CXX_GUARDEDALLOC
 	MEM_CXX_CLASS_ALLOC_FUNCS("GE:CcdPhysicsController")
