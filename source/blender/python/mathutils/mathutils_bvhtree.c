@@ -241,7 +241,7 @@ static int PyBVHTreeDerivedMesh__tp_init(PyBVHTree_DerivedMesh *self, PyObject *
 	Object *ob;
 	struct Scene *scene;
 	DerivedMesh *dm;
-	const char *type = "POLYS";
+	const char *type = "POLY";
 	int use_deform = true;
 	int use_render = false;
 	int use_cage = false;
@@ -268,28 +268,28 @@ static int PyBVHTreeDerivedMesh__tp_init(PyBVHTree_DerivedMesh *self, PyObject *
 		return -1;
 	}
 	
-	if (STREQ(type, "FACES")) {
+	if (STREQ(type, "TESSFACE")) {
 		bvhtree_from_mesh_faces(meshdata, dm, 0.0f, 4, 6);
 		self->use_poly_index = false;
 		success = true;
 	}
-	else if (STREQ(type, "POLYS")) {
+	else if (STREQ(type, "POLY")) {
 		bvhtree_from_mesh_faces(meshdata, dm, 0.0f, 4, 6);
 		self->use_poly_index = true;
 		success = true;
 	}
-	else if (STREQ(type, "VERTS")) {
+	else if (STREQ(type, "VERT")) {
 		bvhtree_from_mesh_verts(meshdata, dm, 0.0f, 4, 6);
 		self->use_poly_index = false;
 		success = true;
 	}
-	else if (STREQ(type, "EDGES")) {
+	else if (STREQ(type, "EDGE")) {
 		bvhtree_from_mesh_edges(meshdata, dm, 0.0f, 4, 6);
 		self->use_poly_index = false;
 		success = true;
 	}
 	else {
-		PyErr_Format(PyExc_ValueError, "'type' must be 'FACES', 'POLYS', 'VERTS' or 'EDGES', not '%.200s'", type);
+		PyErr_Format(PyExc_ValueError, "'type' must be 'TESSFACE', 'POLY', 'VERT' or 'EDGE', not '%.200s'", type);
 		success = false;
 	}
 	
