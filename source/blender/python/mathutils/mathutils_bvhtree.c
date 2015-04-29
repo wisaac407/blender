@@ -120,11 +120,6 @@ static int PyBVHTree__tp_init(PyBVHTree *UNUSED(self), PyObject *UNUSED(args), P
 	return 0;
 }
 
-static void PyBVHTree__tp_dealloc(PyBVHTree *self)
-{
-	Py_TYPE(self)->tp_free((PyObject *)self);
-}
-
 static PyMethodDef PyBVHTree_methods[] = {
 	{NULL, NULL, 0, NULL}
 };
@@ -138,7 +133,7 @@ PyTypeObject PyBVHTree_Type = {
 	sizeof(PyBVHTree),                           /* tp_basicsize */
 	0,                                           /* tp_itemsize */
 	/* methods */
-	(destructor)PyBVHTree__tp_dealloc,           /* tp_dealloc */
+	NULL,                                        /* tp_dealloc */
 	NULL,                                        /* tp_print */
 	NULL,                                        /* tp_getattr */
 	NULL,                                        /* tp_setattr */
