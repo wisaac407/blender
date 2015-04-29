@@ -316,10 +316,12 @@ PyDoc_STRVAR(py_BVHTreeDerivedMesh_ray_cast_doc,
 "\n"
 "   Cast a ray onto the mesh.\n"
 "\n"
-"   :arg ray_start: Start location of the ray in object space.\n"
-"   :type ray_start: :class:`Vector`\n"
-"   :arg ray_end: End location of the ray in object space.\n"
-"   :type ray_end: :class:`Vector`\n"
+"   :arg ray_point: Start location of the ray in object space.\n"
+"   :type ray_point: :class:`Vector`\n"
+"   :arg ray_direction: Direction of the ray in object space.\n"
+"   :type ray_direction: :class:`Vector`\n"
+"   :arg ray_maxdist: Maximum distance of intersection.\n"
+"   :type ray_maxdist: :float\n"
 "   :return: Returns a tuple (:class:`Vector` location, :class:`Vector` normal, int index, float distance), index==-1 if no hit was found.\n"
 "   :rtype: :class:`tuple`\n"
 );
@@ -330,34 +332,33 @@ static PyObject *py_BVHTreeDerivedMesh_ray_cast(PyBVHTree_DerivedMesh *self, PyO
 	BVHTreeFromMesh *meshdata = &self->meshdata;
 	Object *ob = self->ob;
 	
-	PyObject *py_ray_start, *py_ray_end;
-	float ray_start[3], ray_end[3];
-	float ray_nor[3], ray_len;
+	PyObject *py_point, *py_direction;
+	float ray_point[3], ray_direction[3];
+	float ray_maxdist = FLT_MAX;
 	
-	if (!PyArg_ParseTuple(args, (char *)"OO:ray_cast", &py_ray_start, &py_ray_end))
+	if (!PyArg_ParseTuple(args, (char *)"OO|f:ray_cast", &py_point, &py_direction, &ray_maxdist))
 	{
 		return NULL;
 	}
 	
-	if (mathutils_array_parse(ray_start, 2, 3, py_ray_start, error_prefix) == -1 ||
-	    mathutils_array_parse(ray_end, 2, 3, py_ray_end, error_prefix) == -1)
+	if (mathutils_array_parse(ray_point, 2, 3, py_point, error_prefix) == -1 ||
+	    mathutils_array_parse(ray_direction, 2, 3, py_direction, error_prefix) == -1)
 	{
 		return NULL;
 	}
 	
-	sub_v3_v3v3(ray_nor, ray_end, ray_start);
-	ray_len = normalize_v3(ray_nor);
+	normalize_v3(ray_direction);
 	
 	/* may fail if the mesh has no faces, in that case the ray-cast misses */
 	if (meshdata->tree && meshdata->raycast_callback && ob->derivedFinal) {
 		BVHTreeRayHit hit;
-		hit.dist = ray_len;
+		hit.dist = ray_maxdist;
 		hit.index = -1;
 		
-		if (BLI_bvhtree_ray_cast(meshdata->tree, ray_start, ray_nor, 0.0f, &hit,
+		if (BLI_bvhtree_ray_cast(meshdata->tree, ray_point, ray_direction, 0.0f, &hit,
 		                         meshdata->raycast_callback, meshdata) != -1)
 		{
-			if (hit.dist <= ray_len) {
+			if (hit.dist <= ray_maxdist) {
 				int ret_index = self->use_poly_index ? dm_tessface_to_poly_index(ob->derivedFinal, hit.index) : hit.index;
 				return bvhtree_ray_hit_to_py(hit.co, hit.no, ret_index, hit.dist);
 			}
@@ -533,10 +534,12 @@ PyDoc_STRVAR(py_BVHTreeBMesh_ray_cast_doc,
 "\n"
 "   Cast a ray onto the mesh.\n"
 "\n"
-"   :arg ray_start: Start location of the ray in object space.\n"
-"   :type ray_start: :class:`Vector`\n"
-"   :arg ray_end: End location of the ray in object space.\n"
-"   :type ray_end: :class:`Vector`\n"
+"   :arg ray_point: Start location of the ray in object space.\n"
+"   :type ray_point: :class:`Vector`\n"
+"   :arg ray_direction: Direction of the ray in object space.\n"
+"   :type ray_direction: :class:`Vector`\n"
+"   :arg ray_maxdist: Maximum distance of intersection.\n"
+"   :type ray_maxdist: :float\n"
 "   :return: Returns a tuple (:class:`Vector` location, :class:`Vector` normal, int index, float distance), index==-1 if no hit was found.\n"
 "   :rtype: :class:`tuple`\n"
 );
@@ -546,33 +549,32 @@ static PyObject *py_BVHTreeBMesh_ray_cast(PyBVHTree_BMesh *self, PyObject *args)
 	
 	BMBVHTree *bmdata = self->bmdata;
 	
-	PyObject *py_ray_start, *py_ray_end;
-	float ray_start[3], ray_end[3];
-	float ray_nor[3], ray_len;
+	PyObject *py_ray_point, *py_ray_direction;
+	float ray_point[3], ray_direction[3];
+	float ray_maxdist = FLT_MAX;
 	
-	if (!PyArg_ParseTuple(args, (char *)"OO:ray_cast", &py_ray_start, &py_ray_end))
+	if (!PyArg_ParseTuple(args, (char *)"OO|f:ray_cast", &py_ray_point, &py_ray_direction, &ray_maxdist))
 	{
 		return NULL;
 	}
 	
-	if (mathutils_array_parse(ray_start, 2, 3, py_ray_start, error_prefix) == -1 ||
-	    mathutils_array_parse(ray_end, 2, 3, py_ray_end, error_prefix) == -1)
+	if (mathutils_array_parse(ray_point, 2, 3, py_ray_point, error_prefix) == -1 ||
+	    mathutils_array_parse(ray_direction, 2, 3, py_ray_direction, error_prefix) == -1)
 	{
 		return NULL;
 	}
 	
-	sub_v3_v3v3(ray_nor, ray_end, ray_start);
-	ray_len = normalize_v3(ray_nor);
+	normalize_v3(ray_direction);
 	
 	/* may fail if the mesh has no faces, in that case the ray-cast misses */
 	if (bmdata) {
 		BMFace *hit_face;
 		float hit_co[3], hit_dist;
 		
-		hit_dist = ray_len;
+		hit_dist = ray_maxdist;
 		
-		hit_face = BKE_bmbvh_ray_cast(bmdata, ray_start, ray_nor, 0.0f, &hit_dist, hit_co, NULL);
-		if (hit_face && hit_dist <= ray_len) {
+		hit_face = BKE_bmbvh_ray_cast(bmdata, ray_point, ray_direction, 0.0f, &hit_dist, hit_co, NULL);
+		if (hit_face && hit_dist <= ray_maxdist) {
 			int ret_index = BM_elem_index_get(hit_face);
 			return bvhtree_ray_hit_to_py(hit_co, hit_face->no, ret_index, hit_dist);
 		}
