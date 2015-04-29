@@ -101,14 +101,14 @@ static PyObject *bvhtree_ray_hit_to_py(const float co[3], const float no[3], int
 	return py_retval;
 }
 
-static PyObject *bvhtree_nearest_to_py(const float co[3], const float no[3], int index, float dist_sq)
+static PyObject *bvhtree_nearest_to_py(const float co[3], const float no[3], int index, float dist)
 {
 	PyObject *py_retval = PyTuple_New(4);
 	PyTuple_SET_ITEMS(py_retval,
 	        Vector_CreatePyObject(co, 3, NULL),
 	        Vector_CreatePyObject(no, 3, NULL),
 	        PyLong_FromLong(index),
-	        PyFloat_FromDouble(dist_sq));
+	        PyFloat_FromDouble(dist));
 	return py_retval;
 }
 
@@ -314,7 +314,7 @@ PyDoc_STRVAR(py_BVHTreeDerivedMesh_find_nearest_doc,
 "   :type ray_start: :class:`Vector`\n"
 "   :art max_dist: Maximum search distance\n"
 "   :type max_dist: :float\n"
-"   :return: Returns a tuple (:class:`Vector` location, :class:`Vector` normal, int index, float distance_squared), index==-1 if no hit was found.\n"
+"   :return: Returns a tuple (:class:`Vector` location, :class:`Vector` normal, int index, float distance), index==-1 if no hit was found.\n"
 "   :rtype: :class:`tuple`\n"
 );
 static PyObject *py_BVHTreeDerivedMesh_find_nearest(PyBVHTree_DerivedMesh *self, PyObject *args)
@@ -347,11 +347,11 @@ static PyObject *py_BVHTreeDerivedMesh_find_nearest(PyBVHTree_DerivedMesh *self,
 		                             meshdata->nearest_callback, meshdata) != -1)
 		{
 			int ret_index = self->use_poly_index ? dm_tessface_to_poly_index(ob->derivedFinal, nearest.index) : nearest.index;
-			return bvhtree_nearest_to_py(nearest.co, nearest.no, ret_index, nearest.dist_sq);
+			return bvhtree_nearest_to_py(nearest.co, nearest.no, ret_index, sqrtf(nearest.dist_sq));
 		}
 	}
 	
-	return bvhtree_ray_hit_to_py(NULL, NULL, -1, 0.0f);
+	return bvhtree_nearest_to_py(NULL, NULL, -1, 0.0f);
 }
 
 static PyMethodDef PyBVHTreeDerivedMesh_methods[] = {
@@ -529,7 +529,7 @@ PyDoc_STRVAR(py_BVHTreeBMesh_find_nearest_doc,
 "   :type ray_start: :class:`Vector`\n"
 "   :art max_dist: Maximum search distance\n"
 "   :type max_dist: :float\n"
-"   :return: Returns a tuple (:class:`Vector` location, :class:`Vector` normal, int index, float distance_squared), index==-1 if no hit was found.\n"
+"   :return: Returns a tuple (:class:`Vector` location, :class:`Vector` normal, int index, float distance), index==-1 if no hit was found.\n"
 "   :rtype: :class:`tuple`\n"
 );
 static PyObject *py_BVHTreeBMesh_find_nearest(PyBVHTree_BMesh *self, PyObject *args)
@@ -556,11 +556,11 @@ static PyObject *py_BVHTreeBMesh_find_nearest(PyBVHTree_BMesh *self, PyObject *a
 		
 		nearest_vert = BKE_bmbvh_find_vert_closest(bmdata, point, max_dist);
 		if (nearest_vert) {
-			return bvhtree_ray_hit_to_py(nearest_vert->co, nearest_vert->no, BM_elem_index_get(nearest_vert), len_squared_v3v3(point, nearest_vert->co));
+			return bvhtree_nearest_to_py(nearest_vert->co, nearest_vert->no, BM_elem_index_get(nearest_vert), len_v3v3(point, nearest_vert->co));
 		}
 	}
 	
-	return bvhtree_ray_hit_to_py(NULL, NULL, -1, 0.0f);
+	return bvhtree_nearest_to_py(NULL, NULL, -1, 0.0f);
 }
 
 static PyMethodDef PyBVHTreeBMesh_methods[] = {
