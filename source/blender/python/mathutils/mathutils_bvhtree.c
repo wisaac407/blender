@@ -76,6 +76,58 @@ typedef struct {
 /* -------------------------------------------------------------------- */
 /* Utility helper functions */
 
+/* return various derived meshes based on requested settings */
+static DerivedMesh *bvh_get_derived_mesh(const char *funcname, struct Scene *scene, Object *ob, bool use_deform, bool use_render, bool use_cage)
+{
+	/* we only need minimum mesh data for topology and vertex locations */
+	CustomDataMask mask = CD_MASK_BAREMESH;
+	
+	/* Write the display mesh into the dummy mesh */
+	if (use_deform) {
+		if (use_render) {
+			if (use_cage) {
+				PyErr_Format(PyExc_ValueError,
+				             "%s(...): cage arg is unsupported when (render=True)", funcname);
+				return NULL;
+			}
+			else {
+				return mesh_create_derived_render(scene, ob, mask);
+			}
+		}
+		else {
+			if (use_cage) {
+				return mesh_get_derived_deform(scene, ob, mask);  /* ob->derivedDeform */
+			}
+			else {
+				return mesh_get_derived_final(scene, ob, mask);  /* ob->derivedFinal */
+			}
+		}
+	}
+	else {
+		/* !use_deform */
+		if (use_render) {
+			if (use_cage) {
+				PyErr_Format(PyExc_ValueError,
+				             "%s(...): cage arg is unsupported when (render=True)", funcname);
+				return NULL;
+			}
+			else {
+				return mesh_create_derived_no_deform_render(scene, ob, NULL, mask);
+			}
+		}
+		else {
+			if (use_cage) {
+				PyErr_Format(PyExc_ValueError,
+				             "%s(...): cage arg is unsupported when (deform=False, render=False)", funcname);
+				return NULL;
+			}
+			else {
+				return mesh_create_derived_no_deform(scene, ob, NULL, mask);
+			}
+		}
+	}
+}
+
 static int dm_tessface_to_poly_index(DerivedMesh *dm, int tessface_index)
 {
 	if (tessface_index != ORIGINDEX_NONE && tessface_index < dm->getNumTessFaces(dm)) {
@@ -183,55 +235,70 @@ PyTypeObject PyBVHTree_Type = {
 static int PyBVHTreeDerivedMesh__tp_init(PyBVHTree_DerivedMesh *self, PyObject *args, PyObject *kwargs)
 {
 	BVHTreeFromMesh *meshdata = &self->meshdata;
-	const char *keywords[] = {"object", "type", NULL};
+	const char *keywords[] = {"object", "scene", "type", "deform", "render", "cage", NULL};
 	
-	PyObject *py_ob;
+	PyObject *py_ob, *py_scene;
 	Object *ob;
+	struct Scene *scene;
+	DerivedMesh *dm;
 	const char *type = "POLYS";
+	int use_deform = true;
+	int use_render = false;
+	int use_cage = false;
+	bool success;
 	
 	if (PyBVHTree_Type.tp_init((PyObject *)self, args, kwargs) < 0)
 		return -1;
 	
-	if (!PyArg_ParseTupleAndKeywords(args, kwargs, (char *)"O|s:BVHTreeDerivedMesh", (char **)keywords,
-	                                 &py_ob, &type))
+	if (!PyArg_ParseTupleAndKeywords(args, kwargs, (char *)"OO|siii:BVHTreeDerivedMesh", (char **)keywords,
+	                                 &py_ob, &py_scene, &type, &use_deform, &use_render, &use_cage))
 	{
 		return -1;
 	}
 	
 	ob = PyC_RNA_AsPointer(py_ob, "Object");
-	if (!ob) {
+	scene = PyC_RNA_AsPointer(py_scene, "Scene");
+	if (!ob || !scene) {
 		return -1;
 	}
-	
-	if (ob->derivedFinal == NULL) {
-		PyErr_Format(PyExc_ValueError, "Object '%.200s' has no mesh data to be used for BVH tree", ob->id.name + 2);
-		return -1;
-	}
-	
 	self->ob = ob;
 	
+	dm = bvh_get_derived_mesh("BVHTree", scene, ob, use_deform, use_render, use_cage);
+	if (!dm) {
+		return -1;
+	}
+	
 	if (STREQ(type, "FACES")) {
-		bvhtree_from_mesh_faces(meshdata, ob->derivedFinal, 0.0f, 4, 6);
+		bvhtree_from_mesh_faces(meshdata, dm, 0.0f, 4, 6);
 		self->use_poly_index = false;
+		success = true;
 	}
 	else if (STREQ(type, "POLYS")) {
-		bvhtree_from_mesh_faces(meshdata, ob->derivedFinal, 0.0f, 4, 6);
+		bvhtree_from_mesh_faces(meshdata, dm, 0.0f, 4, 6);
 		self->use_poly_index = true;
+		success = true;
 	}
 	else if (STREQ(type, "VERTS")) {
-		bvhtree_from_mesh_verts(meshdata, ob->derivedFinal, 0.0f, 4, 6);
+		bvhtree_from_mesh_verts(meshdata, dm, 0.0f, 4, 6);
 		self->use_poly_index = false;
+		success = true;
 	}
 	else if (STREQ(type, "EDGES")) {
-		bvhtree_from_mesh_edges(meshdata, ob->derivedFinal, 0.0f, 4, 6);
+		bvhtree_from_mesh_edges(meshdata, dm, 0.0f, 4, 6);
 		self->use_poly_index = false;
+		success = true;
 	}
 	else {
 		PyErr_Format(PyExc_ValueError, "'type' must be 'FACES', 'POLYS', 'VERTS' or 'EDGES', not '%.200s'", type);
-		return -1;
+		success = false;
 	}
 	
-	return 0;
+	dm->release(dm);
+	
+	if (success)
+		return 0;
+	else
+		return -1;
 }
 
 static void PyBVHTreeDerivedMesh__tp_dealloc(PyBVHTree_DerivedMesh *self)
@@ -417,7 +484,6 @@ PyTypeObject PyBVHTreeDerivedMesh_Type = {
 
 /* -------------------------------------------------------------------- */
 /* BVHTreeBMesh */
-
 
 static int PyBVHTreeBMesh__tp_init(PyBVHTree_BMesh *self, PyObject *args, PyObject *kwargs)
 {
