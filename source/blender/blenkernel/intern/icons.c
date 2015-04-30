@@ -328,7 +328,7 @@ PreviewImage *BKE_previewimg_cached_thumbnail_get(
 	}
 
 	if (force_update) {
-		ImBuf *thumb = IMB_thumb_manage(path, THB_NORMAL, source);
+		ImBuf *thumb = IMB_thumb_manage(path, THB_LARGE, source);
 
 		if (thumb) {
 			prv->w[ICON_SIZE_PREVIEW] = thumb->x;
