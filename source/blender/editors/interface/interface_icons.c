@@ -1001,6 +1001,10 @@ static void icon_draw_rect(float x, float y, int w, int h, float UNUSED(aspect),
                            unsigned int *rect, float alpha, const float rgb[3], const bool is_preview)
 {
 	ImBuf *ima = NULL;
+	int draw_w = w;
+	int draw_h = h;
+	int draw_x = x;
+	int draw_y = y;
 
 	/* sanity check */
 	if (w <= 0 || h <= 0 || w > 2000 || h > 2000) {
@@ -1020,21 +1024,34 @@ static void icon_draw_rect(float x, float y, int w, int h, float UNUSED(aspect),
 	}
 
 	/* rect contains image in 'rendersize', we only scale if needed */
-	if (rw != w && rh != h) {
+	if (rw != w || rh != h) {
+		/* preserve aspect ratio and center */
+		if(rw > rh) {
+			draw_w = w;
+			draw_h = (int)(((float)rh / (float)rw) * (float)w);
+			draw_y += (h - draw_h) / 2;
+		}
+		else if(rw < rh) {
+			draw_w = (int)(((float)rw / (float)rh) * (float)h);
+			draw_h = h;
+			draw_x += (w - draw_w) / 2;
+		}
+		/* if the image is squared, the draw_ initialization values are good */
+
 		/* first allocate imbuf for scaling and copy preview into it */
 		ima = IMB_allocImBuf(rw, rh, 32, IB_rect);
 		memcpy(ima->rect, rect, rw * rh * sizeof(unsigned int));
-		IMB_scaleImBuf(ima, w, h); /* scale it */
+		IMB_scaleImBuf(ima, draw_w, draw_h); /* scale it */
 		rect = ima->rect;
 	}
 
 	/* draw */
 	if (is_preview) {
-		glaDrawPixelsSafe(x, y, w, h, w, GL_RGBA, GL_UNSIGNED_BYTE, rect);
+		glaDrawPixelsSafe(draw_x, draw_y, draw_w, draw_h, draw_w, GL_RGBA, GL_UNSIGNED_BYTE, rect);
 	}
 	else {
-		glRasterPos2f(x, y);
-		glDrawPixels(w, h, GL_RGBA, GL_UNSIGNED_BYTE, rect);
+		glRasterPos2f(draw_x, draw_y);
+		glDrawPixels(draw_w, draw_h, GL_RGBA, GL_UNSIGNED_BYTE, rect);
 	}
 
 	if (ima)
