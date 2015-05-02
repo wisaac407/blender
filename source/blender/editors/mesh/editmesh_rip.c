@@ -715,7 +715,7 @@ static int edbm_rip_invoke__vert(bContext *C, wmOperator *op, const wmEvent *eve
 				}
 
 				for (i = 2; i < vout_len; i++) {
-					BM_vert_splice(bm, vout[i], vout[1]);
+					BM_vert_splice(bm, vout[1], vout[i]);
 				}
 			}
 
@@ -941,7 +941,7 @@ static int edbm_rip_invoke__edge(bContext *C, wmOperator *op, const wmEvent *eve
 		fill_uloop_pairs = edbm_tagged_loop_pairs_to_fill(bm);
 	}
 
-	BM_mesh_edgesplit(em->bm, true, true, true, true);
+	BM_mesh_edgesplit(em->bm, true, true, true);
 
 	/* note: the output of the bmesh operator is ignored, since we built
 	 * the contiguous loop pairs to split already, its possible that some
