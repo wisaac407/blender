@@ -41,6 +41,10 @@ class BPyPreviewsCollection(dict):
     """
     Dict-like class of previews.
     """
+    # Internal notes:
+    # - keys in the dict are stored by name
+    # - values are instances of bpy.types.Preview
+    # - Blender's internal 'PreviewImage' struct uses 'self._coll_name' prefix.
 
     def __init__(self, name):
         super().__init__()
