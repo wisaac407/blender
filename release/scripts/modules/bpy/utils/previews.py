@@ -41,6 +41,7 @@ class BPyPreviewsCollection(dict):
     """
     Dict-like class of previews.
     """
+
     # Internal notes:
     # - keys in the dict are stored by name
     # - values are instances of bpy.types.Preview
@@ -49,10 +50,14 @@ class BPyPreviewsCollection(dict):
     def __init__(self, name):
         super().__init__()
         self._coll_name = name
+        _previews_names_used.add(name)
 
     def __del__(self):
-        for name in self.keys():
-            _previews.release(self._gen_key(name))
+        if self._coll_name not in _previews_names_used:
+            return
+
+        raise Warning("%r: left open, remove with 'bpy.utils.previews.remove()'")
+        self.close()
 
     def _gen_key(self, name):
         return ":".join((self._coll_name, name))
@@ -73,7 +78,6 @@ class BPyPreviewsCollection(dict):
     def release(self, name):
         p = self.pop(name, None)
         if p is not None:
-            del p
             _previews.release(self._gen_key(name))
     release.__doc__ = _previews.release.__doc__
 
@@ -82,6 +86,10 @@ class BPyPreviewsCollection(dict):
             _previews.release(self._gen_key(name))
         super().clear()
 
+    def close(self):
+        self.clear()
+        _previews_names_used.remove(self._coll_name)
+
     def __delitem__(self, key):
         return self.release(key)
 
@@ -89,25 +97,24 @@ class BPyPreviewsCollection(dict):
         return "<PreviewsCollection '%s'>\n\tPreviews: %s" % (self._coll_name, super().__repr__())
 
 
-_previews_collections = {}
+_previews_names_used = set()
 
 
 def new(name):
     """
     Return a new preview collection, or existing one if 'name' already exists.
     """
-    return _previews_collections.setdefault(name, BPyPreviewsCollection(name))
+
+    if name in _previews_names_used:
+        raise Exception("Preview %r already exists!" % name)
+
+    p = BPyPreviewsCollection(name)
+    return p
 
 
-def remove(name):
+def remove(p):
     """
     Remove the specified previews collection.
     """
-    _previews_collections.pop(name, None)
+    p.close()
 
-
-def clear(self):
-    """
-    Delete all previews collections.
-    """
-    _previews_collections.clear()
