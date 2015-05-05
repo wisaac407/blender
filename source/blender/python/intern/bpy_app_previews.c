@@ -53,15 +53,6 @@
 
 #include "../generic/python_utildefines.h"
 
-
-/* Empty container... */
-typedef struct {
-	PyObject_HEAD
-} BlenderAppPreviews;
-
-/* Our singleton instance pointer */
-static BlenderAppPreviews *_previews = NULL;
-
 PyDoc_STRVAR(app_previews_meth_new_doc,
 ".. method:: new(name)\n"
 "\n"
@@ -172,127 +163,34 @@ static PyObject *app_previews_meth_release(PyObject *UNUSED(self), PyObject *arg
 	Py_RETURN_NONE;
 }
 
-
-static PyMethodDef app_previews_methods[] = {
+static struct PyMethodDef bpy_app_previews_methods[] = {
 	/* Can't use METH_KEYWORDS alone, see http://bugs.python.org/issue11587 */
-	{"new", (PyCFunction)app_previews_meth_new, METH_VARARGS | METH_KEYWORDS | METH_STATIC, app_previews_meth_new_doc},
-	{"load", (PyCFunction)app_previews_meth_load, METH_VARARGS | METH_KEYWORDS | METH_STATIC,
-             app_previews_meth_load_doc},
-	{"release", (PyCFunction)app_previews_meth_release, METH_VARARGS | METH_KEYWORDS | METH_STATIC,
-	            app_previews_meth_release_doc},
-	{NULL}
+	{"new", (PyCFunction)app_previews_meth_new, METH_VARARGS | METH_KEYWORDS, app_previews_meth_new_doc},
+	{"load", (PyCFunction)app_previews_meth_load, METH_VARARGS | METH_KEYWORDS, app_previews_meth_load_doc},
+	{"release", (PyCFunction)app_previews_meth_release, METH_VARARGS | METH_KEYWORDS, app_previews_meth_release_doc},
+	{NULL, NULL, 0, NULL}
 };
 
-static PyObject *app_previews_new(PyTypeObject *type, PyObject *UNUSED(args), PyObject *UNUSED(kw))
-{
-	if (_previews == NULL) {
-		_previews = (BlenderAppPreviews *)type->tp_alloc(type, 0);
-	}
-
-	return (PyObject *)_previews;
-}
-
-static void app_previews_free(void *obj)
-{
-	PyObject_Del(obj);
-	_previews = NULL;
-}
-
-PyDoc_STRVAR(app_previews_doc,
+PyDoc_STRVAR(bpy_app_previews_doc,
 "This object contains basic static methods to handle cached (non-ID) previews in Blender (low-level API, \n"
 "not exposed to final users).\n"
 "\n"
 );
-static PyTypeObject BlenderAppPreviewsType = {
-	PyVarObject_HEAD_INIT(NULL, 0)
-	                            /* tp_name */
-	"bpy.app._previews_type",
-	sizeof(BlenderAppPreviews), /* tp_basicsize */
-	0,                          /* tp_itemsize */
-	/* methods */
-	/* No destructor, this is a singleton! */
-	NULL,                       /* tp_dealloc */
-	NULL,                       /* printfunc tp_print; */
-	NULL,                       /* getattrfunc tp_getattr; */
-	NULL,                       /* setattrfunc tp_setattr; */
-	NULL,                       /* tp_compare */ /* DEPRECATED in python 3.0! */
-	NULL,                       /* tp_repr */
-
-	/* Method suites for standard classes */
-	NULL,                       /* PyNumberMethods *tp_as_number; */
-	NULL,                       /* PySequenceMethods *tp_as_sequence; */
-	NULL,                       /* PyMappingMethods *tp_as_mapping; */
-
-	/* More standard operations (here for binary compatibility) */
-	(hashfunc)_Py_HashPointer,  /* hashfunc tp_hash; */  /* without this we can't do set(sys.modules), T29635 */
-	NULL,                       /* ternaryfunc tp_call; */
-	NULL,                       /* reprfunc tp_str; */
-	NULL,                       /* getattrofunc tp_getattro; */
-	NULL,                       /* setattrofunc tp_setattro; */
-
-	/* Functions to access object as input/output buffer */
-	NULL,                       /* PyBufferProcs *tp_as_buffer; */
-
-	/*** Flags to define presence of optional/expanded features ***/
-	Py_TPFLAGS_DEFAULT,         /* long tp_flags; */
-
-	app_previews_doc,           /* char *tp_doc;  Documentation string */
-
-	/*** Assigned meaning in release 2.0 ***/
-	/* call function for all accessible objects */
-	NULL,                       /* traverseproc tp_traverse; */
-
-	/* delete references to contained objects */
-	NULL,                       /* inquiry tp_clear; */
-
-	/***  Assigned meaning in release 2.1 ***/
-	/*** rich comparisons ***/
-	NULL,                       /* richcmpfunc tp_richcompare; */
-
-	/***  weak reference enabler ***/
-	0,                          /* long tp_weaklistoffset */
-
-	/*** Added in release 2.2 ***/
-	/*   Iterators */
-	NULL,                       /* getiterfunc tp_iter; */
-	NULL,                       /* iternextfunc tp_iternext; */
-
-	/*** Attribute descriptor and subclassing stuff ***/
-	app_previews_methods,       /* struct PyMethodDef *tp_methods; */
-	NULL,                       /* struct PyMemberDef *tp_members; */
-	NULL,                       /* struct PyGetSetDef *tp_getset; */
-	NULL,                       /* struct _typeobject *tp_base; */
-	NULL,                       /* PyObject *tp_dict; */
-	NULL,                       /* descrgetfunc tp_descr_get; */
-	NULL,                       /* descrsetfunc tp_descr_set; */
-	0,                          /* long tp_dictoffset; */
-	NULL,                       /* initproc tp_init; */
-	NULL,                       /* allocfunc tp_alloc; */
-	(newfunc)app_previews_new,  /* newfunc tp_new; */
-	/*  Low-level free-memory routine */
-	app_previews_free,          /* freefunc tp_free;  */
-	/* For PyObject_IS_GC */
-	NULL,                       /* inquiry tp_is_gc;  */
-	NULL,                       /* PyObject *tp_bases; */
-	/* method resolution order */
-	NULL,                       /* PyObject *tp_mro;  */
-	NULL,                       /* PyObject *tp_cache; */
-	NULL,                       /* PyObject *tp_subclasses; */
-	NULL,                       /* PyObject *tp_weaklist; */
-	NULL
+static struct PyModuleDef bpy_app_previews_module = {
+	PyModuleDef_HEAD_INIT,
+	"bpy.app._previews",
+	bpy_app_previews_doc,
+	0,
+	bpy_app_previews_methods,
+	NULL, NULL, NULL, NULL
 };
 
-PyObject *BPY_app_previews_struct(void)
+
+PyObject *BPY_app_preview_module(void)
 {
-	PyObject *ret;
+	PyObject *submodule;
 
-	if (PyType_Ready(&BlenderAppPreviewsType) < 0)
-		return NULL;
+	submodule = PyModule_Create(&bpy_app_previews_module);
 
-	ret = PyObject_CallObject((PyObject *)&BlenderAppPreviewsType, NULL);
-
-	/* prevent user from creating new instances */
-	BlenderAppPreviewsType.tp_new = NULL;
-
-	return ret;
+	return submodule;
 }

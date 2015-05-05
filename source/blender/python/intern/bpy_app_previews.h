@@ -27,7 +27,6 @@
 #ifndef __BPY_APP_PREVIEWS_H__
 #define __BPY_APP_PREVIEWS_H__
 
-PyObject *BPY_app_previews_struct(void);
-void      BPY_app_previews_end(void);
+PyObject *BPY_app_preview_module(void);
 
 #endif /* __BPY_APP_PREVIEWS_H__ */
