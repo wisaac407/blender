@@ -58,7 +58,10 @@ class BPyPreviewsCollection(dict):
         if self._uuid not in _uuid_open:
             return
 
-        raise Warning("%r: left open, remove with 'bpy.utils.previews.remove()'")
+        raise ResourceWarning(
+                "<%s id=%s[%d]>: left open, remove with "
+                "'bpy.utils.previews.remove()'" %
+                (self.__class__.__name__, self._uuid, len(self)))
         self.close()
 
     def _gen_key(self, name):
@@ -96,7 +99,11 @@ class BPyPreviewsCollection(dict):
         return self.release(key)
 
     def __repr__(self):
-        return "<PreviewsCollection '%s'>\n\tPreviews: %s" % (self._uuid, super().__repr__())
+        return "<%s id=%s[%d], %s>" % (
+                self.__class__.__name__,
+                self._uuid,
+                len(self),
+                super().__repr__())
 
 
 def new():
