@@ -185,7 +185,7 @@ static PyMethodDef app_previews_methods[] = {
 
 static PyObject *app_previews_new(PyTypeObject *type, PyObject *UNUSED(args), PyObject *UNUSED(kw))
 {
-	if (!_previews) {
+	if (_previews == NULL) {
 		_previews = (BlenderAppPreviews *)type->tp_alloc(type, 0);
 	}
 

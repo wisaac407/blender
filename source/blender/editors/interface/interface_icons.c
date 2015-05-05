@@ -1026,12 +1026,12 @@ static void icon_draw_rect(float x, float y, int w, int h, float UNUSED(aspect),
 	/* rect contains image in 'rendersize', we only scale if needed */
 	if (rw != w || rh != h) {
 		/* preserve aspect ratio and center */
-		if(rw > rh) {
+		if (rw > rh) {
 			draw_w = w;
 			draw_h = (int)(((float)rh / (float)rw) * (float)w);
 			draw_y += (h - draw_h) / 2;
 		}
-		else if(rw < rh) {
+		else if (rw < rh) {
 			draw_w = (int)(((float)rw / (float)rh) * (float)h);
 			draw_h = h;
 			draw_x += (w - draw_w) / 2;

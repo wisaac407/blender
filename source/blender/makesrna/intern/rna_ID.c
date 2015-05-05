@@ -410,14 +410,15 @@ static void rna_Library_filepath_set(PointerRNA *ptr, const char *value)
 
 /* ***** ImagePreview ***** */
 
-static void rna_Preview_is_custom_set(PointerRNA *ptr, int value, enum eIconSizes size) {
-	ID *id = (ID *)ptr->id.data;
+static void rna_Preview_is_custom_set(PointerRNA *ptr, int value, enum eIconSizes size)
+{
+	ID *id = ptr->id.data;
 	PreviewImage *prv_img = (PreviewImage *)ptr->data;
 
 	BLI_assert(prv_img == BKE_previewimg_id_get(id));
 	UNUSED_VARS_NDEBUG(id);
 
-	if(value)
+	if (value)
 		prv_img->flag[size] |= USER_EDITED;
 	else
 		prv_img->flag[size] &= ~USER_EDITED;
@@ -461,7 +462,7 @@ static void rna_Preview_size_set(PointerRNA *ptr, const int *values, enum eIconS
 
 static int rna_Preview_pixels_get_length(PointerRNA *ptr, int length[RNA_MAX_ARRAY_DIMENSION], enum eIconSizes size)
 {
-	ID *id = (ID *)ptr->id.data;
+	ID *id = ptr->id.data;
 	PreviewImage *prv_img = (PreviewImage *)ptr->data;
 
 	BLI_assert(prv_img == BKE_previewimg_id_get(id));
@@ -474,7 +475,7 @@ static int rna_Preview_pixels_get_length(PointerRNA *ptr, int length[RNA_MAX_ARR
 
 static void rna_Preview_pixels_get(PointerRNA *ptr, int *values, enum eIconSizes size)
 {
-	ID *id = (ID *)ptr->id.data;
+	ID *id = ptr->id.data;
 	PreviewImage *prv_img = (PreviewImage *)ptr->data;
 
 	BLI_assert(prv_img == BKE_previewimg_id_get(id));
@@ -485,7 +486,7 @@ static void rna_Preview_pixels_get(PointerRNA *ptr, int *values, enum eIconSizes
 
 static void rna_Preview_pixels_set(PointerRNA *ptr, const int *values, enum eIconSizes size)
 {
-	ID *id = (ID *)ptr->id.data;
+	ID *id = ptr->id.data;
 	PreviewImage *prv_img = (PreviewImage *)ptr->data;
 
 	BLI_assert(prv_img == BKE_previewimg_id_get(id));
@@ -495,7 +496,8 @@ static void rna_Preview_pixels_set(PointerRNA *ptr, const int *values, enum eIco
 	prv_img->flag[size] |= USER_EDITED;
 }
 
-static void rna_Preview_image_is_custom_set(PointerRNA *ptr, int value) {
+static void rna_Preview_image_is_custom_set(PointerRNA *ptr, int value)
+{
 	rna_Preview_is_custom_set(ptr, value, ICON_SIZE_PREVIEW);
 }
 

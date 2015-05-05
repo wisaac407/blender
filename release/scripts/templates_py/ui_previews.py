@@ -9,19 +9,23 @@ import bpy
 # not be used with UILayout templates that require IDs, such as template_list
 # and template_ID_preview.
 
-# Other usecases:
+# Other use cases:
 # - make a fixed list of enum_items instead of calculating them in a function.
 # - generate a single thumbnail to pass in a UILayout function as icon_value
-# example:
+#
+# Example:
 #    my_addon_icons = bpy.utils.previews.new("MyAddonIcons")
 #    myicon = my_addon_icons.load("myicon", "/path/to/icon-image.png", 'IMAGE')
 #    layout.operator("render.render", icon_value=int(myicon.icon_id))
+#
 # You can generate thumbnails of your own made icons to associate with an action
 
 
 def get_previews_from_folder(self, context):
+    wm = context.window_manager
+
     enum_items = []
-    folder_path = context.window_manager.my_previews_folderpath
+    folder_path = wm.my_previews_folderpath
 
     # gets the already existing preview collection (defined in register func).
     pcoll = bpy.utils.previews.new("PreviewsInDirectory")
@@ -36,7 +40,7 @@ def get_previews_from_folder(self, context):
         dir_contents = os.listdir(folder_path)
         image_paths = []
         for c in dir_contents:
-            if c.endswith(".png") or c.endswith(".PNG"):
+            if c.lower().endswith(".png"):
                 image_paths.append(c)
 
         for idx, img_name in enumerate(image_paths):
@@ -62,17 +66,16 @@ class PreviewsExamplePanel(bpy.types.Panel):
 
     def draw(self, context):
         layout = self.layout
-
-        obj = context.object
-
-        row = layout.row()
-        row.prop(context.window_manager, "my_previews_folderpath")
+        wm = context.window_manager
 
         row = layout.row()
-        row.template_icon_view(context.window_manager, "my_previews")
+        row.prop(wm, "my_previews_folderpath")
 
         row = layout.row()
-        row.prop(context.window_manager, "my_previews")
+        row.template_icon_view(wm, "my_previews")
+
+        row = layout.row()
+        row.prop(wm, "my_previews")
 
 
 def register():
@@ -84,10 +87,11 @@ def register():
 
     # Note that preview collections returned by bpy.utils.previews are regular py objects - you can use them
     # to store custom data.
+    #
     # This is especially useful here, since:
-    #     * It avoids us regenerating the whole enum over and over.
-    #     * It can store enumitems' strings (remember you have to keep those strings somewhere in py, else they get
-    #       freed and blender references invalid memory!).
+    # - It avoids us regenerating the whole enum over and over.
+    # - It can store enumitems' strings (remember you have to keep those strings somewhere in py, else they get
+    #   freed and blender references invalid memory!).
     pcoll = bpy.utils.previews.new("PreviewsInDirectory")
     pcoll.my_previews_folderpath = ""
     pcoll.my_previews = ()
