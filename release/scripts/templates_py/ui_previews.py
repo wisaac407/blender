@@ -107,7 +107,7 @@ def register():
     #   (remember you have to keep those strings somewhere in py,
     #   else they get freed and Blender references invalid memory!).
     import bpy.utils.previews
-    pcoll = bpy.utils.previews.new("PreviewsInDirectory")
+    pcoll = bpy.utils.previews.new()
     pcoll.my_previews_dir = ""
     pcoll.my_previews = ()
 

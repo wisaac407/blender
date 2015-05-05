@@ -35,6 +35,8 @@ __all__ = (
 
 from bpy.app import _previews
 
+_uuid_open = set()
+
 
 # High-level previews manager.
 class BPyPreviewsCollection(dict):
@@ -45,22 +47,22 @@ class BPyPreviewsCollection(dict):
     # Internal notes:
     # - keys in the dict are stored by name
     # - values are instances of bpy.types.Preview
-    # - Blender's internal 'PreviewImage' struct uses 'self._coll_name' prefix.
+    # - Blender's internal 'PreviewImage' struct uses 'self._uuid' prefix.
 
-    def __init__(self, name):
+    def __init__(self):
         super().__init__()
-        self._coll_name = name
-        _previews_names_used.add(name)
+        self._uuid = hex(id(self))
+        _uuid_open.add(self._uuid)
 
     def __del__(self):
-        if self._coll_name not in _previews_names_used:
+        if self._uuid not in _uuid_open:
             return
 
         raise Warning("%r: left open, remove with 'bpy.utils.previews.remove()'")
         self.close()
 
     def _gen_key(self, name):
-        return ":".join((self._coll_name, name))
+        return ":".join((self._uuid, name))
 
     def new(self, name):
         return self.setdefault(name, _previews.new(self._gen_key(name)))
@@ -88,28 +90,21 @@ class BPyPreviewsCollection(dict):
 
     def close(self):
         self.clear()
-        _previews_names_used.remove(self._coll_name)
+        _uuid_open.remove(self._uuid)
 
     def __delitem__(self, key):
         return self.release(key)
 
     def __repr__(self):
-        return "<PreviewsCollection '%s'>\n\tPreviews: %s" % (self._coll_name, super().__repr__())
+        return "<PreviewsCollection '%s'>\n\tPreviews: %s" % (self._uuid, super().__repr__())
 
 
-_previews_names_used = set()
-
-
-def new(name):
+def new():
     """
-    Return a new preview collection, or existing one if 'name' already exists.
+    Return a new preview collection.
     """
 
-    if name in _previews_names_used:
-        raise Exception("Preview %r already exists!" % name)
-
-    p = BPyPreviewsCollection(name)
-    return p
+    return BPyPreviewsCollection()
 
 
 def remove(p):
