@@ -115,7 +115,7 @@ def unregister():
 
     del WindowManager.my_previews
 
-    bpy.utils.previews.delete("PreviewsInDirectory")
+    bpy.utils.previews.remove("PreviewsInDirectory")
 
     bpy.utils.unregister_class(PreviewsExamplePanel)
 

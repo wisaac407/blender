@@ -29,7 +29,7 @@ This allows addons to generate their own previews, and use them as icons in UI w
 
 __all__ = (
     "new",
-    "delete",
+    "remove",
     "clear",
     )
 
@@ -103,9 +103,9 @@ def _remove(name):
     return _previews_collections.pop(name, None)
 
 
-def delete(name):
+def remove(name):
     """
-    Delete specified previews collection.
+    Remove the specified previews collection.
     """
     pcoll = _remove(name)
     if pcoll is not None:
