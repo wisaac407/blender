@@ -95,23 +95,15 @@ def new(name):
     return _previews_collections.setdefault(name, BPyPreviewsCollection(name))
 
 
-def _remove(name):
-    return _previews_collections.pop(name, None)
-
-
 def remove(name):
     """
     Remove the specified previews collection.
     """
-    pcoll = _remove(name)
-    if pcoll is not None:
-        del pcoll
+    _previews_collections.pop(name, None)
 
 
 def clear(self):
     """
     Delete all previews collections.
     """
-    for pcoll in _previews_collections.values():
-        del pcoll
     _previews_collections.clear()
