@@ -50,7 +50,7 @@ def enum_previews_from_directory_items(self, context):
             filepath = os.path.join(directory, img_name)
             thumb = pcoll.load(filepath, filepath, 'IMAGE')
             # enum item: (identifier, name, description, icon, number)
-            enum_items.append((img_name, img_name, img_name, int(thumb.icon_id), idx))
+            enum_items.append((img_name, img_name, img_name, thumb.icon_id, idx))
 
     pcoll.my_previews = enum_items
     pcoll.my_previews_dir = directory
