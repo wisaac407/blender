@@ -33,53 +33,49 @@ __all__ = (
     "clear",
     )
 
+from bpy.app import _previews
+
 
 # High-level previews manager.
 class BPyPreviewsCollection(dict):
     """
     Dict-like class of previews.
     """
-    from _bpy import app as _app
 
     def __init__(self, name):
         super().__init__()
         self._coll_name = name
 
     def __del__(self):
-        app = self.__class__._app
         for name in self.keys():
-            app._previews.release(self._gen_key(name))
+            _previews.release(self._gen_key(name))
 
     def _gen_key(self, name):
         return self._coll_name + name
 
     def new(self, name):
-        app = self.__class__._app
-        return self.setdefault(name, app._previews.new(self._gen_key(name)))
-    new.__doc__ = _app._previews.new.__doc__
+        return self.setdefault(name, _previews.new(self._gen_key(name)))
+    new.__doc__ = _previews.new.__doc__
 
     def load(self, name, path, path_type, force_reload=False):
-        app = self.__class__._app
         pkey = self._gen_key(name)
         if force_reload:
-            self[name] = p = app._previews.load(pkey, path, path_type, True)
+            self[name] = p = _previews.load(pkey, path, path_type, True)
             return p
         else:
-            return self.setdefault(name, app._previews.load(pkey, path, path_type, False))
-    load.__doc__ = _app._previews.load.__doc__
+            return self.setdefault(name, _previews.load(pkey, path, path_type, False))
+    load.__doc__ = _previews.load.__doc__
 
     def release(self, name):
-        app = self.__class__._app
         p = self.pop(name, None)
         if p is not None:
             del p
-            app._previews.release(self._gen_key(name))
-    release.__doc__ = _app._previews.release.__doc__
+            _previews.release(self._gen_key(name))
+    release.__doc__ = _previews.release.__doc__
 
     def clear(self):
-        app = self.__class__._app
         for name in self.keys():
-            app._previews.release(self._gen_key(name))
+            _previews.release(self._gen_key(name))
         super().clear()
 
     def __delitem__(self, key):

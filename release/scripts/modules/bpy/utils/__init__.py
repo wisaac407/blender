@@ -62,8 +62,6 @@ from _bpy import script_paths as _bpy_script_paths
 from _bpy import user_resource as _user_resource
 from _bpy import _utils_units as units
 
-from . import previews
-
 import bpy as _bpy
 import os as _os
 import sys as _sys
