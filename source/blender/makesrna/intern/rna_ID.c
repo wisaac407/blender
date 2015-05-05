@@ -684,9 +684,9 @@ static void rna_def_preview(BlenderRNA *brna)
 	StructRNA *srna;
 	PropertyRNA *prop;
 
-	srna = RNA_def_struct(brna, "Preview", NULL);
+	srna = RNA_def_struct(brna, "ImagePreview", NULL);
 	RNA_def_struct_sdna(srna, "PreviewImage");
-	RNA_def_struct_ui_text(srna, "Preview", "Preview image and icon");
+	RNA_def_struct_ui_text(srna, "Image Preview", "Preview image and icon");
 
 	prop = RNA_def_property(srna, "image_is_custom", PROP_BOOLEAN, PROP_NONE);
 	RNA_def_property_boolean_sdna(prop, NULL, "flag[ICON_SIZE_PREVIEW]", USER_EDITED);

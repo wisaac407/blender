@@ -78,7 +78,7 @@ static PyObject *app_previews_meth_new(PyObject *UNUSED(self), PyObject *args, P
 	}
 
 	prv = BKE_previewimg_cached_get(name);
-	RNA_pointer_create(NULL, &RNA_Preview, prv, &ptr);
+	RNA_pointer_create(NULL, &RNA_ImagePreview, prv, &ptr);
 
 	return pyrna_struct_CreatePyObject(&ptr);
 }
@@ -135,7 +135,7 @@ static PyObject *app_previews_meth_load(PyObject *UNUSED(self), PyObject *args, 
 	}
 
 	prv = BKE_previewimg_cached_thumbnail_get(name, path, path_type, force_reload);
-	RNA_pointer_create(NULL, &RNA_Preview, prv, &ptr);
+	RNA_pointer_create(NULL, &RNA_ImagePreview, prv, &ptr);
 
 	return pyrna_struct_CreatePyObject(&ptr);
 }

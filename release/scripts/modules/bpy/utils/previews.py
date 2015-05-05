@@ -30,7 +30,6 @@ This allows addons to generate their own previews, and use them as icons in UI w
 __all__ = (
     "new",
     "remove",
-    "clear",
     )
 
 from bpy.app import _previews
@@ -39,7 +38,8 @@ _uuid_open = set()
 
 
 # High-level previews manager.
-class BPyPreviewsCollection(dict):
+# not accessed directly
+class _BPyImagePreviewCollection(dict):
     """
     Dict-like class of previews.
     """
@@ -111,7 +111,7 @@ def new():
     Return a new preview collection.
     """
 
-    return BPyPreviewsCollection()
+    return _BPyImagePreviewCollection()
 
 
 def remove(p):
