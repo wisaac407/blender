@@ -71,14 +71,17 @@ static PyObject *app_previews_meth_new(PyObject *UNUSED(self), PyObject *args, P
 	PreviewImage *prv;
 	PointerRNA ptr;
 
-	if (!PyArg_ParseTupleAndKeywords(args, kw, "s:bpy.app.previews.new", (char **)kwlist, &name)) {
+	if (!PyArg_ParseTupleAndKeywords(
+	        args, kw, "s:bpy.app.previews.new", (char **)kwlist,
+	        &name))
+	{
 		return NULL;
 	}
 
 	prv = BKE_previewimg_cached_get(name);
 	RNA_pointer_create(NULL, &RNA_Preview, prv, &ptr);
 
-	return (PyObject *)pyrna_struct_CreatePyObject(&ptr);
+	return pyrna_struct_CreatePyObject(&ptr);
 }
 
 PyDoc_STRVAR(app_previews_meth_load_doc,
@@ -107,8 +110,9 @@ static PyObject *app_previews_meth_load(PyObject *UNUSED(self), PyObject *args, 
 	PreviewImage *prv;
 	PointerRNA ptr;
 
-	if (!PyArg_ParseTupleAndKeywords(args, kw, "sss|p:bpy.app.previews.load", (char **)kwlist,
-	                                 &name, &path, &path_type_s, &force_reload))
+	if (!PyArg_ParseTupleAndKeywords(
+	        args, kw, "sss|p:bpy.app.previews.load", (char **)kwlist,
+	        &name, &path, &path_type_s, &force_reload))
 	{
 		return NULL;
 	}
@@ -135,7 +139,7 @@ static PyObject *app_previews_meth_load(PyObject *UNUSED(self), PyObject *args, 
 	prv = BKE_previewimg_cached_thumbnail_get(name, path, path_type, force_reload);
 	RNA_pointer_create(NULL, &RNA_Preview, prv, &ptr);
 
-	return (PyObject *)pyrna_struct_CreatePyObject(&ptr);
+	return pyrna_struct_CreatePyObject(&ptr);
 }
 
 PyDoc_STRVAR(app_previews_meth_release_doc,
@@ -154,7 +158,10 @@ static PyObject *app_previews_meth_release(PyObject *UNUSED(self), PyObject *arg
 	static const char *kwlist[] = {"name", NULL};
 	char *name;
 
-	if (!PyArg_ParseTupleAndKeywords(args, kw, "s:bpy.app.previews.release", (char **)kwlist, &name)) {
+	if (!PyArg_ParseTupleAndKeywords(
+	        args, kw, "s:bpy.app.previews.release", (char **)kwlist,
+	        &name))
+	{
 		return NULL;
 	}
 
