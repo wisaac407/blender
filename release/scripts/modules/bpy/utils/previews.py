@@ -51,7 +51,7 @@ class BPyPreviewsCollection(dict):
             _previews.release(self._gen_key(name))
 
     def _gen_key(self, name):
-        return self._coll_name + name
+        return ":".join((self._coll_name, name))
 
     def new(self, name):
         return self.setdefault(name, _previews.new(self._gen_key(name)))
