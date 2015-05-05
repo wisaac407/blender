@@ -62,7 +62,6 @@ PyDoc_STRVAR(app_previews_meth_new_doc,
 "   :type name: string\n"
 "   :return: The Preview matching given name, or a new empty one.\n"
 "   :type return: Preview\n"
-"\n"
 );
 static PyObject *app_previews_meth_new(PyObject *UNUSED(self), PyObject *args, PyObject *kw)
 {
@@ -99,7 +98,6 @@ PyDoc_STRVAR(app_previews_meth_load_doc,
 "   :type force_reload: bool\n"
 "   :return: The Preview matching given name, or a new empty one.\n"
 "   :type return: Preview\n"
-"\n"
 );
 static PyObject *app_previews_meth_load(PyObject *UNUSED(self), PyObject *args, PyObject *kw)
 {
@@ -132,7 +130,7 @@ static PyObject *app_previews_meth_load(PyObject *UNUSED(self), PyObject *args, 
 	else {
 		PyErr_Format(PyExc_ValueError,
 		             "bpy.app.previews.load: invalid '%' path type, only 'IMAGE', 'MOVIE', 'BLEND' and 'FONT' "
-		             "are supported", (const char *)path_type_s);
+		             "are supported", path_type_s);
 		return NULL;
 	}
 
@@ -151,7 +149,6 @@ PyDoc_STRVAR(app_previews_meth_release_doc,
 "   :arg name: The name (unique id) identifying the preview.\n"
 "   :type name: string\n"
 "   :return: None.\n"
-"\n"
 );
 static PyObject *app_previews_meth_release(PyObject *UNUSED(self), PyObject *args, PyObject *kw)
 {
@@ -165,7 +162,7 @@ static PyObject *app_previews_meth_release(PyObject *UNUSED(self), PyObject *arg
 		return NULL;
 	}
 
-	BKE_previewimg_cached_release((const char *)name);
+	BKE_previewimg_cached_release(name);
 
 	Py_RETURN_NONE;
 }
@@ -181,7 +178,6 @@ static struct PyMethodDef bpy_app_previews_methods[] = {
 PyDoc_STRVAR(bpy_app_previews_doc,
 "This object contains basic static methods to handle cached (non-ID) previews in Blender (low-level API, \n"
 "not exposed to final users).\n"
-"\n"
 );
 static struct PyModuleDef bpy_app_previews_module = {
 	PyModuleDef_HEAD_INIT,
