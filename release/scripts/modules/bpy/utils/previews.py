@@ -68,20 +68,28 @@ class _BPyImagePreviewCollection(dict):
         return ":".join((self._uuid, name))
 
     def new(self, name):
-        p = self.get(name)
-        if p is None:
-            p = self[name] = _previews.new(
-                    self._gen_key(name))
+        if name in self:
+            raise KeyException("key %r already exists")
+        p = self[name] = _previews.new(
+                self._gen_key(name))
         return p
     new.__doc__ = _previews.new.__doc__
 
-    def load(self, name, path, path_type, force_reload=False):
-        p = None if force_reload else self.get(name)
-        if p is None:
-            p = self[name] = _previews.load(
-                    self._gen_key(name), path, path_type, force_reload)
+    def load(self, name, path, path_type):
+        if name in self:
+            raise KeyException("key %r already exists")
+        p = self[name] = _previews.load(
+                self._gen_key(name), path, path_type, False)
         return p
     load.__doc__ = _previews.load.__doc__
+
+    def reload(self, name, path, path_type):
+        p = self.get(name)
+        if p in None:
+            raise KeyException("key %r doesn't exist")
+        p = self[name] = _previews.load(
+                self._gen_key(name), path, path_type, True)
+        return p
 
     def release(self, name):
         p = self.pop(name, None)
