@@ -123,7 +123,7 @@ def unregister():
 
     for p in previews.values():
         bpy.utils.previews.remove(p)
-    bpy.utils.previews.clear()
+    previews.clear()
 
     bpy.utils.unregister_class(PreviewsExamplePanel)
 
