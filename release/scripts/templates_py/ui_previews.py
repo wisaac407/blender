@@ -29,7 +29,7 @@ def enum_previews_from_directory_items(self, context):
     directory = wm.my_previews_dir
 
     # gets the already existing preview collection (defined in register func).
-    pcoll = previews["main"]
+    pcoll = preview_collections["main"]
 
     if directory == pcoll.my_previews_dir:
         return pcoll.my_previews
@@ -79,7 +79,10 @@ class PreviewsExamplePanel(bpy.types.Panel):
         row.prop(wm, "my_previews")
 
 
-previews = {}
+# We can store multiple preview collections here,
+# however in this example we only store "main"
+preview_collections = {}
+
 
 def register():
     from bpy.types import WindowManager
@@ -111,7 +114,7 @@ def register():
     pcoll.my_previews_dir = ""
     pcoll.my_previews = ()
 
-    previews["main"] = pcoll
+    preview_collections["main"] = pcoll
 
     bpy.utils.register_class(PreviewsExamplePanel)
 
@@ -121,9 +124,9 @@ def unregister():
 
     del WindowManager.my_previews
 
-    for p in previews.values():
-        bpy.utils.previews.remove(p)
-    previews.clear()
+    for pcoll in preview_collections.values():
+        bpy.utils.previews.remove(pcoll)
+    preview_collections.clear()
 
     bpy.utils.unregister_class(PreviewsExamplePanel)
 
