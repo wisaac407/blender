@@ -171,6 +171,9 @@ void WM_init(bContext *C, int argc, const char **argv)
 	wm_homefile_read(C, NULL, G.factory_startup, NULL);
 	
 	BLF_lang_set(NULL);
+	if (!G.background) {
+		UI_init();
+	}
 
 	ED_spacemacros_init();
 
@@ -204,8 +207,6 @@ void WM_init(bContext *C, int argc, const char **argv)
 		GPU_set_linear_mipmap(true);
 		GPU_set_anisotropic(U.anisotropic_filter);
 		GPU_set_gpu_mipmapping(U.use_gpu_mipmap);
-
-		UI_init();
 	}
 	
 	clear_matcopybuf();
