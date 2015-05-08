@@ -7,15 +7,14 @@
 # such as template_list and template_ID_preview.
 #
 # Other use cases:
-# - make a fixed list of enum_items instead of calculating them in a function.
-# - generate a single thumbnail to pass in a UILayout function as icon_value
+# - make a fixed list of enum_items instead of calculating them in a function
+# - generate isolated thumbnails to use as custom icons in buttons and menu items
+# For custom icons, see the template 'ui_previews_custom_icon"
 #
-# Example:
-#    my_addon_icons = bpy.utils.previews.new("MyAddonIcons")
-#    myicon = my_addon_icons.load("myicon", "/path/to/icon-image.png", 'IMAGE')
-#    layout.operator("render.render", icon_value=int(myicon.icon_id))
-#
-# You can generate thumbnails of your own made icons to associate with an action
+# For distributable addons, it is recommended to place the icons inside the
+# addon folder and access it with bpy.utils.user_resource for portability:
+#     bpy.utils.user_resource('SCRIPTS', "addons") + "/my_addon/imgs/"
+
 
 import os
 import bpy
