@@ -1070,7 +1070,7 @@ static void icon_preview_startjob_all_sizes(void *customdata, short *stop, short
 		sp->pr_rect = cur_size->rect;
 		sp->id = ip->id;
 
-		if (use_new_shading) {
+		if (use_new_shading && ip->id) {
 			/* texture icon rendering is hardcoded to use BI,
 			 * so don't even think of using cycle's bmain for
 			 * texture icons
