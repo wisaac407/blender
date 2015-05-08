@@ -1059,29 +1059,34 @@ static void icon_preview_startjob_all_sizes(void *customdata, short *stop, short
 	const bool use_new_shading = BKE_scene_use_new_shading_nodes(ip->scene);
 
 	while (cur_size) {
+		PreviewImage *prv = ip->owner;
 		ShaderPreview *sp = MEM_callocN(sizeof(ShaderPreview), "Icon ShaderPreview");
+		const bool is_render = !prv->deferred_data;
 
 		/* construct shader preview from image size and previewcustomdata */
 		sp->scene = ip->scene;
 		sp->owner = ip->owner;
 		sp->sizex = cur_size->sizex;
 		sp->sizey = cur_size->sizey;
-		sp->pr_method = ip->id ? PR_ICON_RENDER : PR_ICON_DEFERRED;
+		sp->pr_method = is_render ? PR_ICON_RENDER : PR_ICON_DEFERRED;
 		sp->pr_rect = cur_size->rect;
 		sp->id = ip->id;
 
-		if (use_new_shading && ip->id) {
-			/* texture icon rendering is hardcoded to use BI,
-			 * so don't even think of using cycle's bmain for
-			 * texture icons
-			 */
-			if (GS(ip->id->name) != ID_TE)
-				sp->pr_main = G_pr_main_cycles;
-			else
+		if (is_render) {
+			BLI_assert(ip->id);
+			if (use_new_shading) {
+				/* texture icon rendering is hardcoded to use BI,
+				 * so don't even think of using cycle's bmain for
+				 * texture icons
+				 */
+				if (GS(ip->id->name) != ID_TE)
+					sp->pr_main = G_pr_main_cycles;
+				else
+					sp->pr_main = G_pr_main;
+			}
+			else {
 				sp->pr_main = G_pr_main;
-		}
-		else {
-			sp->pr_main = G_pr_main;
+			}
 		}
 
 		common_preview_startjob(sp, stop, do_update, progress);
