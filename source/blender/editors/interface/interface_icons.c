@@ -926,9 +926,46 @@ static void icon_create_rect(struct PreviewImage *prv_img, enum eIconSizes size)
 	else if (!prv_img->rect[size]) {
 		prv_img->w[size] = render_size;
 		prv_img->h[size] = render_size;
-		prv_img->flag[size] |= CHANGED;
+		prv_img->flag[size] |= PRV_CHANGED;
 		prv_img->changed_timestamp[size] = 0;
 		prv_img->rect[size] = MEM_callocN(render_size * render_size * sizeof(unsigned int), "prv_rect");
+	}
+}
+
+void ui_icon_ensure_deferred(const bContext *C, const int icon_id, const bool big)
+{
+	Icon *icon = BKE_icon_get(icon_id);
+
+	if (icon) {
+		DrawInfo *di = (DrawInfo *)icon->drawinfo;
+
+		if (!di) {
+			di = icon_create_drawinfo();
+
+			icon->drawinfo = di;
+			icon->drawinfo_free = UI_icons_free_drawinfo;
+		}
+
+		if (di) {
+			if (di->type == ICON_TYPE_PREVIEW) {
+				PreviewImage *prv = (icon->type != 0) ? BKE_previewimg_id_get((ID *)icon->obj) : icon->obj;
+
+				if (prv) {
+					const int size = big ? ICON_SIZE_PREVIEW : ICON_SIZE_ICON;
+
+					if (!prv->use_deferred || prv->rect[size] || (prv->flag[size] & PRV_USER_EDITED)) {
+						return;
+					}
+
+					icon_create_rect(prv, size);
+
+					/* Always using job (background) version. */
+					ED_preview_icon_job(C, prv, NULL, prv->rect[size], prv->w[size], prv->h[size]);
+
+					prv->flag[size] &= ~PRV_CHANGED;
+				}
+			}
+		}
 	}
 }
 
@@ -943,7 +980,7 @@ static void icon_set_image(
 		return;
 	}
 
-	if (prv_img->flag[size] & USER_EDITED) {
+	if (prv_img->flag[size] & PRV_USER_EDITED) {
 		/* user-edited preview, do not auto-update! */
 		return;
 	}
@@ -968,12 +1005,16 @@ PreviewImage *UI_icon_to_preview(int icon_id)
 	Icon *icon = BKE_icon_get(icon_id);
 	
 	if (icon) {
-		if (icon->type == 0 && icon->obj) {
-			return BKE_previewimg_copy(icon->obj);
-		}
-		else {
-			DrawInfo *di = (DrawInfo *)icon->drawinfo;
-			if (di && di->data.buffer.image) {
+		DrawInfo *di = (DrawInfo *)icon->drawinfo;
+		if (di) {
+			if (di->type == ICON_TYPE_PREVIEW) {
+				PreviewImage *prv = (icon->type != 0) ? BKE_previewimg_id_get((ID *)icon->obj) : icon->obj;
+
+				if (prv) {
+					return BKE_previewimg_copy(prv);
+				}
+			}
+			else if (di->data.buffer.image) {
 				ImBuf *bbuf;
 
 				bbuf = IMB_ibImageFromMemory(di->data.buffer.image->datatoc_rect, di->data.buffer.image->datatoc_size,
@@ -1181,9 +1222,12 @@ static void icon_draw_size(
 		glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 	}
 	else if (di->type == ICON_TYPE_PREVIEW) {
-		PreviewImage *pi = icon->type ? BKE_previewimg_id_get((ID *)icon->obj) : icon->obj;
+		PreviewImage *pi = (icon->type != 0) ? BKE_previewimg_id_get((ID *)icon->obj) : icon->obj;
 
 		if (pi) {
+			/* Do deferred loading/generation if needed. */
+//			BKE_previewimg_ensure(pi, size);
+
 			/* no create icon on this level in code */
 			if (!pi->rect[size]) return;  /* something has gone wrong! */
 			
@@ -1198,11 +1242,11 @@ static void icon_draw_size(
 static void ui_id_preview_image_render_size(
         const bContext *C, Scene *scene, ID *id, PreviewImage *pi, int size, const bool use_job)
 {
-	if (((pi->flag[size] & CHANGED) || !pi->rect[size])) { /* changed only ever set by dynamic icons */
+	if (((pi->flag[size] & PRV_CHANGED) || !pi->rect[size])) { /* changed only ever set by dynamic icons */
 		/* create the rect if necessary */
 		icon_set_image(C, scene, id, pi, size, use_job);
 
-		pi->flag[size] &= ~CHANGED;
+		pi->flag[size] &= ~PRV_CHANGED;
 	}
 }
 
@@ -1229,9 +1273,9 @@ static void ui_id_brush_render(const bContext *C, ID *id)
 	for (i = 0; i < NUM_ICON_SIZES; i++) {
 		/* check if rect needs to be created; changed
 		 * only set by dynamic icons */
-		if (((pi->flag[i] & CHANGED) || !pi->rect[i])) {
+		if (((pi->flag[i] & PRV_CHANGED) || !pi->rect[i])) {
 			icon_set_image(C, NULL, id, pi, i, true);
-			pi->flag[i] &= ~CHANGED;
+			pi->flag[i] &= ~PRV_CHANGED;
 		}
 	}
 }

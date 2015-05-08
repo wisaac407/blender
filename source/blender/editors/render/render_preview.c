@@ -79,7 +79,7 @@
 
 #include "IMB_imbuf.h"
 #include "IMB_imbuf_types.h"
-
+#include "IMB_thumbs.h"
 
 #include "BIF_gl.h"
 #include "BIF_glutil.h"
@@ -935,65 +935,83 @@ static void set_alpha(char *cp, int sizex, int sizey, char alpha)
 static void icon_preview_startjob(void *customdata, short *stop, short *do_update)
 {
 	ShaderPreview *sp = customdata;
-	ID *id = sp->id;
-	short idtype = GS(id->name);
-	
-	if (idtype == ID_IM) {
-		Image *ima = (Image *)id;
-		ImBuf *ibuf = NULL;
-		ImageUser iuser = {NULL};
 
-		/* ima->ok is zero when Image cannot load */
-		if (ima == NULL || ima->ok == 0)
-			return;
+	if (sp->pr_method == PR_ICON_DEFERRED) {
+		PreviewImage *prv = sp->owner;
+		ImBuf *thumb;
+		int source = (int)prv->deferred_data[0];
+		char *path = &prv->deferred_data[1];
 
-		/* setup dummy image user */
-		iuser.ok = iuser.framenr = 1;
-		iuser.scene = sp->scene;
-		
-		/* elubie: this needs to be changed: here image is always loaded if not
-		 * already there. Very expensive for large images. Need to find a way to 
-		 * only get existing ibuf */
-		ibuf = BKE_image_acquire_ibuf(ima, &iuser, NULL);
-		if (ibuf == NULL || ibuf->rect == NULL) {
-			BKE_image_release_ibuf(ima, ibuf, NULL);
-			return;
+//		printf("generating deferred %d×%d preview for %s\n", sp->sizex, sp->sizey, path);
+
+		thumb = IMB_thumb_manage(path, THB_LARGE, source);
+
+		if (thumb) {
+			icon_copy_rect(thumb, sp->sizex, sp->sizey, sp->pr_rect);
+			IMB_freeImBuf(thumb);
 		}
-		
-		icon_copy_rect(ibuf, sp->sizex, sp->sizey, sp->pr_rect);
-
-		*do_update = true;
-
-		BKE_image_release_ibuf(ima, ibuf, NULL);
-	}
-	else if (idtype == ID_BR) {
-		Brush *br = (Brush *)id;
-
-		br->icon_imbuf = get_brush_icon(br);
-
-		memset(sp->pr_rect, 0x88, sp->sizex * sp->sizey * sizeof(unsigned int));
-
-		if (!(br->icon_imbuf) || !(br->icon_imbuf->rect))
-			return;
-
-		icon_copy_rect(br->icon_imbuf, sp->sizex, sp->sizey, sp->pr_rect);
-
-		*do_update = true;
 	}
 	else {
-		/* re-use shader job */
-		shader_preview_startjob(customdata, stop, do_update);
+		ID *id = sp->id;
+		short idtype = GS(id->name);
 
-		/* world is rendered with alpha=0, so it wasn't displayed 
-		 * this could be render option for sky to, for later */
-		if (idtype == ID_WO) {
-			set_alpha((char *)sp->pr_rect, sp->sizex, sp->sizey, 255);
+		if (idtype == ID_IM) {
+			Image *ima = (Image *)id;
+			ImBuf *ibuf = NULL;
+			ImageUser iuser = {NULL};
+
+			/* ima->ok is zero when Image cannot load */
+			if (ima == NULL || ima->ok == 0)
+				return;
+
+			/* setup dummy image user */
+			iuser.ok = iuser.framenr = 1;
+			iuser.scene = sp->scene;
+
+			/* elubie: this needs to be changed: here image is always loaded if not
+			 * already there. Very expensive for large images. Need to find a way to
+			 * only get existing ibuf */
+			ibuf = BKE_image_acquire_ibuf(ima, &iuser, NULL);
+			if (ibuf == NULL || ibuf->rect == NULL) {
+				BKE_image_release_ibuf(ima, ibuf, NULL);
+				return;
+			}
+
+			icon_copy_rect(ibuf, sp->sizex, sp->sizey, sp->pr_rect);
+
+			*do_update = true;
+
+			BKE_image_release_ibuf(ima, ibuf, NULL);
 		}
-		else if (idtype == ID_MA) {
-			Material *ma = (Material *)id;
+		else if (idtype == ID_BR) {
+			Brush *br = (Brush *)id;
 
-			if (ma->material_type == MA_TYPE_HALO)
+			br->icon_imbuf = get_brush_icon(br);
+
+			memset(sp->pr_rect, 0x88, sp->sizex * sp->sizey * sizeof(unsigned int));
+
+			if (!(br->icon_imbuf) || !(br->icon_imbuf->rect))
+				return;
+
+			icon_copy_rect(br->icon_imbuf, sp->sizex, sp->sizey, sp->pr_rect);
+
+			*do_update = true;
+		}
+		else {
+			/* re-use shader job */
+			shader_preview_startjob(customdata, stop, do_update);
+
+			/* world is rendered with alpha=0, so it wasn't displayed
+			 * this could be render option for sky to, for later */
+			if (idtype == ID_WO) {
 				set_alpha((char *)sp->pr_rect, sp->sizex, sp->sizey, 255);
+			}
+			else if (idtype == ID_MA) {
+				Material *ma = (Material *)id;
+
+				if (ma->material_type == MA_TYPE_HALO)
+					set_alpha((char *)sp->pr_rect, sp->sizex, sp->sizey, 255);
+			}
 		}
 	}
 }
@@ -1005,7 +1023,7 @@ static void common_preview_startjob(void *customdata, short *stop, short *do_upd
 {
 	ShaderPreview *sp = customdata;
 
-	if (sp->pr_method == PR_ICON_RENDER)
+	if (ELEM(sp->pr_method, PR_ICON_RENDER, PR_ICON_DEFERRED))
 		icon_preview_startjob(customdata, stop, do_update);
 	else
 		shader_preview_startjob(customdata, stop, do_update);
@@ -1048,7 +1066,7 @@ static void icon_preview_startjob_all_sizes(void *customdata, short *stop, short
 		sp->owner = ip->owner;
 		sp->sizex = cur_size->sizex;
 		sp->sizey = cur_size->sizey;
-		sp->pr_method = PR_ICON_RENDER;
+		sp->pr_method = ip->id ? PR_ICON_RENDER : PR_ICON_DEFERRED;
 		sp->pr_rect = cur_size->rect;
 		sp->id = ip->id;
 
@@ -1145,7 +1163,7 @@ void ED_preview_icon_job(const bContext *C, void *owner, ID *id, unsigned int *r
 
 	/* customdata for preview thread */
 	ip->scene = CTX_data_scene(C);
-	ip->owner = id;
+	ip->owner = owner;
 	ip->id = id;
 
 	icon_preview_add_size(ip, rect, sizex, sizey);

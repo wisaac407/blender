@@ -162,8 +162,8 @@ enum eIconSizes {
 
 /* for PreviewImage->flag */
 enum ePreviewImage_Flag {
-	CHANGED          = (1 << 0),
-	USER_EDITED      = (1 << 1),  /* if user-edited, do not auto-update this anymore! */
+	PRV_CHANGED          = (1 << 0),
+	PRV_USER_EDITED      = (1 << 1),  /* if user-edited, do not auto-update this anymore! */
 };
 
 typedef struct PreviewImage {
@@ -172,10 +172,14 @@ typedef struct PreviewImage {
 	unsigned int h[2];
 	short flag[2];
 	short changed_timestamp[2];
-	int icon_id;  /* Used by previews outside of ID context. */
-	int pad_i1;
 	unsigned int *rect[2];
+
+	/* Runtime-only data. */
 	struct GPUTexture *gputexture[2];
+	int icon_id;  /* Used by previews outside of ID context. */
+
+	short use_deferred;  /* for now a mere bool, if we add more deferred loading methods we can switch to bitflag. */
+	char deferred_data[2];  /* *must* remain the last one, used as over-allocated mem storage. */
 } PreviewImage;
 
 /**

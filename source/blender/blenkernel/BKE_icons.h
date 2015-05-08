@@ -96,6 +96,8 @@ struct PreviewImage *BKE_previewimg_copy(struct PreviewImage *prv);
 /* retrieve existing or create new preview image */
 struct PreviewImage *BKE_previewimg_id_get(struct ID *id);
 
+void BKE_previewimg_ensure(struct PreviewImage *prv, const int size);
+
 struct PreviewImage *BKE_previewimg_cached_get(const char *name);
 
 struct PreviewImage *BKE_previewimg_cached_thumbnail_get(

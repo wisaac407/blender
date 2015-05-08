@@ -131,18 +131,30 @@ void BKE_icons_free(void)
 	}
 }
 
-PreviewImage *BKE_previewimg_create(void)
+static PreviewImage *previewimg_create_ex(void *deferred_data, size_t deferred_data_size)
 {
 	PreviewImage *prv_img = NULL;
+	size_t overalloc = (deferred_data_size > sizeof(prv_img->deferred_data)) ?
+	                       deferred_data_size - sizeof(prv_img->deferred_data) : 0;
 	int i;
 
-	prv_img = MEM_callocN(sizeof(PreviewImage), "img_prv");
+	prv_img = MEM_callocN(sizeof(PreviewImage) + overalloc, "img_prv");
+
+	if (deferred_data) {
+		memcpy(prv_img->deferred_data, deferred_data, deferred_data_size);
+		prv_img->use_deferred = true;
+	}
 
 	for (i = 0; i < NUM_ICON_SIZES; ++i) {
-		prv_img->flag[i] |= CHANGED;
+		prv_img->flag[i] |= PRV_CHANGED;
 		prv_img->changed_timestamp[i] = 0;
 	}
 	return prv_img;
+}
+
+PreviewImage *BKE_previewimg_create(void)
+{
+	return previewimg_create_ex(NULL, 0);
 }
 
 void BKE_previewimg_freefunc(void *link)
@@ -182,7 +194,7 @@ void BKE_previewimg_clear(struct PreviewImage *prv, enum eIconSizes size)
 		GPU_texture_free(prv->gputexture[size]);
 	}
 	prv->h[size] = prv->w[size] = 0;
-	prv->flag[size] |= CHANGED;
+	prv->flag[size] |= PRV_CHANGED;
 	prv->changed_timestamp[size] = 0;
 }
 
@@ -196,9 +208,6 @@ PreviewImage *BKE_previewimg_copy(PreviewImage *prv)
 		for (i = 0; i < NUM_ICON_SIZES; ++i) {
 			if (prv->rect[i]) {
 				prv_img->rect[i] = MEM_dupallocN(prv->rect[i]);
-			}
-			else {
-				prv_img->rect[i] = NULL;
 			}
 			prv_img->gputexture[i] = NULL;
 		}
@@ -309,7 +318,6 @@ PreviewImage *BKE_previewimg_cached_thumbnail_get(
 {
 	PreviewImage *prv = NULL;
 	void **prv_v;
-	int icon_w, icon_h;
 
 	prv_v = BLI_ghash_lookup_p(gCachedPreviews, name);
 
@@ -319,44 +327,31 @@ PreviewImage *BKE_previewimg_cached_thumbnail_get(
 	}
 
 	if (prv && force_update) {
-		BKE_previewimg_clear(prv, ICON_SIZE_ICON);
-		BKE_previewimg_clear(prv, ICON_SIZE_PREVIEW);
+		if (((int)prv->deferred_data[0] == source) && STREQ(&prv->deferred_data[1], path)) {
+			/* If same path, no need to re-allocate preview, just clear it up. */
+			BKE_previewimg_clear(prv, ICON_SIZE_ICON);
+			BKE_previewimg_clear(prv, ICON_SIZE_PREVIEW);
+		}
+		else {
+			BKE_previewimg_free(&prv);
+		}
 	}
-	else if (!prv) {
-		prv = BKE_previewimg_create();
+
+	if (!prv) {
+		/* We pack needed data for lazy loading (source type, in a single char, and path). */
+		size_t defdata_size = strlen(path) + 2;
+		char *defdata = MEM_mallocN(sizeof(defdata) * defdata_size, __func__);
+
+		defdata[0] = (char)source;
+		strcpy(&defdata[1], path);
+
+		prv = previewimg_create_ex((void *)defdata, defdata_size);
 		force_update = true;
+
+		MEM_freeN(defdata);
 	}
 
 	if (force_update) {
-		ImBuf *thumb = IMB_thumb_manage(path, THB_LARGE, source);
-
-		if (thumb) {
-			prv->w[ICON_SIZE_PREVIEW] = thumb->x;
-			prv->h[ICON_SIZE_PREVIEW] = thumb->y;
-			prv->rect[ICON_SIZE_PREVIEW] = MEM_dupallocN(thumb->rect);
-			prv->flag[ICON_SIZE_PREVIEW] &= ~(CHANGED | USER_EDITED);
-
-			if (thumb->x > thumb->y) {
-				icon_w = ICON_RENDER_DEFAULT_HEIGHT;
-				icon_h = (thumb->y * icon_w) / thumb->x + 1;
-			}
-			else if (thumb->x < thumb->y) {
-				icon_h = ICON_RENDER_DEFAULT_HEIGHT;
-				icon_w = (thumb->x * icon_h) / thumb->y + 1;
-			}
-			else {
-				icon_w = icon_h = ICON_RENDER_DEFAULT_HEIGHT;
-			}
-
-			IMB_scaleImBuf(thumb, icon_w, icon_h);
-			prv->w[ICON_SIZE_ICON] = icon_w;
-			prv->h[ICON_SIZE_ICON] = icon_h;
-			prv->rect[ICON_SIZE_ICON] = MEM_dupallocN(thumb->rect);
-			prv->flag[ICON_SIZE_ICON] &= ~(CHANGED | USER_EDITED);
-
-			IMB_freeImBuf(thumb);
-		}
-
 		if (prv_v) {
 			*prv_v = prv;
 		}
@@ -380,6 +375,54 @@ void BKE_previewimg_cached_release(const char *name)
 	}
 }
 
+/** Handle deferred (lazy) loading/generation of preview image, if needed.
+ * For now, only used with file thumbnails. */
+void BKE_previewimg_ensure(PreviewImage *prv, const int size)
+{
+	if (prv->use_deferred) {
+		const bool do_icon = ((size == ICON_SIZE_ICON) && !prv->rect[ICON_SIZE_ICON]);
+		const bool do_preview = ((size == ICON_SIZE_PREVIEW) && !prv->rect[ICON_SIZE_PREVIEW]);
+
+		if (do_icon || do_preview) {
+			ImBuf *thumb;
+			int source = (int)prv->deferred_data[0];
+			char *path = &prv->deferred_data[1];
+			int icon_w, icon_h;
+
+			thumb = IMB_thumb_manage(path, THB_LARGE, source);
+
+			if (thumb) {
+				if (do_preview) {
+					prv->w[ICON_SIZE_PREVIEW] = thumb->x;
+					prv->h[ICON_SIZE_PREVIEW] = thumb->y;
+					prv->rect[ICON_SIZE_PREVIEW] = MEM_dupallocN(thumb->rect);
+					prv->flag[ICON_SIZE_PREVIEW] &= ~(PRV_CHANGED | PRV_USER_EDITED);
+				}
+				if (do_icon) {
+					if (thumb->x > thumb->y) {
+						icon_w = ICON_RENDER_DEFAULT_HEIGHT;
+						icon_h = (thumb->y * icon_w) / thumb->x + 1;
+					}
+					else if (thumb->x < thumb->y) {
+						icon_h = ICON_RENDER_DEFAULT_HEIGHT;
+						icon_w = (thumb->x * icon_h) / thumb->y + 1;
+					}
+					else {
+						icon_w = icon_h = ICON_RENDER_DEFAULT_HEIGHT;
+					}
+
+					IMB_scaleImBuf(thumb, icon_w, icon_h);
+					prv->w[ICON_SIZE_ICON] = icon_w;
+					prv->h[ICON_SIZE_ICON] = icon_h;
+					prv->rect[ICON_SIZE_ICON] = MEM_dupallocN(thumb->rect);
+					prv->flag[ICON_SIZE_ICON] &= ~(PRV_CHANGED | PRV_USER_EDITED);
+				}
+				IMB_freeImBuf(thumb);
+			}
+		}
+	}
+}
+
 void BKE_icon_changed(int id)
 {
 	Icon *icon = NULL;
@@ -395,7 +438,7 @@ void BKE_icon_changed(int id)
 		if (prv) {
 			int i;
 			for (i = 0; i < NUM_ICON_SIZES; ++i) {
-				prv->flag[i] |= CHANGED;
+				prv->flag[i] |= PRV_CHANGED;
 				prv->changed_timestamp[i]++;
 			}
 		}
