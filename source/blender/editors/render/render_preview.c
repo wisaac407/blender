@@ -947,6 +947,9 @@ static void icon_preview_startjob(void *customdata, short *stop, short *do_updat
 		thumb = IMB_thumb_manage(path, THB_LARGE, source);
 
 		if (thumb) {
+			/* PreviewImage assumes premultiplied alhpa... */
+			IMB_premultiply_alpha(thumb);
+
 			icon_copy_rect(thumb, sp->sizex, sp->sizey, sp->pr_rect);
 			IMB_freeImBuf(thumb);
 		}

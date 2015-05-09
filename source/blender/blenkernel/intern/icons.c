@@ -392,6 +392,9 @@ void BKE_previewimg_ensure(PreviewImage *prv, const int size)
 			thumb = IMB_thumb_manage(path, THB_LARGE, source);
 
 			if (thumb) {
+				/* PreviewImage assumes premultiplied alhpa... */
+				IMB_premultiply_alpha(thumb);
+
 				if (do_preview) {
 					prv->w[ICON_SIZE_PREVIEW] = thumb->x;
 					prv->h[ICON_SIZE_PREVIEW] = thumb->y;
