@@ -183,7 +183,7 @@ typedef struct PreviewImage {
 } PreviewImage;
 
 #define PRV_DEFERRED_DATA(prv) \
-	(CHECK_TYPE_INLINE(prv, PreviewImage *), (void *)((prv) + 1))
+	(CHECK_TYPE_INLINE(prv, PreviewImage *), BLI_assert((prv)->use_deferred), (void *)((prv) + 1))
 
 /**
  * Defines for working with IDs.
