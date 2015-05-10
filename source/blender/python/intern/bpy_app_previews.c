@@ -61,7 +61,7 @@ PyDoc_STRVAR(app_previews_meth_new_doc,
 "   :arg name: The name (unique id) identifying the preview.\n"
 "   :type name: string\n"
 "   :return: The Preview matching given name, or a new empty one.\n"
-"   :type return: Preview\n"
+"   :rtype: :class:`bpy.types.ImagePreview`\n"
 );
 static PyObject *app_previews_meth_new(PyObject *UNUSED(self), PyObject *args, PyObject *kw)
 {
@@ -71,7 +71,7 @@ static PyObject *app_previews_meth_new(PyObject *UNUSED(self), PyObject *args, P
 	PointerRNA ptr;
 
 	if (!PyArg_ParseTupleAndKeywords(
-	        args, kw, "s:bpy.app.previews.new", (char **)kwlist,
+	        args, kw, "s:new", (char **)kwlist,
 	        &name))
 	{
 		return NULL;
@@ -97,7 +97,7 @@ PyDoc_STRVAR(app_previews_meth_load_doc,
 "   :arg force_reload: If True, force running thumbnail manager even if preview already exists in cache.\n"
 "   :type force_reload: bool\n"
 "   :return: The Preview matching given name, or a new empty one.\n"
-"   :type return: Preview\n"
+"   :rtype: :class:`bpy.types.ImagePreview`\n"
 );
 static PyObject *app_previews_meth_load(PyObject *UNUSED(self), PyObject *args, PyObject *kw)
 {
@@ -109,7 +109,7 @@ static PyObject *app_previews_meth_load(PyObject *UNUSED(self), PyObject *args, 
 	PointerRNA ptr;
 
 	if (!PyArg_ParseTupleAndKeywords(
-	        args, kw, "sss|p:bpy.app.previews.load", (char **)kwlist,
+	        args, kw, "sss|p:load", (char **)kwlist,
 	        &name, &path, &path_type_s, &force_reload))
 	{
 		return NULL;
@@ -148,7 +148,6 @@ PyDoc_STRVAR(app_previews_meth_release_doc,
 "\n"
 "   :arg name: The name (unique id) identifying the preview.\n"
 "   :type name: string\n"
-"   :return: None.\n"
 );
 static PyObject *app_previews_meth_release(PyObject *UNUSED(self), PyObject *args, PyObject *kw)
 {
@@ -156,7 +155,7 @@ static PyObject *app_previews_meth_release(PyObject *UNUSED(self), PyObject *arg
 	char *name;
 
 	if (!PyArg_ParseTupleAndKeywords(
-	        args, kw, "s:bpy.app.previews.release", (char **)kwlist,
+	        args, kw, "s:release", (char **)kwlist,
 	        &name))
 	{
 		return NULL;
@@ -176,8 +175,8 @@ static struct PyMethodDef bpy_app_previews_methods[] = {
 };
 
 PyDoc_STRVAR(bpy_app_previews_doc,
-"This object contains basic static methods to handle cached (non-ID) previews in Blender (low-level API, \n"
-"not exposed to final users).\n"
+"This object contains basic static methods to handle cached (non-ID) previews in Blender\n"
+"(low-level API, not exposed to final users)."
 );
 static struct PyModuleDef bpy_app_previews_module = {
 	PyModuleDef_HEAD_INIT,
