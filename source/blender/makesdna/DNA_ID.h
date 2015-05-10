@@ -178,9 +178,12 @@ typedef struct PreviewImage {
 	struct GPUTexture *gputexture[2];
 	int icon_id;  /* Used by previews outside of ID context. */
 
-	short use_deferred;  /* for now a mere bool, if we add more deferred loading methods we can switch to bitflag. */
-	char deferred_data[2];  /* *must* remain the last one, used as over-allocated mem storage. */
+	char pad[3];
+	char use_deferred;  /* for now a mere bool, if we add more deferred loading methods we can switch to bitflag. */
 } PreviewImage;
+
+#define PRV_DEFERRED_DATA(prv) \
+	(CHECK_TYPE_INLINE(prv, PreviewImage *), (void *)((prv) + 1))
 
 /**
  * Defines for working with IDs.

@@ -939,8 +939,9 @@ static void icon_preview_startjob(void *customdata, short *stop, short *do_updat
 	if (sp->pr_method == PR_ICON_DEFERRED) {
 		PreviewImage *prv = sp->owner;
 		ImBuf *thumb;
-		int source = (int)prv->deferred_data[0];
-		char *path = &prv->deferred_data[1];
+		char *deferred_data = PRV_DEFERRED_DATA(prv);
+		int source =  deferred_data[0];
+		char *path = &deferred_data[1];
 
 //		printf("generating deferred %d×%d preview for %s\n", sp->sizex, sp->sizey, path);
 
@@ -1064,7 +1065,7 @@ static void icon_preview_startjob_all_sizes(void *customdata, short *stop, short
 	while (cur_size) {
 		PreviewImage *prv = ip->owner;
 		ShaderPreview *sp = MEM_callocN(sizeof(ShaderPreview), "Icon ShaderPreview");
-		const bool is_render = !prv->deferred_data;
+		const bool is_render = !prv->use_deferred;
 
 		/* construct shader preview from image size and previewcustomdata */
 		sp->scene = ip->scene;

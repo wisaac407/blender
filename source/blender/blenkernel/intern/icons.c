@@ -131,17 +131,15 @@ void BKE_icons_free(void)
 	}
 }
 
-static PreviewImage *previewimg_create_ex(void *deferred_data, size_t deferred_data_size)
+static PreviewImage *previewimg_create_ex(size_t deferred_data_size)
 {
 	PreviewImage *prv_img = NULL;
-	size_t overalloc = (deferred_data_size > sizeof(prv_img->deferred_data)) ?
-	                       deferred_data_size - sizeof(prv_img->deferred_data) : 0;
 	int i;
 
-	prv_img = MEM_callocN(sizeof(PreviewImage) + overalloc, "img_prv");
+	prv_img = MEM_mallocN(sizeof(PreviewImage) + deferred_data_size, "img_prv");
+	memset(prv_img, 0, sizeof(*prv_img));  /* leave deferred data dirty */
 
-	if (deferred_data) {
-		memcpy(prv_img->deferred_data, deferred_data, deferred_data_size);
+	if (deferred_data_size) {
 		prv_img->use_deferred = true;
 	}
 
@@ -154,7 +152,7 @@ static PreviewImage *previewimg_create_ex(void *deferred_data, size_t deferred_d
 
 PreviewImage *BKE_previewimg_create(void)
 {
-	return previewimg_create_ex(NULL, 0);
+	return previewimg_create_ex(0);
 }
 
 void BKE_previewimg_freefunc(void *link)
@@ -327,7 +325,8 @@ PreviewImage *BKE_previewimg_cached_thumbnail_get(
 	}
 
 	if (prv && force_update) {
-		if (((int)prv->deferred_data[0] == source) && STREQ(&prv->deferred_data[1], path)) {
+		const char *prv_deferred_data = PRV_DEFERRED_DATA(prv);
+		if (((int)prv_deferred_data[0] == source) && STREQ(&prv_deferred_data[1], path)) {
 			/* If same path, no need to re-allocate preview, just clear it up. */
 			BKE_previewimg_clear(prv, ICON_SIZE_ICON);
 			BKE_previewimg_clear(prv, ICON_SIZE_PREVIEW);
@@ -339,16 +338,15 @@ PreviewImage *BKE_previewimg_cached_thumbnail_get(
 
 	if (!prv) {
 		/* We pack needed data for lazy loading (source type, in a single char, and path). */
-		size_t defdata_size = strlen(path) + 2;
-		char *defdata = MEM_mallocN(defdata_size, __func__);
+		const size_t deferred_data_size = strlen(path) + 2;
+		char *deferred_data;
 
-		defdata[0] = (char)source;
-		strcpy(&defdata[1], path);
+		prv = previewimg_create_ex(deferred_data_size);
+		deferred_data = PRV_DEFERRED_DATA(prv);
+		deferred_data[0] = source;
+		memcpy(&deferred_data[1], path, deferred_data_size - 1);
 
-		prv = previewimg_create_ex((void *)defdata, defdata_size);
 		force_update = true;
-
-		MEM_freeN(defdata);
 	}
 
 	if (force_update) {
@@ -385,8 +383,9 @@ void BKE_previewimg_ensure(PreviewImage *prv, const int size)
 
 		if (do_icon || do_preview) {
 			ImBuf *thumb;
-			int source = (int)prv->deferred_data[0];
-			char *path = &prv->deferred_data[1];
+			char *prv_deferred_data = PRV_DEFERRED_DATA(prv);
+			int source =  prv_deferred_data[0];
+			char *path = &prv_deferred_data[1];
 			int icon_w, icon_h;
 
 			thumb = IMB_thumb_manage(path, THB_LARGE, source);
