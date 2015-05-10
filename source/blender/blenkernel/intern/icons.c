@@ -340,7 +340,7 @@ PreviewImage *BKE_previewimg_cached_thumbnail_get(
 	if (!prv) {
 		/* We pack needed data for lazy loading (source type, in a single char, and path). */
 		size_t defdata_size = strlen(path) + 2;
-		char *defdata = MEM_mallocN(sizeof(defdata) * defdata_size, __func__);
+		char *defdata = MEM_mallocN(defdata_size, __func__);
 
 		defdata[0] = (char)source;
 		strcpy(&defdata[1], path);
