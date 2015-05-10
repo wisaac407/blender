@@ -4,7 +4,7 @@
 # IMPORTANT NOTE: if you run this sample, there will be no icon in the button
 # You need to replace the image path with a real existing one.
 # For distributable addons, it is recommended to place the icons inside the
-# addon folder and access it with bpy.utils.user_resource for portability
+# addon folder and access it relative to the py script file for portability
 #
 #
 # Other use cases for UI-previews:
@@ -46,18 +46,21 @@ preview_collections = {}
 
 def register():
 
+    # path to the folder where the icon is
+    # the path is calculated relative to this py file inside the addon folder
+    my_icons_dir = os.path.join(os.path.dirname(__file__), "icons")
+
     # Note that preview collections returned by bpy.utils.previews
     # are regular py objects - you can use them to store custom data.
     import bpy.utils.previews
     pcoll = bpy.utils.previews.new()
-    pcoll.my_icons_dir = bpy.utils.user_resource('SCRIPTS', "addons") \
-                        + "/my_addon_folder/icons/"
+
     # load a preview thumbnail of a file and store in the previews collection
     pcoll.load(
         # identifier
         "my_icon",
         # path to image
-        pcoll.my_icons_dir + "icon-image.png",
+        os.path.join( my_icons_dir, "icon-image.png"),
         # file type to generate preview from. others are: MOVIE, FONT, BLEND
         'IMAGE')
 

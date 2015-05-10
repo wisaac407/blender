@@ -12,8 +12,8 @@
 # For custom icons, see the template 'ui_previews_custom_icon"
 #
 # For distributable addons, it is recommended to place the icons inside the
-# addon folder and access it with bpy.utils.user_resource for portability:
-#     bpy.utils.user_resource('SCRIPTS', "addons") + "/my_addon/imgs/"
+# addon folder and access it relative to the py script file for portability:
+#     os.path.join(os.path.dirname(__file__), "imgs")
 
 
 import os
