@@ -11,7 +11,7 @@
 # - provide a fixed list of previews to select from
 # - provide a dynamic list of preview (eg. calculated from reading a directory)
 #
-# For the above use cases, see the template 'ui_previews_dynamic_enum"
+# For the above use cases, see the template 'ui_previews_dynamic_enum.py"
 
 
 import os
@@ -28,15 +28,15 @@ class PreviewsExamplePanel(bpy.types.Panel):
 
     def draw(self, context):
         layout = self.layout
-        wm = context.window_manager
+        pcoll = preview_collections["main"]
 
         row = layout.row()
-        pcoll = preview_collections["main"]
         my_icon = pcoll.get("my_icon")
         row.operator("render.render", icon_value=my_icon.icon_id)
 
-        # my_icon.icon_id can be used in any UI function that accepts icon_value
-        # try also setting text="" to get an icon only operator button
+        # my_icon.icon_id can be used in any UI function that accepts
+        # icon_value # try also setting text=""
+        # to get an icon only operator button
 
 
 # We can store multiple preview collections here,
@@ -46,21 +46,21 @@ preview_collections = {}
 
 def register():
 
-    # path to the folder where the icon is
-    # the path is calculated relative to this py file inside the addon folder
-    my_icons_dir = os.path.join(os.path.dirname(__file__), "icons")
-
     # Note that preview collections returned by bpy.utils.previews
     # are regular py objects - you can use them to store custom data.
     import bpy.utils.previews
     pcoll = bpy.utils.previews.new()
+
+    # path to the folder where the icon is
+    # the path is calculated relative to this py file inside the addon folder
+    my_icons_dir = os.path.join(os.path.dirname(__file__), "icons")
 
     # load a preview thumbnail of a file and store in the previews collection
     pcoll.load(
         # identifier
         "my_icon",
         # path to image
-        os.path.join( my_icons_dir, "icon-image.png"),
+        os.path.join(my_icons_dir, "icon-image.png"),
         # file type to generate preview from. others are: MOVIE, FONT, BLEND
         'IMAGE')
 
@@ -80,4 +80,3 @@ def unregister():
 
 if __name__ == "__main__":
     register()
-

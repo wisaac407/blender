@@ -8,12 +8,15 @@
 #
 # Other use cases:
 # - make a fixed list of enum_items instead of calculating them in a function
-# - generate isolated thumbnails to use as custom icons in buttons and menu items
-# For custom icons, see the template 'ui_previews_custom_icon"
+# - generate isolated thumbnails to use as custom icons in buttons
+#   and menu items
+#
+# For custom icons, see the template "ui_previews_custom_icon.py".
 #
 # For distributable addons, it is recommended to place the icons inside the
-# addon folder and access it relative to the py script file for portability:
-#     os.path.join(os.path.dirname(__file__), "imgs")
+# addon directory and access it relative to the py script file for portability:
+#
+#    os.path.join(os.path.dirname(__file__), "images")
 
 
 import os
@@ -27,29 +30,28 @@ def enum_previews_from_directory_items(self, context):
     enum_items = []
     directory = wm.my_previews_dir
 
-    # gets the already existing preview collection (defined in register func).
+    # Get the preview collection (defined in register func).
     pcoll = preview_collections["main"]
 
     if directory == pcoll.my_previews_dir:
         return pcoll.my_previews
 
-    print("Scanning folder: %s" % directory)
+    print("Scanning directory: %s" % directory)
 
     if directory and os.path.exists(directory):
-        # scan the directory for png files
-        dir_contents = os.listdir(directory)
+        # Scan the directory for png files
         image_paths = []
-        for c in dir_contents:
-            if c.lower().endswith(".png"):
-                image_paths.append(c)
+        for fn in  os.listdir(directory):
+            if fn.lower().endswith(".png"):
+                image_paths.append(fn)
 
-        for idx, img_name in enumerate(image_paths):
+        for i, name in enumerate(image_paths):
             # generates a thumbnail preview for a file.
             # Also works with previews for 'MOVIE', 'BLEND' and 'FONT'
-            filepath = os.path.join(directory, img_name)
+            filepath = os.path.join(directory, name)
             thumb = pcoll.load(filepath, filepath, 'IMAGE')
             # enum item: (identifier, name, description, icon, number)
-            enum_items.append((img_name, img_name, img_name, thumb.icon_id, idx))
+            enum_items.append((name, name, name, thumb.icon_id, i))
 
     pcoll.my_previews = enum_items
     pcoll.my_previews_dir = directory
@@ -93,7 +95,7 @@ def register():
     WindowManager.my_previews_dir = StringProperty(
             name="Folder Path",
             subtype='DIR_PATH',
-            default="/d"
+            default=""
             )
 
     WindowManager.my_previews = EnumProperty(
@@ -101,7 +103,7 @@ def register():
             )
 
     # Note that preview collections returned by bpy.utils.previews
-    # are regular py objects - you can use them to store custom data.
+    # are regular Python objects - you can use them to store custom data.
     #
     # This is especially useful here, since:
     # - It avoids us regenerating the whole enum over and over.
@@ -132,4 +134,3 @@ def unregister():
 
 if __name__ == "__main__":
     register()
-
