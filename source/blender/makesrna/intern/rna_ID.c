@@ -579,8 +579,10 @@ static int rna_ImagePreview_icon_id_get(PointerRNA *ptr)
 }
 static void rna_ImagePreview_icon_reload(PreviewImage *prv)
 {
-	/* will lazy load on next use */
-	BKE_previewimg_clear(prv);
+	/* will lazy load on next use, but only in case icon is not user-modified! */
+	if (!(prv->flag[ICON_SIZE_ICON] & PRV_USER_EDITED) && !(prv->flag[ICON_SIZE_PREVIEW] & PRV_USER_EDITED)) {
+		BKE_previewimg_clear(prv);
+	}
 }
 
 #else
