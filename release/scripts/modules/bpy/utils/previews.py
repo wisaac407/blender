@@ -78,11 +78,11 @@ class _BPyImagePreviewCollection(dict):
         return p
     new.__doc__ = _utils_previews.new.__doc__
 
-    def load(self, name, path, path_type):
+    def load(self, name, path, path_type, force_reload):
         if name in self:
             raise KeyException("key %r already exists")
         p = self[name] = _utils_previews.load(
-                self._gen_key(name), path, path_type, False)
+                self._gen_key(name), path, path_type, force_reload)
         return p
     load.__doc__ = _utils_previews.load.__doc__
 
