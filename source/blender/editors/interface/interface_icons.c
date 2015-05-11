@@ -1286,7 +1286,7 @@ static int ui_id_brush_get_icon(const bContext *C, ID *id)
 	Brush *br = (Brush *)id;
 
 	if (br->flag & BRUSH_CUSTOM_ICON) {
-		BKE_icon_id_get(id);
+		BKE_icon_id_ensure(id);
 		ui_id_brush_render(C, id);
 	}
 	else {
@@ -1348,7 +1348,7 @@ int ui_id_icon_get(const bContext *C, ID *id, const bool big)
 		case ID_IM: /* fall through */
 		case ID_WO: /* fall through */
 		case ID_LA: /* fall through */
-			iconid = BKE_icon_id_get(id);
+			iconid = BKE_icon_id_ensure(id);
 			/* checks if not exists, or changed */
 			UI_id_icon_render(C, NULL, id, big, true);
 			break;

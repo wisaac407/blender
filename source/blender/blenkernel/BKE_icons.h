@@ -53,9 +53,9 @@ enum eIconSizes;
 void BKE_icons_init(int first_dyn_id);
 
 /* return icon id for library object or create new icon if not found */
-int BKE_icon_id_get(struct ID *id);
+int BKE_icon_id_ensure(struct ID *id);
 
-int BKE_icon_preview_get(struct PreviewImage *preview);
+int BKE_icon_preview_ensure(struct PreviewImage *preview);
 
 /* retrieve icon for id */
 struct Icon *BKE_icon_get(int icon_id);

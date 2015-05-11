@@ -416,7 +416,7 @@ static void rna_Brush_icon_update(Main *UNUSED(bmain), Scene *UNUSED(scene), Poi
 
 	if (br->flag & BRUSH_CUSTOM_ICON) {
 		BKE_previewimg_id_get(&br->id);
-		BKE_icon_changed(BKE_icon_id_get(&br->id));
+		BKE_icon_changed(BKE_icon_id_ensure(&br->id));
 	}
 
 	WM_main_add_notifier(NC_BRUSH | NA_EDITED, br);

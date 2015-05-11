@@ -443,7 +443,7 @@ void BKE_icon_changed(int id)
 	}
 }
 
-int BKE_icon_id_get(struct ID *id)
+int BKE_icon_id_ensure(struct ID *id)
 {
 	Icon *new_icon = NULL;
 
@@ -477,7 +477,7 @@ int BKE_icon_id_get(struct ID *id)
 /**
  * Return icon id of given preview, or create new icon if not found.
  */
-int BKE_icon_preview_get(PreviewImage *preview)
+int BKE_icon_preview_ensure(PreviewImage *preview)
 {
 	Icon *new_icon = NULL;
 

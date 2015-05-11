@@ -3001,7 +3001,7 @@ static void image_initialize_after_load(Image *ima, ImBuf *ibuf)
 {
 	/* preview is NULL when it has never been used as an icon before */
 	if (G.background == 0 && ima->preview == NULL)
-		BKE_icon_changed(BKE_icon_id_get(&ima->id));
+		BKE_icon_changed(BKE_icon_id_ensure(&ima->id));
 
 	/* fields */
 	if (ima->flag & IMA_FIELDS) {
