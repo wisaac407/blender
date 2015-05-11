@@ -245,7 +245,7 @@ void BKE_previewimg_id_free(ID *id)
 	}
 }
 
-PreviewImage *BKE_previewimg_id_get(ID *id)
+PreviewImage *BKE_previewimg_id_ensure(ID *id)
 {
 	PreviewImage *prv_img = NULL;
 
@@ -430,7 +430,7 @@ void BKE_icon_changed(int id)
 	icon = BLI_ghash_lookup(gIcons, SET_INT_IN_POINTER(id));
 	
 	if (icon) {
-		PreviewImage *prv = BKE_previewimg_id_get((ID *)icon->obj);
+		PreviewImage *prv = BKE_previewimg_id_ensure((ID *)icon->obj);
 
 		/* all previews changed */
 		if (prv) {

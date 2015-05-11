@@ -416,7 +416,7 @@ static void rna_ImagePreview_is_custom_set(PointerRNA *ptr, int value, enum eIco
 	PreviewImage *prv_img = (PreviewImage *)ptr->data;
 
 	if (id != NULL) {
-		BLI_assert(prv_img == BKE_previewimg_id_get(id));
+		BLI_assert(prv_img == BKE_previewimg_id_ensure(id));
 	}
 
 	if ((value && (prv_img->flag[size] & PRV_USER_EDITED)) || (!value && !(prv_img->flag[size] & PRV_USER_EDITED))) {
@@ -439,7 +439,7 @@ static void rna_ImagePreview_size_get(PointerRNA *ptr, int *values, enum eIconSi
 	PreviewImage *prv_img = (PreviewImage *)ptr->data;
 
 	if (id != NULL) {
-		BLI_assert(prv_img == BKE_previewimg_id_get(id));
+		BLI_assert(prv_img == BKE_previewimg_id_ensure(id));
 	}
 
 	BKE_previewimg_ensure(prv_img, size);
@@ -454,7 +454,7 @@ static void rna_ImagePreview_size_set(PointerRNA *ptr, const int *values, enum e
 	PreviewImage *prv_img = (PreviewImage *)ptr->data;
 
 	if (id != NULL) {
-		BLI_assert(prv_img == BKE_previewimg_id_get(id));
+		BLI_assert(prv_img == BKE_previewimg_id_ensure(id));
 	}
 
 	BKE_previewimg_ensure(prv_img, size);
@@ -475,7 +475,7 @@ static int rna_ImagePreview_pixels_get_length(PointerRNA *ptr, int length[RNA_MA
 	PreviewImage *prv_img = (PreviewImage *)ptr->data;
 
 	if (id != NULL) {
-		BLI_assert(prv_img == BKE_previewimg_id_get(id));
+		BLI_assert(prv_img == BKE_previewimg_id_ensure(id));
 	}
 
 	BKE_previewimg_ensure(prv_img, size);
@@ -491,7 +491,7 @@ static void rna_ImagePreview_pixels_get(PointerRNA *ptr, int *values, enum eIcon
 	PreviewImage *prv_img = (PreviewImage *)ptr->data;
 
 	if (id != NULL) {
-		BLI_assert(prv_img == BKE_previewimg_id_get(id));
+		BLI_assert(prv_img == BKE_previewimg_id_ensure(id));
 	}
 
 	BKE_previewimg_ensure(prv_img, size);
@@ -505,7 +505,7 @@ static void rna_ImagePreview_pixels_set(PointerRNA *ptr, const int *values, enum
 	PreviewImage *prv_img = (PreviewImage *)ptr->data;
 
 	if (id != NULL) {
-		BLI_assert(prv_img == BKE_previewimg_id_get(id));
+		BLI_assert(prv_img == BKE_previewimg_id_ensure(id));
 	}
 
 	memcpy(prv_img->rect[size], values, prv_img->w[size] * prv_img->h[size] * sizeof(unsigned int));

@@ -948,7 +948,7 @@ void ui_icon_ensure_deferred(const bContext *C, const int icon_id, const bool bi
 
 		if (di) {
 			if (di->type == ICON_TYPE_PREVIEW) {
-				PreviewImage *prv = (icon->type != 0) ? BKE_previewimg_id_get((ID *)icon->obj) : icon->obj;
+				PreviewImage *prv = (icon->type != 0) ? BKE_previewimg_id_ensure((ID *)icon->obj) : icon->obj;
 
 				if (prv) {
 					const int size = big ? ICON_SIZE_PREVIEW : ICON_SIZE_ICON;
@@ -1008,7 +1008,7 @@ PreviewImage *UI_icon_to_preview(int icon_id)
 		DrawInfo *di = (DrawInfo *)icon->drawinfo;
 		if (di) {
 			if (di->type == ICON_TYPE_PREVIEW) {
-				PreviewImage *prv = (icon->type != 0) ? BKE_previewimg_id_get((ID *)icon->obj) : icon->obj;
+				PreviewImage *prv = (icon->type != 0) ? BKE_previewimg_id_ensure((ID *)icon->obj) : icon->obj;
 
 				if (prv) {
 					return BKE_previewimg_copy(prv);
@@ -1222,7 +1222,7 @@ static void icon_draw_size(
 		glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 	}
 	else if (di->type == ICON_TYPE_PREVIEW) {
-		PreviewImage *pi = (icon->type != 0) ? BKE_previewimg_id_get((ID *)icon->obj) : icon->obj;
+		PreviewImage *pi = (icon->type != 0) ? BKE_previewimg_id_ensure((ID *)icon->obj) : icon->obj;
 
 		if (pi) {
 			/* Do deferred loading/generation if needed. */
@@ -1252,7 +1252,7 @@ static void ui_id_preview_image_render_size(
 
 void UI_id_icon_render(const bContext *C, Scene *scene, ID *id, const bool big, const bool use_job)
 {
-	PreviewImage *pi = BKE_previewimg_id_get(id);
+	PreviewImage *pi = BKE_previewimg_id_ensure(id);
 
 	if (pi) {
 		if (big)
@@ -1264,7 +1264,7 @@ void UI_id_icon_render(const bContext *C, Scene *scene, ID *id, const bool big, 
 
 static void ui_id_brush_render(const bContext *C, ID *id)
 {
-	PreviewImage *pi = BKE_previewimg_id_get(id);
+	PreviewImage *pi = BKE_previewimg_id_ensure(id);
 	enum eIconSizes i;
 	
 	if (!pi)
