@@ -312,12 +312,12 @@ PreviewImage *BKE_previewimg_cached_thumbnail_read(
         const char *name, const char *path, const int source, bool force_update)
 {
 	PreviewImage *prv = NULL;
-	void **prv_v;
+	void **prv_p;
 
-	prv_v = BLI_ghash_lookup_p(gCachedPreviews, name);
+	prv_p = BLI_ghash_lookup_p(gCachedPreviews, name);
 
-	if (prv_v) {
-		prv = *prv_v;
+	if (prv_p) {
+		prv = *prv_p;
 		BLI_assert(prv);
 	}
 
@@ -346,8 +346,8 @@ PreviewImage *BKE_previewimg_cached_thumbnail_read(
 	}
 
 	if (force_update) {
-		if (prv_v) {
-			*prv_v = prv;
+		if (prv_p) {
+			*prv_p = prv;
 		}
 		else {
 			BLI_ghash_insert(gCachedPreviews, BLI_strdup(name), prv);
