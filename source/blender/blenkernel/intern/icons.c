@@ -164,7 +164,6 @@ void BKE_previewimg_freefunc(void *link)
 		for (i = 0; i < NUM_ICON_SIZES; ++i) {
 			if (prv->rect[i]) {
 				MEM_freeN(prv->rect[i]);
-				prv->rect[i] = NULL;
 			}
 			if (prv->gputexture[i])
 				GPU_texture_free(prv->gputexture[i]);
@@ -182,18 +181,23 @@ void BKE_previewimg_free(PreviewImage **prv)
 	}
 }
 
-void BKE_previewimg_clear(struct PreviewImage *prv, enum eIconSizes size)
+void BKE_previewimg_clear_single(struct PreviewImage *prv, enum eIconSizes size)
 {
-	if (prv->rect[size]) {
-		MEM_freeN(prv->rect[size]);
-		prv->rect[size] = NULL;
-	}
+	MEM_SAFE_FREE(prv->rect[size]);
 	if (prv->gputexture[size]) {
 		GPU_texture_free(prv->gputexture[size]);
 	}
 	prv->h[size] = prv->w[size] = 0;
 	prv->flag[size] |= PRV_CHANGED;
 	prv->changed_timestamp[size] = 0;
+}
+
+void BKE_previewimg_clear(struct PreviewImage *prv)
+{
+	int i;
+	for (i = 0; i < NUM_ICON_SIZES; ++i) {
+		BKE_previewimg_clear_single(prv, i);
+	}
 }
 
 PreviewImage *BKE_previewimg_copy(PreviewImage *prv)
@@ -279,31 +283,24 @@ PreviewImage *BKE_previewimg_id_get(ID *id)
 	return prv_img;
 }
 
+PreviewImage *BKE_previewimg_cached_get(const char *name)
+{
+	return BLI_ghash_lookup(gCachedPreviews, name);
+}
+
 /**
  * Generate an empty PreviewImage, if not yet existing.
  */
-PreviewImage *BKE_previewimg_cached_get(const char *name)
+PreviewImage *BKE_previewimg_cached_ensure(const char *name)
 {
 	PreviewImage *prv = NULL;
-	void **prv_v;
+	void **prv_p;
 
-	prv_v = BLI_ghash_lookup_p(gCachedPreviews, name);
-
-	if (prv_v) {
-		prv = *prv_v;
-		BLI_assert(prv);
+	if (!BLI_ghash_ensure_p_ex(gCachedPreviews, name, &prv_p, (GHashKeyCopyFP)BLI_strdup)) {
+		*prv_p = BKE_previewimg_create();
 	}
-
-	if (!prv) {
-		prv = BKE_previewimg_create();
-	}
-
-	if (prv_v) {
-		*prv_v = prv;
-	}
-	else {
-		BLI_ghash_insert(gCachedPreviews, (void *)BLI_strdup(name), prv);
-	}
+	prv = *prv_p;
+	BLI_assert(prv);
 
 	return prv;
 }
@@ -311,7 +308,7 @@ PreviewImage *BKE_previewimg_cached_get(const char *name)
 /**
  * Generate a PreviewImage from given file path, using thumbnails management, if not yet existing.
  */
-PreviewImage *BKE_previewimg_cached_thumbnail_get(
+PreviewImage *BKE_previewimg_cached_thumbnail_read(
         const char *name, const char *path, const int source, bool force_update)
 {
 	PreviewImage *prv = NULL;
@@ -328,8 +325,7 @@ PreviewImage *BKE_previewimg_cached_thumbnail_get(
 		const char *prv_deferred_data = PRV_DEFERRED_DATA(prv);
 		if (((int)prv_deferred_data[0] == source) && STREQ(&prv_deferred_data[1], path)) {
 			/* If same path, no need to re-allocate preview, just clear it up. */
-			BKE_previewimg_clear(prv, ICON_SIZE_ICON);
-			BKE_previewimg_clear(prv, ICON_SIZE_PREVIEW);
+			BKE_previewimg_clear(prv);
 		}
 		else {
 			BKE_previewimg_free(&prv);
@@ -354,7 +350,7 @@ PreviewImage *BKE_previewimg_cached_thumbnail_get(
 			*prv_v = prv;
 		}
 		else {
-			BLI_ghash_insert(gCachedPreviews, (void *)BLI_strdup(name), prv);
+			BLI_ghash_insert(gCachedPreviews, BLI_strdup(name), prv);
 		}
 	}
 
@@ -363,7 +359,7 @@ PreviewImage *BKE_previewimg_cached_thumbnail_get(
 
 void BKE_previewimg_cached_release(const char *name)
 {
-	PreviewImage *prv = BLI_ghash_popkey(gCachedPreviews, (void *)name, MEM_freeN);
+	PreviewImage *prv = BLI_ghash_popkey(gCachedPreviews, name, MEM_freeN);
 
 	if (prv) {
 		if (prv->icon_id) {

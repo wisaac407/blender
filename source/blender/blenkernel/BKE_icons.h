@@ -82,7 +82,10 @@ void BKE_previewimg_freefunc(void *link);
 void BKE_previewimg_free(struct PreviewImage **prv);
 
 /* clear the preview image or icon, but does not free it */
-void BKE_previewimg_clear(struct PreviewImage *prv, enum eIconSizes size);
+void BKE_previewimg_clear(struct PreviewImage *prv);
+
+/* clear the preview image or icon at a specific size */
+void BKE_previewimg_clear_single(struct PreviewImage *prv, enum eIconSizes size);
 
 /* free the preview image belonging to the id */
 void BKE_previewimg_id_free(struct ID *id);
@@ -100,7 +103,9 @@ void BKE_previewimg_ensure(struct PreviewImage *prv, const int size);
 
 struct PreviewImage *BKE_previewimg_cached_get(const char *name);
 
-struct PreviewImage *BKE_previewimg_cached_thumbnail_get(
+struct PreviewImage *BKE_previewimg_cached_ensure(const char *name);
+
+struct PreviewImage *BKE_previewimg_cached_thumbnail_read(
         const char *name, const char *path, const int source, bool force_update);
 
 void BKE_previewimg_cached_release(const char *name);

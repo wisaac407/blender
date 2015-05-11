@@ -430,7 +430,7 @@ static void rna_Preview_is_custom_set(PointerRNA *ptr, int value, enum eIconSize
 
 	prv_img->flag[size] |= PRV_CHANGED;
 
-	BKE_previewimg_clear(prv_img, size);
+	BKE_previewimg_clear_single(prv_img, size);
 }
 
 static void rna_Preview_size_get(PointerRNA *ptr, int *values, enum eIconSizes size)
