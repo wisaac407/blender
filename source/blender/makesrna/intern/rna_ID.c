@@ -577,6 +577,12 @@ static int rna_ImagePreview_icon_id_get(PointerRNA *ptr)
 	/* Using a callback here allows us to only generate icon matching that preview when icon_id is requested. */
 	return BKE_icon_preview_get((PreviewImage *)(ptr->data));
 }
+static void rna_ImagePreview_icon_reload(PreviewImage *prv)
+{
+	/* will lazy load on next use */
+	BKE_previewimg_clear(prv);
+}
+
 #else
 
 static void rna_def_ID_properties(BlenderRNA *brna)
@@ -698,6 +704,7 @@ static void rna_def_ID_materials(BlenderRNA *brna)
 static void rna_def_image_preview(BlenderRNA *brna)
 {
 	StructRNA *srna;
+	FunctionRNA *func;
 	PropertyRNA *prop;
 
 	srna = RNA_def_struct(brna, "ImagePreview", NULL);
@@ -745,6 +752,9 @@ static void rna_def_image_preview(BlenderRNA *brna)
 	                   "Unique integer identifying this preview as an icon (zero means invalid)", INT_MIN, INT_MAX);
 	RNA_def_property_clear_flag(prop, PROP_EDITABLE);
 	RNA_def_property_int_funcs(prop, "rna_ImagePreview_icon_id_get", NULL, NULL);
+
+	func = RNA_def_function(srna, "reload", "rna_ImagePreview_icon_reload");
+	RNA_def_function_ui_description(func, "Reload the preview from its source path");
 }
 
 static void rna_def_ID(BlenderRNA *brna)

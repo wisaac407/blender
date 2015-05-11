@@ -46,7 +46,7 @@ class _BPyImagePreviewCollection(dict):
 
     # Internal notes:
     # - keys in the dict are stored by name
-    # - values are instances of bpy.types.Preview
+    # - values are instances of bpy.types.ImagePreview
     # - Blender's internal 'PreviewImage' struct uses 'self._uuid' prefix.
 
     def __init__(self):
@@ -82,14 +82,6 @@ class _BPyImagePreviewCollection(dict):
                 self._gen_key(name), path, path_type, False)
         return p
     load.__doc__ = _previews.load.__doc__
-
-    def reload(self, name, path, path_type):
-        p = self.get(name)
-        if p in None:
-            raise KeyException("key %r doesn't exist")
-        p = self[name] = _previews.load(
-                self._gen_key(name), path, path_type, True)
-        return p
 
     def release(self, name):
         p = self.pop(name, None)
