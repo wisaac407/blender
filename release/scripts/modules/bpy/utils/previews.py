@@ -126,3 +126,12 @@ def remove(p):
     """
     p.close()
 
+
+# don't complain about resources on exit (only unregister)
+import atexit
+
+def exit_clear_warning():
+    del _BPyImagePreviewCollection.__del__
+
+atexit.register(exit_clear_warning)
+del atexit, exit_clear_warning
