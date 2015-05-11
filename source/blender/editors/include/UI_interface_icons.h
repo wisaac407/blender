@@ -36,7 +36,6 @@ struct bContext;
 struct ID;
 struct PreviewImage;
 struct PointerRNA;
-struct Scene;
 
 typedef struct IconFile {
 	struct IconFile *next, *prev;

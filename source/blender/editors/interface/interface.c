@@ -3244,7 +3244,7 @@ void ui_def_but_icon(uiBut *but, const int icon, const int flag) {
 	but->icon = (BIFIconID)icon;
 	but->flag |= flag;
 
-	if (but->str) {
+	if (but->str && but->str[0]) {
 		but->drawflag |= UI_BUT_ICON_LEFT;
 	}
 }
