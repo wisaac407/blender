@@ -32,7 +32,10 @@ __all__ = (
     "remove",
     )
 
-from bpy.app import _previews
+import _bpy
+_utils_previews = _bpy._utils_previews
+del _bpy
+
 
 _uuid_open = set()
 
@@ -70,28 +73,28 @@ class _BPyImagePreviewCollection(dict):
     def new(self, name):
         if name in self:
             raise KeyException("key %r already exists")
-        p = self[name] = _previews.new(
+        p = self[name] = _utils_previews.new(
                 self._gen_key(name))
         return p
-    new.__doc__ = _previews.new.__doc__
+    new.__doc__ = _utils_previews.new.__doc__
 
     def load(self, name, path, path_type):
         if name in self:
             raise KeyException("key %r already exists")
-        p = self[name] = _previews.load(
+        p = self[name] = _utils_previews.load(
                 self._gen_key(name), path, path_type, False)
         return p
-    load.__doc__ = _previews.load.__doc__
+    load.__doc__ = _utils_previews.load.__doc__
 
     def release(self, name):
         p = self.pop(name, None)
         if p is not None:
-            _previews.release(self._gen_key(name))
-    release.__doc__ = _previews.release.__doc__
+            _utils_previews.release(self._gen_key(name))
+    release.__doc__ = _utils_previews.release.__doc__
 
     def clear(self):
         for name in self.keys():
-            _previews.release(self._gen_key(name))
+            _utils_previews.release(self._gen_key(name))
         super().clear()
 
     def close(self):

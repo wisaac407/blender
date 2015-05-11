@@ -20,10 +20,10 @@
  * ***** END GPL LICENSE BLOCK *****
  */
 
-/** \file blender/python/intern/bpy_app_previews.c
+/** \file blender/python/intern/bpy_utils_previews.c
  *  \ingroup pythonintern
  *
- * This file defines a singleton py object accessed via 'bpy.app.previews',
+ * This file defines a singleton py object accessed via 'bpy.utils.previews',
  * which exposes low-level API for custom previews/icons.
  * It is replaced in final API by an higher-level python wrapper, that handles previews by addon,
  * and automatically release them on deletion.
@@ -38,7 +38,7 @@
 #include "RNA_access.h"
 
 #include "BPY_extern.h"
-#include "bpy_app_previews.h"
+#include "bpy_utils_previews.h"
 #include "bpy_rna.h"
 
 #include "MEM_guardedalloc.h"
@@ -53,7 +53,7 @@
 
 #include "../generic/python_utildefines.h"
 
-PyDoc_STRVAR(app_previews_meth_new_doc,
+PyDoc_STRVAR(bpy_utils_previews_new_doc,
 ".. method:: new(name)\n"
 "\n"
 "   Generate a new empty preview, or return existing one matching ``name``.\n"
@@ -63,7 +63,7 @@ PyDoc_STRVAR(app_previews_meth_new_doc,
 "   :return: The Preview matching given name, or a new empty one.\n"
 "   :rtype: :class:`bpy.types.ImagePreview`\n"
 );
-static PyObject *app_previews_meth_new(PyObject *UNUSED(self), PyObject *args, PyObject *kw)
+static PyObject *bpy_utils_previews_new(PyObject *UNUSED(self), PyObject *args, PyObject *kw)
 {
 	static const char *kwlist[] = {"name", NULL};
 	char *name;
@@ -83,7 +83,7 @@ static PyObject *app_previews_meth_new(PyObject *UNUSED(self), PyObject *args, P
 	return pyrna_struct_CreatePyObject(&ptr);
 }
 
-PyDoc_STRVAR(app_previews_meth_load_doc,
+PyDoc_STRVAR(bpy_utils_previews_load_doc,
 ".. method:: load(name, path, path_type, force_reload)\n"
 "\n"
 "   Generate a new preview from given file path, or return existing one matching ``name``.\n"
@@ -99,7 +99,7 @@ PyDoc_STRVAR(app_previews_meth_load_doc,
 "   :return: The Preview matching given name, or a new empty one.\n"
 "   :rtype: :class:`bpy.types.ImagePreview`\n"
 );
-static PyObject *app_previews_meth_load(PyObject *UNUSED(self), PyObject *args, PyObject *kw)
+static PyObject *bpy_utils_previews_load(PyObject *UNUSED(self), PyObject *args, PyObject *kw)
 {
 	static const char *kwlist[] = {"name", "path", "path_type", "force_reload", NULL};
 	char *name, *path, *path_type_s;
@@ -129,7 +129,7 @@ static PyObject *app_previews_meth_load(PyObject *UNUSED(self), PyObject *args, 
 	}
 	else {
 		PyErr_Format(PyExc_ValueError,
-		             "bpy.app.previews.load: invalid '%' path type, only 'IMAGE', 'MOVIE', 'BLEND' and 'FONT' "
+		             "load: invalid '%' path type, only 'IMAGE', 'MOVIE', 'BLEND' and 'FONT' "
 		             "are supported", path_type_s);
 		return NULL;
 	}
@@ -140,7 +140,7 @@ static PyObject *app_previews_meth_load(PyObject *UNUSED(self), PyObject *args, 
 	return pyrna_struct_CreatePyObject(&ptr);
 }
 
-PyDoc_STRVAR(app_previews_meth_release_doc,
+PyDoc_STRVAR(bpy_utils_previews_release_doc,
 ".. method:: release(name)\n"
 "\n"
 "   Release (free) a previously created preview.\n"
@@ -149,7 +149,7 @@ PyDoc_STRVAR(app_previews_meth_release_doc,
 "   :arg name: The name (unique id) identifying the preview.\n"
 "   :type name: string\n"
 );
-static PyObject *app_previews_meth_release(PyObject *UNUSED(self), PyObject *args, PyObject *kw)
+static PyObject *bpy_utils_previews_release(PyObject *UNUSED(self), PyObject *args, PyObject *kw)
 {
 	static const char *kwlist[] = {"name", NULL};
 	char *name;
@@ -166,33 +166,33 @@ static PyObject *app_previews_meth_release(PyObject *UNUSED(self), PyObject *arg
 	Py_RETURN_NONE;
 }
 
-static struct PyMethodDef bpy_app_previews_methods[] = {
+static struct PyMethodDef bpy_utils_previews_methods[] = {
 	/* Can't use METH_KEYWORDS alone, see http://bugs.python.org/issue11587 */
-	{"new", (PyCFunction)app_previews_meth_new, METH_VARARGS | METH_KEYWORDS, app_previews_meth_new_doc},
-	{"load", (PyCFunction)app_previews_meth_load, METH_VARARGS | METH_KEYWORDS, app_previews_meth_load_doc},
-	{"release", (PyCFunction)app_previews_meth_release, METH_VARARGS | METH_KEYWORDS, app_previews_meth_release_doc},
+	{"new", (PyCFunction)bpy_utils_previews_new, METH_VARARGS | METH_KEYWORDS, bpy_utils_previews_new_doc},
+	{"load", (PyCFunction)bpy_utils_previews_load, METH_VARARGS | METH_KEYWORDS, bpy_utils_previews_load_doc},
+	{"release", (PyCFunction)bpy_utils_previews_release, METH_VARARGS | METH_KEYWORDS, bpy_utils_previews_release_doc},
 	{NULL, NULL, 0, NULL}
 };
 
-PyDoc_STRVAR(bpy_app_previews_doc,
+PyDoc_STRVAR(bpy_utils_previews_doc,
 "This object contains basic static methods to handle cached (non-ID) previews in Blender\n"
 "(low-level API, not exposed to final users)."
 );
-static struct PyModuleDef bpy_app_previews_module = {
+static struct PyModuleDef bpy_utils_previews_module = {
 	PyModuleDef_HEAD_INIT,
-	"bpy.app._previews",
-	bpy_app_previews_doc,
+	"bpy._utils_previews",
+	bpy_utils_previews_doc,
 	0,
-	bpy_app_previews_methods,
+	bpy_utils_previews_methods,
 	NULL, NULL, NULL, NULL
 };
 
 
-PyObject *BPY_app_preview_module(void)
+PyObject *BPY_utils_previews_module(void)
 {
 	PyObject *submodule;
 
-	submodule = PyModule_Create(&bpy_app_previews_module);
+	submodule = PyModule_Create(&bpy_utils_previews_module);
 
 	return submodule;
 }

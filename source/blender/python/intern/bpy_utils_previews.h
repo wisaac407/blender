@@ -20,13 +20,13 @@
  * ***** END GPL LICENSE BLOCK *****
  */
 
-/** \file blender/python/intern/bpy_app_previews.h
+/** \file blender/python/intern/bpy_utils_previews.h
  *  \ingroup pythonintern
  */
 
-#ifndef __BPY_APP_PREVIEWS_H__
-#define __BPY_APP_PREVIEWS_H__
+#ifndef __BPY_UTILS_PREVIEWS_H__
+#define __BPY_UTILS_PREVIEWS_H__
 
-PyObject *BPY_app_preview_module(void);
+PyObject *BPY_utils_previews_module(void);
 
-#endif /* __BPY_APP_PREVIEWS_H__ */
+#endif /* __BPY_UTILS_PREVIEWS_H__ */
