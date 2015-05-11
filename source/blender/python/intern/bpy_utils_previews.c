@@ -53,6 +53,8 @@
 
 #include "../generic/python_utildefines.h"
 
+#define STR_SOURCE_TYPES "'IMAGE', 'MOVIE', 'BLEND', 'FONT'"
+
 PyDoc_STRVAR(bpy_utils_previews_new_doc,
 ".. method:: new(name)\n"
 "\n"
@@ -92,7 +94,7 @@ PyDoc_STRVAR(bpy_utils_previews_load_doc,
 "   :type name: string\n"
 "   :arg path: The file path to generate the preview from.\n"
 "   :type path: string\n"
-"   :arg path_type: The type of file, needed to generate the preview ('IMAGE', 'MOVIE', 'BLEND' or 'FONT').\n"
+"   :arg path_type: The type of file, needed to generate the preview in [" STR_SOURCE_TYPES "].\n"
 "   :type path_type: string\n"
 "   :arg force_reload: If True, force running thumbnail manager even if preview already exists in cache.\n"
 "   :type force_reload: bool\n"
@@ -129,7 +131,7 @@ static PyObject *bpy_utils_previews_load(PyObject *UNUSED(self), PyObject *args,
 	}
 	else {
 		PyErr_Format(PyExc_ValueError,
-		             "load: invalid '%' path type, only 'IMAGE', 'MOVIE', 'BLEND' and 'FONT' "
+		             "load: invalid '%' path type, only [" STR_SOURCE_TYPES "] "
 		             "are supported", path_type_s);
 		return NULL;
 	}
