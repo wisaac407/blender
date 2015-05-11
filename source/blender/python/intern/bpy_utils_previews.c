@@ -65,17 +65,13 @@ PyDoc_STRVAR(bpy_utils_previews_new_doc,
 "   :return: The Preview matching given name, or a new empty one.\n"
 "   :rtype: :class:`bpy.types.ImagePreview`\n"
 );
-static PyObject *bpy_utils_previews_new(PyObject *UNUSED(self), PyObject *args, PyObject *kw)
+static PyObject *bpy_utils_previews_new(PyObject *UNUSED(self), PyObject *args)
 {
-	static const char *kwlist[] = {"name", NULL};
 	char *name;
 	PreviewImage *prv;
 	PointerRNA ptr;
 
-	if (!PyArg_ParseTupleAndKeywords(
-	        args, kw, "s:new", (char **)kwlist,
-	        &name))
-	{
+	if (!PyArg_ParseTuple(args, "s:new", &name)) {
 		return NULL;
 	}
 
@@ -101,19 +97,15 @@ PyDoc_STRVAR(bpy_utils_previews_load_doc,
 "   :return: The Preview matching given name, or a new empty one.\n"
 "   :rtype: :class:`bpy.types.ImagePreview`\n"
 );
-static PyObject *bpy_utils_previews_load(PyObject *UNUSED(self), PyObject *args, PyObject *kw)
+static PyObject *bpy_utils_previews_load(PyObject *UNUSED(self), PyObject *args)
 {
-	static const char *kwlist[] = {"name", "path", "path_type", "force_reload", NULL};
 	char *name, *path, *path_type_s;
 	int path_type, force_reload = false;
 
 	PreviewImage *prv;
 	PointerRNA ptr;
 
-	if (!PyArg_ParseTupleAndKeywords(
-	        args, kw, "sss|p:load", (char **)kwlist,
-	        &name, &path, &path_type_s, &force_reload))
-	{
+	if (!PyArg_ParseTuple( args, "sss|p:load", &name, &path, &path_type_s, &force_reload)) {
 		return NULL;
 	}
 
@@ -151,15 +143,11 @@ PyDoc_STRVAR(bpy_utils_previews_release_doc,
 "   :arg name: The name (unique id) identifying the preview.\n"
 "   :type name: string\n"
 );
-static PyObject *bpy_utils_previews_release(PyObject *UNUSED(self), PyObject *args, PyObject *kw)
+static PyObject *bpy_utils_previews_release(PyObject *UNUSED(self), PyObject *args)
 {
-	static const char *kwlist[] = {"name", NULL};
 	char *name;
 
-	if (!PyArg_ParseTupleAndKeywords(
-	        args, kw, "s:release", (char **)kwlist,
-	        &name))
-	{
+	if (!PyArg_ParseTuple(args, "s:release", &name)) {
 		return NULL;
 	}
 
@@ -170,9 +158,9 @@ static PyObject *bpy_utils_previews_release(PyObject *UNUSED(self), PyObject *ar
 
 static struct PyMethodDef bpy_utils_previews_methods[] = {
 	/* Can't use METH_KEYWORDS alone, see http://bugs.python.org/issue11587 */
-	{"new", (PyCFunction)bpy_utils_previews_new, METH_VARARGS | METH_KEYWORDS, bpy_utils_previews_new_doc},
-	{"load", (PyCFunction)bpy_utils_previews_load, METH_VARARGS | METH_KEYWORDS, bpy_utils_previews_load_doc},
-	{"release", (PyCFunction)bpy_utils_previews_release, METH_VARARGS | METH_KEYWORDS, bpy_utils_previews_release_doc},
+	{"new", (PyCFunction)bpy_utils_previews_new, METH_VARARGS, bpy_utils_previews_new_doc},
+	{"load", (PyCFunction)bpy_utils_previews_load, METH_VARARGS, bpy_utils_previews_load_doc},
+	{"release", (PyCFunction)bpy_utils_previews_release, METH_VARARGS, bpy_utils_previews_release_doc},
 	{NULL, NULL, 0, NULL}
 };
 
