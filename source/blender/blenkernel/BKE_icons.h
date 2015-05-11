@@ -87,6 +87,9 @@ void BKE_previewimg_clear(struct PreviewImage *prv);
 /* clear the preview image or icon at a specific size */
 void BKE_previewimg_clear_single(struct PreviewImage *prv, enum eIconSizes size);
 
+/* get the preview from any pointer */
+struct PreviewImage **BKE_previewimg_id_get_p(struct ID *id);
+
 /* free the preview image belonging to the id */
 void BKE_previewimg_id_free(struct ID *id);
 

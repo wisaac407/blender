@@ -217,70 +217,42 @@ PreviewImage *BKE_previewimg_copy(PreviewImage *prv)
 	return prv_img;
 }
 
+PreviewImage **BKE_previewimg_id_get_p(ID *id)
+{
+	switch (GS(id->name)) {
+#define ID_PRV_CASE(id_code, id_struct) case id_code: { return &((id_struct *)id)->preview; }
+		ID_PRV_CASE(ID_MA, Material);
+		ID_PRV_CASE(ID_TE, Tex);
+		ID_PRV_CASE(ID_WO, World);
+		ID_PRV_CASE(ID_LA, Lamp);
+		ID_PRV_CASE(ID_IM, Image);
+		ID_PRV_CASE(ID_BR, Brush);
+#undef ID_PRV_CASE
+	}
+
+	return NULL;
+}
+
 void BKE_previewimg_id_free(ID *id)
 {
-	if (GS(id->name) == ID_MA) {
-		Material *mat = (Material *)id;
-		BKE_previewimg_free(&mat->preview);
-	}
-	else if (GS(id->name) == ID_TE) {
-		Tex *tex = (Tex *)id;
-		BKE_previewimg_free(&tex->preview);
-	}
-	else if (GS(id->name) == ID_WO) {
-		World *wo = (World *)id;
-		BKE_previewimg_free(&wo->preview);
-	}
-	else if (GS(id->name) == ID_LA) {
-		Lamp *la  = (Lamp *)id;
-		BKE_previewimg_free(&la->preview);
-	}
-	else if (GS(id->name) == ID_IM) {
-		Image *img  = (Image *)id;
-		BKE_previewimg_free(&img->preview);
-	}
-	else if (GS(id->name) == ID_BR) {
-		Brush *br  = (Brush *)id;
-		BKE_previewimg_free(&br->preview);
+	PreviewImage **prv_p = BKE_previewimg_id_get_p(id);
+	if (prv_p) {
+		BKE_previewimg_free(prv_p);
 	}
 }
 
 PreviewImage *BKE_previewimg_id_ensure(ID *id)
 {
-	PreviewImage *prv_img = NULL;
+	PreviewImage **prv_p = BKE_previewimg_id_get_p(id);
 
-	if (GS(id->name) == ID_MA) {
-		Material *mat = (Material *)id;
-		if (!mat->preview) mat->preview = BKE_previewimg_create();
-		prv_img = mat->preview;
-	}
-	else if (GS(id->name) == ID_TE) {
-		Tex *tex = (Tex *)id;
-		if (!tex->preview) tex->preview = BKE_previewimg_create();
-		prv_img = tex->preview;
-	}
-	else if (GS(id->name) == ID_WO) {
-		World *wo = (World *)id;
-		if (!wo->preview) wo->preview = BKE_previewimg_create();
-		prv_img = wo->preview;
-	}
-	else if (GS(id->name) == ID_LA) {
-		Lamp *la  = (Lamp *)id;
-		if (!la->preview) la->preview = BKE_previewimg_create();
-		prv_img = la->preview;
-	}
-	else if (GS(id->name) == ID_IM) {
-		Image *img  = (Image *)id;
-		if (!img->preview) img->preview = BKE_previewimg_create();
-		prv_img = img->preview;
-	}
-	else if (GS(id->name) == ID_BR) {
-		Brush *br  = (Brush *)id;
-		if (!br->preview) br->preview = BKE_previewimg_create();
-		prv_img = br->preview;
+	if (prv_p) {
+		if (*prv_p == NULL) {
+			*prv_p = BKE_previewimg_create();
+		}
+		return *prv_p;
 	}
 
-	return prv_img;
+	return NULL;
 }
 
 PreviewImage *BKE_previewimg_cached_get(const char *name)
