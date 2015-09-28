@@ -453,7 +453,7 @@ PyDoc_STRVAR(GPU_offscreen_object_bind_doc,
 "\n"
 "   :param offscreen_object: offscreen object\n"
 "   :type offscreen_object: :class:`gpu.OffScreenObject`\n"
-"   :param use_save: \n"
+"   :param use_save: save OpenGL current states\n"
 "   :type use_save: bool"
 );
 static PyObject *GPU_offscreen_object_bind(PyObject *UNUSED(self), PyObject *args, PyObject *kwds)
@@ -532,7 +532,7 @@ PyDoc_STRVAR(GPU_offscreen_object_unbind_doc,
 "\n"
 "   :param offscreen_object: offscreen object\n"
 "   :type offscreen_object: :class:`gpu.OffScreenObject`\n"
-"   :param use_restore: \n"
+"   :param use_restore: restore OpenGL previous states\n"
 "   :type use_restore: bool"
 );
 static PyObject *GPU_offscreen_object_unbind(PyObject *UNUSED(self), PyObject *args, PyObject *kwds)
