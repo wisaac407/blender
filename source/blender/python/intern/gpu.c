@@ -351,10 +351,10 @@ static PyObject *GPUOffscreen_color_object_get(PyGPUOffscreen *self, void *UNUSE
 
 static PyGetSetDef GPUOffscreen_getseters[] = {
 	{(char *)"color_object", (getter)GPUOffscreen_color_object_get, (setter)NULL, GPUOffscreen_color_object_doc, NULL},
-    {(char *)"framebuffer_object", (getter)GPUOffscreen_framebuffer_object_get, (setter)NULL, GPUOffscreen_framebuffer_object_doc, NULL},
-    {(char *)"width", (getter)GPUOffscreen_width_get, (setter)NULL, GPUOffscreen_width_doc, NULL},
-    {(char *)"height", (getter)GPUOffscreen_height_get, (setter)NULL, GPUOffscreen_height_doc, NULL},
-    {NULL, NULL, NULL, NULL, NULL}  /* Sentinel */
+	{(char *)"framebuffer_object", (getter)GPUOffscreen_framebuffer_object_get, (setter)NULL, GPUOffscreen_framebuffer_object_doc, NULL},
+	{(char *)"width", (getter)GPUOffscreen_width_get, (setter)NULL, GPUOffscreen_width_doc, NULL},
+	{(char *)"height", (getter)GPUOffscreen_height_get, (setter)NULL, GPUOffscreen_height_doc, NULL},
+	{NULL, NULL, NULL, NULL, NULL}  /* Sentinel */
 };
 
 static int PyGPUOffscreen__tp_init(PyGPUOffscreen *self, PyObject *args, PyObject *kwargs)
