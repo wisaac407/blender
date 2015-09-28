@@ -518,6 +518,7 @@ static PyObject *GPU_offscreen_object_free(PyObject *UNUSED(self), PyObject *arg
 		return NULL;
 
 	GPU_offscreen_free(PyOfs->ofs);
+	PyOfs->ofs = NULL;
 	Py_RETURN_NONE;
 }
 
