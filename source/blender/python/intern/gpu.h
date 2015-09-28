@@ -36,4 +36,6 @@
 
 PyObject *GPU_initPython(void);
 
+extern PyTypeObject PyGPUOffscreen_Type;
+
 #endif /* __GPU_H__ */
