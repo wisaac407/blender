@@ -54,6 +54,8 @@
 
 #include "../mathutils/mathutils.h"
 
+#include "gpu.h"
+
 /* -------------------------------------------------------------------- */
 /* GPU Offscreen PyObject */
 
@@ -63,41 +65,41 @@
 typedef struct {
 	PyObject_HEAD
 	GPUOffScreen *ofs;
-} PyGPUOffscreen;
+} PyGPUOffScreen;
 
-PyDoc_STRVAR(GPUOffscreen_width_doc, "Texture width.\n\n:type: GLsizei");
-static PyObject *GPUOffscreen_width_get(PyGPUOffscreen *self, void *UNUSED(type))
+PyDoc_STRVAR(GPUOffScreen_width_doc, "Texture width.\n\n:type: GLsizei");
+static PyObject *GPUOffScreen_width_get(PyGPUOffScreen *self, void *UNUSED(type))
 {
 	return PyLong_FromLong(GPU_offscreen_width(self->ofs));
 }
 
-PyDoc_STRVAR(GPUOffscreen_height_doc, "Texture height.\n\n:type: GLsizei");
-static PyObject *GPUOffscreen_height_get(PyGPUOffscreen *self, void *UNUSED(type))
+PyDoc_STRVAR(GPUOffScreen_height_doc, "Texture height.\n\n:type: GLsizei");
+static PyObject *GPUOffScreen_height_get(PyGPUOffScreen *self, void *UNUSED(type))
 {
 	return PyLong_FromLong(GPU_offscreen_height(self->ofs));
 }
 
-PyDoc_STRVAR(GPUOffscreen_framebuffer_object_doc, "Framebuffer object.\n\n:type: GLuint");
-static PyObject *GPUOffscreen_framebuffer_object_get(PyGPUOffscreen *self, void *UNUSED(type))
+PyDoc_STRVAR(GPUOffScreen_framebuffer_object_doc, "Framebuffer object.\n\n:type: GLuint");
+static PyObject *GPUOffScreen_framebuffer_object_get(PyGPUOffScreen *self, void *UNUSED(type))
 {
 	return PyLong_FromLong(GPU_offscreen_fb_object(self->ofs));
 }
 
-PyDoc_STRVAR(GPUOffscreen_color_object_doc, "Color object.\n\n:type: GLuint");
-static PyObject *GPUOffscreen_color_object_get(PyGPUOffscreen *self, void *UNUSED(type))
+PyDoc_STRVAR(GPUOffScreen_color_object_doc, "Color object.\n\n:type: GLuint");
+static PyObject *GPUOffScreen_color_object_get(PyGPUOffScreen *self, void *UNUSED(type))
 {
 	return PyLong_FromLong(GPU_offscreen_color_object(self->ofs));
 }
 
-static PyGetSetDef GPUOffscreen_getseters[] = {
-	{(char *)"color_object", (getter)GPUOffscreen_color_object_get, (setter)NULL, GPUOffscreen_color_object_doc, NULL},
-	{(char *)"framebuffer_object", (getter)GPUOffscreen_framebuffer_object_get, (setter)NULL, GPUOffscreen_framebuffer_object_doc, NULL},
-	{(char *)"width", (getter)GPUOffscreen_width_get, (setter)NULL, GPUOffscreen_width_doc, NULL},
-	{(char *)"height", (getter)GPUOffscreen_height_get, (setter)NULL, GPUOffscreen_height_doc, NULL},
+static PyGetSetDef GPUOffScreen_getseters[] = {
+	{(char *)"color_object", (getter)GPUOffScreen_color_object_get, (setter)NULL, GPUOffScreen_color_object_doc, NULL},
+	{(char *)"framebuffer_object", (getter)GPUOffScreen_framebuffer_object_get, (setter)NULL, GPUOffScreen_framebuffer_object_doc, NULL},
+	{(char *)"width", (getter)GPUOffScreen_width_get, (setter)NULL, GPUOffScreen_width_doc, NULL},
+	{(char *)"height", (getter)GPUOffScreen_height_get, (setter)NULL, GPUOffScreen_height_doc, NULL},
 	{NULL, NULL, NULL, NULL, NULL}  /* Sentinel */
 };
 
-static int PyGPUOffscreen__tp_init(PyGPUOffscreen *self, PyObject *args, PyObject *kwargs)
+static int PyGPUOffScreen__tp_init(PyGPUOffScreen *self, PyObject *args, PyObject *kwargs)
 {
 	unsigned int width, height;
 	const char *keywords[] = {"width", "height",  NULL};
@@ -121,25 +123,25 @@ static int PyGPUOffscreen__tp_init(PyGPUOffscreen *self, PyObject *args, PyObjec
 	return 0;
 }
 
-static void PyGPUOffscreen__tp_dealloc(PyGPUOffscreen *self)
+static void PyGPUOffScreen__tp_dealloc(PyGPUOffScreen *self)
 {
 	if (self->ofs)
 		GPU_offscreen_free(self->ofs);
 	Py_TYPE(self)->tp_free((PyObject *)self);
 }
 
-PyDoc_STRVAR(py_GPUOffscreen_doc,
+PyDoc_STRVAR(py_GPUOffScreen_doc,
 "GPUOffscreen(width, height) -> new GPU Offscreen object"
 "initialized to hold a framebuffer object of ``width`` x ``height``.\n"
 ""
 );
-PyTypeObject PyGPUOffscreen_Type = {
+PyTypeObject PyGPUOffScreen_Type = {
 	PyVarObject_HEAD_INIT(NULL, 0)
-	"GPUOffscreen",                              /* tp_name */
-	sizeof(PyGPUOffscreen),                      /* tp_basicsize */
+	"GPUOffScreen",                              /* tp_name */
+	sizeof(PyGPUOffScreen),                      /* tp_basicsize */
 	0,                                           /* tp_itemsize */
 	/* methods */
-	(destructor)PyGPUOffscreen__tp_dealloc,      /* tp_dealloc */
+	(destructor)PyGPUOffScreen__tp_dealloc,      /* tp_dealloc */
 	NULL,                                        /* tp_print */
 	NULL,                                        /* tp_getattr */
 	NULL,                                        /* tp_setattr */
@@ -155,7 +157,7 @@ PyTypeObject PyGPUOffscreen_Type = {
 	NULL,                                        /* tp_setattro */
 	NULL,                                        /* tp_as_buffer */
 	Py_TPFLAGS_DEFAULT,                          /* tp_flags */
-	py_GPUOffscreen_doc,                         /* Documentation string */
+	py_GPUOffScreen_doc,                         /* Documentation string */
 	NULL,                                        /* tp_traverse */
 	NULL,                                        /* tp_clear */
 	NULL,                                        /* tp_richcompare */
@@ -164,13 +166,13 @@ PyTypeObject PyGPUOffscreen_Type = {
 	NULL,                                        /* tp_iternext */
 	NULL,                                        /* tp_methods */
 	NULL,                                        /* tp_members */
-	GPUOffscreen_getseters,                      /* tp_getset */
+	GPUOffScreen_getseters,                      /* tp_getset */
 	NULL,                                        /* tp_base */
 	NULL,                                        /* tp_dict */
 	NULL,                                        /* tp_descr_get */
 	NULL,                                        /* tp_descr_set */
 	0,                                           /* tp_dictoffset */
-	(initproc)PyGPUOffscreen__tp_init,           /* tp_init */
+	(initproc)PyGPUOffScreen__tp_init,           /* tp_init */
 	(allocfunc)PyType_GenericAlloc,              /* tp_alloc */
 	(newfunc)PyType_GenericNew,                  /* tp_new */
 	(freefunc)0,                                 /* tp_free */
@@ -198,7 +200,7 @@ PyDoc_STRVAR(GPU_offscreen_object_bind_doc,
 );
 static PyObject *GPU_offscreen_object_bind(PyObject *UNUSED(self), PyObject *args, PyObject *kwds)
 {
-	PyGPUOffscreen *PyOfs;
+	PyGPUOffScreen *PyOfs;
 	int use_save;
 
 	static const char *kwlist[] = {"offscreen_object", "use_save", NULL};
@@ -232,7 +234,7 @@ static PyObject *GPU_offscreen_object_create(PyObject *UNUSED(self), PyObject *a
 	if (!PyArg_ParseTupleAndKeywords(args, kwds, "ii:offscreen_object_create", (char **)(kwlist), &width, &height))
 		return NULL;
 
-	return PyObject_CallObject((PyObject *) &PyGPUOffscreen_Type, args);
+	return PyObject_CallObject((PyObject *) &PyGPUOffScreen_Type, args);
 }
 
 PyMethodDef meth_offscreen_object_create[] = {
@@ -250,7 +252,7 @@ PyDoc_STRVAR(GPU_offscreen_object_free_doc,
 );
 static PyObject *GPU_offscreen_object_free(PyObject *UNUSED(self), PyObject *args, PyObject *kwds)
 {
-	PyGPUOffscreen *PyOfs;
+	PyGPUOffScreen *PyOfs;
 
 	static const char *kwlist[] = {"offscreen_object", NULL};
 
@@ -278,7 +280,7 @@ PyDoc_STRVAR(GPU_offscreen_object_unbind_doc,
 );
 static PyObject *GPU_offscreen_object_unbind(PyObject *UNUSED(self), PyObject *args, PyObject *kwds)
 {
-	PyGPUOffscreen *PyOfs;
+	PyGPUOffScreen *PyOfs;
 	int use_restore;
 
 	static const char *kwlist[] = {"offscreen_object", "use_restore", NULL};

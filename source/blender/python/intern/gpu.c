@@ -321,7 +321,7 @@ PyObject *GPU_initPython(void)
 	PyObject *module;
 
 	/* Register the 'GPUOffscreen' class */
-	if (PyType_Ready(&PyGPUOffscreen_Type)) {
+	if (PyType_Ready(&PyGPUOffScreen_Type)) {
 		return NULL;
 	}
 
@@ -329,7 +329,7 @@ PyObject *GPU_initPython(void)
 
 	PyModule_AddObject(module, "export_shader", (PyObject *)PyCFunction_New(meth_export_shader, NULL));
 
-	PyModule_AddObject(module, "OffscreenObject", (PyObject *) &PyGPUOffscreen_Type);
+	PyModule_AddObject(module, "OffScreenObject", (PyObject *) &PyGPUOffScreen_Type);
 
 	PyModule_AddObject(module, "offscreen_object_bind", (PyObject *)PyCFunction_New(meth_offscreen_object_bind, NULL));
 	PyModule_AddObject(module, "offscreen_object_create", (PyObject *)PyCFunction_New(meth_offscreen_object_create, NULL));
