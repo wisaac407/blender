@@ -54,6 +54,8 @@
 
 #include "../mathutils/mathutils.h"
 
+#include "bpy_util.h"
+
 #include "gpu.h"
 
 /* -------------------------------------------------------------------- */
@@ -294,4 +296,67 @@ static PyObject *GPU_offscreen_object_unbind(PyObject *UNUSED(self), PyObject *a
 
 PyMethodDef meth_offscreen_object_unbind[] = {
 	{"offscreen_object_unbind", (PyCFunction)GPU_offscreen_object_unbind, METH_VARARGS | METH_KEYWORDS, GPU_offscreen_object_unbind_doc}
+};
+
+static bool gpu_offscreen_check_matrix(MatrixObject *PyMat, const char *UNUSED(name))
+{
+	if (!MatrixObject_Check(PyMat)) {
+		PyErr_SetString(PyExc_TypeError, "matrix could not be converted to a matrix (sequence of sequences)");
+		return false;
+	}
+
+	if (BaseMath_ReadCallback(PyMat) == -1) {
+		PyErr_SetString(PyExc_TypeError, "matrix data could not be accessed");
+		return false;
+	}
+
+	if ((PyMat->num_col != 4) ||
+	    (PyMat->num_row != 4))
+	{
+		PyErr_SetString(PyExc_TypeError, "matrix need to have 4 rows and 4 columns");
+		return false;
+	}
+
+	return true;
+}
+
+PyDoc_STRVAR(GPU_offscreen_object_draw_doc,
+"offscreen_object_unbind(offscreen_object, modelview_matrix, projection_matrix)\n"
+"\n"
+"   Unbind an offscreen object.\n"
+"\n"
+"   :param offscreen_object: offscreen object\n"
+"   :type offscreen_object: :class:`gpu.OffScreenObject`\n"
+"   :param modelview_matrix: ModelView Matrix\n"
+"   :type modelview_matrix: :class:`bgl.Matrix`\n"
+"   :param projection_matrix: Projection Matrix\n"
+"   :type projection_matrix: :class:`bgl.Matrix`"
+);
+static PyObject *GPU_offscreen_object_draw(PyObject *UNUSED(self), PyObject *args, PyObject *kwds)
+{
+	PyGPUOffScreen *PyOfs;
+	MatrixObject *PyModelViewMatrix;
+	MatrixObject *PyProjectionMatrix;
+	bContext *C;
+
+	static const char *kwlist[] = {"offscreen_object", "projection_matrix", "modelview_matrix", NULL};
+
+	if (!PyArg_ParseTupleAndKeywords(args, kwds, "OOO:offscreen_object_draw", (char **)(kwlist),
+	                                 &PyOfs, &PyProjectionMatrix, &PyModelViewMatrix))
+		return NULL;
+
+	if ((!gpu_offscreen_check_matrix(PyProjectionMatrix, "projection_matrix")) ||
+	    (!gpu_offscreen_check_matrix(PyModelViewMatrix, "modelview_matrix")))
+	{
+		return NULL;
+	}
+
+	C = BPy_GetContext();
+	GPU_offscreen_draw(PyOfs->ofs, C, (float(*)[4])PyProjectionMatrix->matrix, (float(*)[4])PyModelViewMatrix->matrix);
+
+	Py_RETURN_NONE;
+}
+
+PyMethodDef meth_offscreen_object_draw[] = {
+	{"offscreen_object_draw", (PyCFunction)GPU_offscreen_object_draw, METH_VARARGS | METH_KEYWORDS, GPU_offscreen_object_draw_doc}
 };

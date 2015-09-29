@@ -333,6 +333,7 @@ PyObject *GPU_initPython(void)
 
 	PyModule_AddObject(module, "offscreen_object_bind", (PyObject *)PyCFunction_New(meth_offscreen_object_bind, NULL));
 	PyModule_AddObject(module, "offscreen_object_create", (PyObject *)PyCFunction_New(meth_offscreen_object_create, NULL));
+	PyModule_AddObject(module, "offscreen_object_draw", (PyObject *)PyCFunction_New(meth_offscreen_object_draw, NULL));
 	PyModule_AddObject(module, "offscreen_object_free", (PyObject *)PyCFunction_New(meth_offscreen_object_free, NULL));
 	PyModule_AddObject(module, "offscreen_object_unbind", (PyObject *)PyCFunction_New(meth_offscreen_object_unbind, NULL));
 
