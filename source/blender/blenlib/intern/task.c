@@ -43,6 +43,7 @@ typedef struct Task {
 	TaskRunFunction run;
 	void *taskdata;
 	bool free_taskdata;
+	TaskFreeFunction freedata;
 	TaskPool *pool;
 } Task;
 
@@ -60,6 +61,10 @@ struct TaskPool {
 	ThreadMutex user_mutex;
 
 	volatile bool do_cancel;
+
+	/* If set, this pool may never be work_and_wait'ed, which means TaskScheduler has to use its special
+	 * background fallback thread in case we are in mono-threaded situation. */
+	bool use_force_background;
 };
 
 struct TaskScheduler {
@@ -107,7 +112,7 @@ static void task_pool_num_increase(TaskPool *pool)
 	BLI_mutex_unlock(&pool->num_mutex);
 }
 
-static bool task_scheduler_thread_wait_pop(TaskScheduler *scheduler, Task **task)
+static bool task_scheduler_thread_wait_pop(TaskScheduler *scheduler, Task **task, const bool forced_background)
 {
 	bool found_task = false;
 	BLI_mutex_lock(&scheduler->queue_mutex);
@@ -127,6 +132,11 @@ static bool task_scheduler_thread_wait_pop(TaskScheduler *scheduler, Task **task
 		     current_task = current_task->next)
 		{
 			TaskPool *pool = current_task->pool;
+
+			if (forced_background && !pool->use_force_background) {
+				continue;
+			}
+
 			if (pool->num_threads == 0 ||
 			    pool->currently_running_tasks < pool->num_threads)
 			{
@@ -146,7 +156,7 @@ static bool task_scheduler_thread_wait_pop(TaskScheduler *scheduler, Task **task
 	return true;
 }
 
-static void *task_scheduler_thread_run(void *thread_p)
+static void *task_scheduler_thread_run_ex(void *thread_p, const bool forced_background)
 {
 	TaskThread *thread = (TaskThread *) thread_p;
 	TaskScheduler *scheduler = thread->scheduler;
@@ -154,15 +164,21 @@ static void *task_scheduler_thread_run(void *thread_p)
 	Task *task;
 
 	/* keep popping off tasks */
-	while (task_scheduler_thread_wait_pop(scheduler, &task)) {
+	while (task_scheduler_thread_wait_pop(scheduler, &task, forced_background)) {
 		TaskPool *pool = task->pool;
 
 		/* run task */
 		task->run(pool, task->taskdata, thread_id);
 
 		/* delete task */
-		if (task->free_taskdata)
-			MEM_freeN(task->taskdata);
+		if (task->free_taskdata) {
+			if (task->freedata) {
+				task->freedata(pool, task->taskdata, thread_id);
+			}
+			else {
+				MEM_freeN(task->taskdata);
+			}
+		}
 		MEM_freeN(task);
 
 		/* notify pool task was done */
@@ -170,6 +186,16 @@ static void *task_scheduler_thread_run(void *thread_p)
 	}
 
 	return NULL;
+}
+
+static void *task_scheduler_thread_run(void *thread_p)
+{
+	return task_scheduler_thread_run_ex(thread_p, false);
+}
+
+static void *task_scheduler_thread_run_forced_background(void *thread_p)
+{
+	return task_scheduler_thread_run_ex(thread_p, true);
 }
 
 TaskScheduler *BLI_task_scheduler_create(int num_threads)
@@ -207,11 +233,25 @@ TaskScheduler *BLI_task_scheduler_create(int num_threads)
 
 			if (pthread_create(&scheduler->threads[i], NULL, task_scheduler_thread_run, thread) != 0) {
 				fprintf(stderr, "TaskScheduler failed to launch thread %d/%d\n", i, num_threads);
-				MEM_freeN(thread);
 			}
 		}
 	}
-	
+	else {
+		/* We create a thread, but only for pools that are 'forced background'. */
+		TaskThread *thread;
+
+		scheduler->num_threads = 1;
+		scheduler->threads = MEM_callocN(sizeof(pthread_t), "TaskScheduler threads");
+		thread = scheduler->task_threads = MEM_callocN(sizeof(TaskThread), "TaskScheduler task threads");
+
+		thread->scheduler = scheduler;
+		thread->id = 1;
+
+		if (pthread_create(&scheduler->threads[0], NULL, task_scheduler_thread_run_forced_background, thread) != 0) {
+			fprintf(stderr, "TaskScheduler failed to launch forced background thread\n");
+		}
+	}
+
 	return scheduler;
 }
 
@@ -244,8 +284,14 @@ void BLI_task_scheduler_free(TaskScheduler *scheduler)
 
 	/* delete leftover tasks */
 	for (task = scheduler->queue.first; task; task = task->next) {
-		if (task->free_taskdata)
-			MEM_freeN(task->taskdata);
+		if (task->free_taskdata) {
+			if (task->freedata) {
+				task->freedata(task->pool, task->taskdata, 0);
+			}
+			else {
+				MEM_freeN(task->taskdata);
+			}
+		}
 	}
 	BLI_freelistN(&scheduler->queue);
 
@@ -289,8 +335,14 @@ static void task_scheduler_clear(TaskScheduler *scheduler, TaskPool *pool)
 		nexttask = task->next;
 
 		if (task->pool == pool) {
-			if (task->free_taskdata)
-				MEM_freeN(task->taskdata);
+			if (task->free_taskdata) {
+				if (task->freedata) {
+					task->freedata(pool, task->taskdata, 0);
+				}
+				else {
+					MEM_freeN(task->taskdata);
+				}
+			}
 			BLI_freelinkN(&scheduler->queue, task);
 
 			done++;
@@ -305,7 +357,7 @@ static void task_scheduler_clear(TaskScheduler *scheduler, TaskPool *pool)
 
 /* Task Pool */
 
-TaskPool *BLI_task_pool_create(TaskScheduler *scheduler, void *userdata)
+TaskPool *BLI_task_pool_create(TaskScheduler *scheduler, void *userdata, const bool is_background)
 {
 	TaskPool *pool = MEM_callocN(sizeof(TaskPool), "TaskPool");
 
@@ -314,6 +366,7 @@ TaskPool *BLI_task_pool_create(TaskScheduler *scheduler, void *userdata)
 	pool->num_threads = 0;
 	pool->currently_running_tasks = 0;
 	pool->do_cancel = false;
+	pool->use_force_background = is_background;
 
 	BLI_mutex_init(&pool->num_mutex);
 	BLI_condition_init(&pool->num_cond);
@@ -346,17 +399,25 @@ void BLI_task_pool_free(TaskPool *pool)
 	BLI_end_threaded_malloc();
 }
 
-void BLI_task_pool_push(TaskPool *pool, TaskRunFunction run,
-	void *taskdata, bool free_taskdata, TaskPriority priority)
+void BLI_task_pool_push_ex(
+        TaskPool *pool, TaskRunFunction run, void *taskdata,
+        bool free_taskdata, TaskFreeFunction freedata, TaskPriority priority)
 {
 	Task *task = MEM_callocN(sizeof(Task), "Task");
 
 	task->run = run;
 	task->taskdata = taskdata;
 	task->free_taskdata = free_taskdata;
+	task->freedata = freedata;
 	task->pool = pool;
 
 	task_scheduler_push(pool->scheduler, task, priority);
+}
+
+void BLI_task_pool_push(
+        TaskPool *pool, TaskRunFunction run, void *taskdata, bool free_taskdata, TaskPriority priority)
+{
+	BLI_task_pool_push_ex(pool, run, taskdata, free_taskdata, NULL, priority);
 }
 
 void BLI_task_pool_work_and_wait(TaskPool *pool)
@@ -398,8 +459,14 @@ void BLI_task_pool_work_and_wait(TaskPool *pool)
 			work_task->run(pool, work_task->taskdata, 0);
 
 			/* delete task */
-			if (work_task->free_taskdata)
-				MEM_freeN(work_task->taskdata);
+			if (task->free_taskdata) {
+				if (task->freedata) {
+					task->freedata(pool, task->taskdata, 0);
+				}
+				else {
+					MEM_freeN(task->taskdata);
+				}
+			}
 			MEM_freeN(work_task);
 
 			/* notify pool task was done */
@@ -559,7 +626,7 @@ void BLI_task_parallel_range_ex(
 	}
 
 	task_scheduler = BLI_task_scheduler_get();
-	task_pool = BLI_task_pool_create(task_scheduler, &state);
+	task_pool = BLI_task_pool_create(task_scheduler, &state, false);
 	num_threads = BLI_task_scheduler_num_threads(task_scheduler);
 
 	/* The idea here is to prevent creating task for each of the loop iterations

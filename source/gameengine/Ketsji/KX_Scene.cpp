@@ -1670,7 +1670,7 @@ static void update_anim_thread_func(TaskPool *pool, void *taskdata, int UNUSED(t
 
 void KX_Scene::UpdateAnimations(double curtime)
 {
-	TaskPool *pool = BLI_task_pool_create(KX_GetActiveEngine()->GetTaskScheduler(), &curtime);
+	TaskPool *pool = BLI_task_pool_create(KX_GetActiveEngine()->GetTaskScheduler(), &curtime, false);
 
 	for (int i=0; i<m_animatedlist->GetCount(); ++i) {
 		BLI_task_pool_push(pool, update_anim_thread_func, m_animatedlist->GetValue(i), false, TASK_PRIORITY_LOW);

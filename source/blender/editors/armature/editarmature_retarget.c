@@ -288,7 +288,7 @@ static RigGraph *newRigGraph(void)
 #endif
 
 	rg->task_scheduler = BLI_task_scheduler_create(totthread);
-	rg->task_pool = BLI_task_pool_create(rg->task_scheduler, NULL);
+	rg->task_pool = BLI_task_pool_create(rg->task_scheduler, NULL, false);
 
 	return rg;
 }

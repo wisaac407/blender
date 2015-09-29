@@ -1650,7 +1650,7 @@ static void scene_update_objects(EvaluationContext *eval_ctx, Main *bmain, Scene
 	state.has_mballs = false;
 #endif
 
-	task_pool = BLI_task_pool_create(task_scheduler, &state);
+	task_pool = BLI_task_pool_create(task_scheduler, &state, false);
 	if (G.debug & G_DEBUG_DEPSGRAPH_NO_THREADS) {
 		BLI_pool_set_num_threads(task_pool, 1);
 	}

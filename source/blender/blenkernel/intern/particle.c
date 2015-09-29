@@ -2358,7 +2358,7 @@ void psys_cache_child_paths(ParticleSimulationData *sim, float cfra, int editupd
 		return;
 	
 	task_scheduler = BLI_task_scheduler_get();
-	task_pool = BLI_task_pool_create(task_scheduler, &ctx);
+	task_pool = BLI_task_pool_create(task_scheduler, &ctx, false);
 	totchild = ctx.totchild;
 	totparent = ctx.totparent;
 	

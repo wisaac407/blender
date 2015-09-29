@@ -618,7 +618,7 @@ static void precache_launch_parts(Render *re, RayObject *tree, ShadeInput *shi, 
 	state.lasttime = PIL_check_seconds_timer();
 	
 	task_scheduler = BLI_task_scheduler_create(totthread);
-	task_pool = BLI_task_pool_create(task_scheduler, &state);
+	task_pool = BLI_task_pool_create(task_scheduler, &state, false);
 
 	/* using boundbox in worldspace */
 	global_bounds_obi(re, obi, bbmin, bbmax);

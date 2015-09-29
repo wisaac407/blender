@@ -1106,7 +1106,7 @@ static void filelist_cache_preview_ensure_running(FileListEntryCache *cache)
 		int num_tasks = max_ii(1, (BLI_system_thread_count() / 2) + 1);
 
 		scheduler = cache->previews_scheduler = BLI_task_scheduler_create(num_tasks + 1);
-		pool = cache->previews_pool = BLI_task_pool_create(scheduler, NULL);
+		pool = cache->previews_pool = BLI_task_pool_create(scheduler, NULL, false);
 		cache->previews_todo = BLI_thread_queue_init();
 		cache->previews_done = BLI_thread_queue_init();
 

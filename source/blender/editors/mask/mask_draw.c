@@ -715,7 +715,7 @@ static float *threaded_mask_rasterize(Mask *mask, const int width, const int hei
 	state.width = width;
 	state.height = height;
 
-	task_pool = BLI_task_pool_create(task_scheduler, &state);
+	task_pool = BLI_task_pool_create(task_scheduler, &state, false);
 
 	scanlines_per_thread = height / num_threads;
 	for (i = 0; i < num_threads; i++) {

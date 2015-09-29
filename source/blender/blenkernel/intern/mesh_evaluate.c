@@ -1300,7 +1300,7 @@ void BKE_mesh_normals_loop_split(
 		common_data.task_queue = BLI_thread_queue_init();
 
 		task_scheduler = BLI_task_scheduler_get();
-		task_pool = BLI_task_pool_create(task_scheduler, NULL);
+		task_pool = BLI_task_pool_create(task_scheduler, NULL, false);
 
 		nbr_workers = max_ii(2, BLI_task_scheduler_num_threads(task_scheduler));
 		for (i = 1; i < nbr_workers; i++) {
