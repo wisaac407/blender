@@ -36,12 +36,6 @@
 
 PyObject *GPU_initPython(void);
 
-extern PyTypeObject PyGPUOffScreen_Type;
-
-extern PyMethodDef meth_offscreen_object_bind[];
-extern PyMethodDef meth_offscreen_object_create[];
-extern PyMethodDef meth_offscreen_object_draw[];
-extern PyMethodDef meth_offscreen_object_free[];
-extern PyMethodDef meth_offscreen_object_unbind[];
+PyObject *BPyInit_gpu_offscreen(void);
 
 #endif /* __GPU_H__ */

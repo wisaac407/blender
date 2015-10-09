@@ -60,7 +60,7 @@
 #define PY_MODULE_ADD_CONSTANT(module, name) PyModule_AddIntConstant(module, # name, name)
 
 PyDoc_STRVAR(M_gpu_doc,
-"This module provides access to the GLSL shader."
+"This module provides access to the GLSL shader and Offscreen rendering functionalities."
 );
 static struct PyModuleDef gpumodule = {
 	PyModuleDef_HEAD_INIT,
@@ -319,26 +319,19 @@ static PyMethodDef meth_export_shader[] = {
 PyObject *GPU_initPython(void)
 {
 	PyObject *module;
-
-	/* Register the 'GPUOffscreen' class */
-	if (PyType_Ready(&PyGPUOffScreen_Type)) {
-		return NULL;
-	}
+	PyObject *submodule;
+	PyObject *sys_modules = PyThreadState_GET()->interp->modules;
 
 	module = PyInit_gpu();
 
 	PyModule_AddObject(module, "export_shader", (PyObject *)PyCFunction_New(meth_export_shader, NULL));
 
-	PyModule_AddObject(module, "OffScreenObject", (PyObject *) &PyGPUOffScreen_Type);
-
-	PyModule_AddObject(module, "offscreen_object_bind", (PyObject *)PyCFunction_New(meth_offscreen_object_bind, NULL));
-	PyModule_AddObject(module, "offscreen_object_create", (PyObject *)PyCFunction_New(meth_offscreen_object_create, NULL));
-	PyModule_AddObject(module, "offscreen_object_draw", (PyObject *)PyCFunction_New(meth_offscreen_object_draw, NULL));
-	PyModule_AddObject(module, "offscreen_object_free", (PyObject *)PyCFunction_New(meth_offscreen_object_free, NULL));
-	PyModule_AddObject(module, "offscreen_object_unbind", (PyObject *)PyCFunction_New(meth_offscreen_object_unbind, NULL));
+	/* gpu.offscreen */
+	PyModule_AddObject(module, "offscreen", (submodule = BPyInit_gpu_offscreen()));
+	PyDict_SetItemString(sys_modules, PyModule_GetName(submodule), submodule);
+	Py_INCREF(submodule);
 
 	PyDict_SetItemString(PyImport_GetModuleDict(), "gpu", module);
-
 	return module;
 }
 
