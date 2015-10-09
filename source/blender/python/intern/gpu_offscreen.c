@@ -164,7 +164,6 @@ static bool pygpu_offscreen_check_matrix(MatrixObject *PyMat, const char *UNUSED
 	}
 
 	if (BaseMath_ReadCallback(PyMat) == -1) {
-		PyErr_SetString(PyExc_TypeError, "matrix data could not be accessed");
 		return false;
 	}
 
