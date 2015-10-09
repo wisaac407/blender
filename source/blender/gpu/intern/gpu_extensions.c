@@ -1505,16 +1505,13 @@ int GPU_offscreen_color_object(const GPUOffScreen *ofs)
 
 /* GPUOffScreen Draw*/
 
-static void gpu_offscreen_draw_setup(GPUOffScreen *ofs, GLint *r_viewport)
+static void gpu_offscreen_draw_setup(GPUOffScreen *ofs)
 {
-	glGetIntegerv(GL_VIEWPORT, r_viewport);
-	glViewport(0, 0, GPU_offscreen_width(ofs), GPU_offscreen_height(ofs));
 	GPU_offscreen_bind(ofs, true);
 }
 
-static void gpu_offscreen_draw_reset(GPUOffScreen *ofs, GLint viewport[4])
+static void gpu_offscreen_draw_reset(GPUOffScreen *ofs)
 {
-	glViewport(viewport[0], viewport[1], viewport[2], viewport[3]);
 	GPU_offscreen_unbind(ofs, true);
 }
 
@@ -1561,10 +1558,9 @@ static void gpu_offscreen_draw_doit(
 
 void GPU_offscreen_draw(GPUOffScreen *ofs, struct bContext *C, float projection_matrix[4][4], float modelview_matrix[4][4])
 {
-	GLint viewport[4];
-	gpu_offscreen_draw_setup(ofs, viewport);
+	gpu_offscreen_draw_setup(ofs);
 	gpu_offscreen_draw_doit(ofs, C, projection_matrix, modelview_matrix);
-	gpu_offscreen_draw_reset(ofs, viewport);
+	gpu_offscreen_draw_reset(ofs);
 }
 
 /* GPUShader */
