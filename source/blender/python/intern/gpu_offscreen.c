@@ -228,30 +228,6 @@ static PyObject *pygpu_offscreen_free(PyGPUOffScreen *self)
 	Py_RETURN_NONE;
 }
 
-static int PyGPUOffScreen__tp_init(PyGPUOffScreen *self, PyObject *args, PyObject *kwargs)
-{
-	unsigned int width, height;
-	const char *keywords[] = {"width", "height",  NULL};
-	char err_out[256];
-
-	if (!PyArg_ParseTupleAndKeywords(args, kwargs, "ii:GPUOffscreen", (char **)keywords, &width, &height)) {
-		return -1;
-	}
-
-	if (UINT_IS_NEG(width)) {
-		PyErr_SetString(PyExc_ValueError, "negative 'width' given");
-		return -1;
-	}
-
-	if (UINT_IS_NEG(height)) {
-		PyErr_SetString(PyExc_ValueError, "negative 'height' given");
-		return -1;
-	}
-
-	self->ofs = GPU_offscreen_create(width, height, err_out);
-	return 0;
-}
-
 static void PyGPUOffScreen__tp_dealloc(PyGPUOffScreen *self)
 {
 	if (self->ofs)
@@ -317,7 +293,7 @@ static PyTypeObject PyGPUOffScreen_Type = {
 	NULL,                                        /* tp_descr_get */
 	NULL,                                        /* tp_descr_set */
 	0,                                           /* tp_dictoffset */
-	(initproc)PyGPUOffScreen__tp_init,           /* tp_init */
+	0,                                           /* tp_init */
 	(allocfunc)PyType_GenericAlloc,              /* tp_alloc */
 	(newfunc)PyType_GenericNew,                  /* tp_new */
 	(freefunc)0,                                 /* tp_free */
@@ -343,15 +319,39 @@ PyDoc_STRVAR(pygpu_offscreen_new_doc,
 );
 static PyObject *pygpu_offscreen_new(PyObject *UNUSED(self), PyObject *args, PyObject *kwds)
 {
-	int width;
-	int height;
+	PyGPUOffScreen *PyOfs;
+	int width, height;
+	char err_out[256];
 
 	static const char *kwlist[] = {"width", "height", NULL};
 
 	if (!PyArg_ParseTupleAndKeywords(args, kwds, "ii:new", (char **)(kwlist), &width, &height))
 		return NULL;
 
-	return PyObject_CallObject((PyObject *) &PyGPUOffScreen_Type, args);
+	if (UINT_IS_NEG(width)) {
+		PyErr_SetString(PyExc_ValueError, "negative 'width' given");
+		return NULL;
+	}
+
+	if (UINT_IS_NEG(height)) {
+		PyErr_SetString(PyExc_ValueError, "negative 'height' given");
+		return NULL;
+	}
+
+	PyOfs = (PyGPUOffScreen *)PyObject_CallObject((PyObject *) &PyGPUOffScreen_Type, NULL);
+	PyOfs->ofs = GPU_offscreen_create(width, height, err_out);
+
+	if (PyOfs->ofs == NULL) {
+		if (err_out[0] != '\0')
+			PyErr_SetString(PyExc_Exception, err_out);
+		else
+			PyErr_SetString(PyExc_Exception, "Error creating framebuffer");
+
+		Py_DecRef((PyObject *)PyOfs);
+		return NULL;
+	}
+
+	return (PyObject *)PyOfs;
 }
 
 static struct PyMethodDef BPy_GPU_offscreen_methods[] = {
