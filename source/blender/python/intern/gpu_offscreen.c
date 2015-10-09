@@ -56,10 +56,17 @@
 
 #include "bpy_util.h"
 
+#include "../generic/py_capi_utils.h"
+
 #include "gpu.h"
 
 /* -------------------------------------------------------------------- */
 /* GPU Offscreen PyObject */
+
+#define BPY_GPU_OFFSCREEN_CHECK_OBJ(self) \
+    if (UNLIKELY(self->ofs == NULL)) { return NULL; } (void)0
+#define BPY_GPU_OFFSCREEN_CHECK_INT(self) \
+	 if (UNLIKELY(self->ofs == NULL)) { return PyLong_FromLong(-1); } (void)0
 
 /* annoying since arg parsing won't check overflow */
 #define UINT_IS_NEG(n) ((n) > INT_MAX)
@@ -72,29 +79,33 @@ typedef struct {
 PyDoc_STRVAR(pygpu_offscreen_width_doc, "Texture width.\n\n:type: GLsizei");
 static PyObject *pygpu_offscreen_width_get(PyGPUOffScreen *self, void *UNUSED(type))
 {
+	BPY_GPU_OFFSCREEN_CHECK_INT(self);
 	return PyLong_FromLong(GPU_offscreen_width(self->ofs));
 }
 
 PyDoc_STRVAR(pygpu_offscreen_height_doc, "Texture height.\n\n:type: GLsizei");
 static PyObject *pygpu_offscreen_height_get(PyGPUOffScreen *self, void *UNUSED(type))
 {
+	BPY_GPU_OFFSCREEN_CHECK_INT(self);
 	return PyLong_FromLong(GPU_offscreen_height(self->ofs));
 }
 
 PyDoc_STRVAR(pygpu_offscreen_framebuffer_object_doc, "Framebuffer object.\n\n:type: GLuint");
 static PyObject *pygpu_offscreen_framebuffer_object_get(PyGPUOffScreen *self, void *UNUSED(type))
 {
+	BPY_GPU_OFFSCREEN_CHECK_INT(self);
 	return PyLong_FromLong(GPU_offscreen_fb_object(self->ofs));
 }
 
 PyDoc_STRVAR(pygpu_offscreen_color_object_doc, "Color object.\n\n:type: GLuint");
 static PyObject *pygpu_offscreen_color_object_get(PyGPUOffScreen *self, void *UNUSED(type))
 {
+	BPY_GPU_OFFSCREEN_CHECK_INT(self);
 	return PyLong_FromLong(GPU_offscreen_color_object(self->ofs));
 }
 
 PyDoc_STRVAR(pygpu_offscreen_bind_doc,
-"bind(save)\n"
+"bind(save=True)\n"
 "\n"
 "   Bind the offscreen object.\n"
 "\n"
@@ -103,18 +114,24 @@ PyDoc_STRVAR(pygpu_offscreen_bind_doc,
 );
 static PyObject *pygpu_offscreen_bind(PyGPUOffScreen *self, PyObject *args, PyObject *kwds)
 {
-	int save;
+	bool save = true;
 	static const char *kwlist[] = {"save", NULL};
 
-	if (!PyArg_ParseTupleAndKeywords(args, kwds, "i:bind", (char **)(kwlist), &save))
+	BPY_GPU_OFFSCREEN_CHECK_OBJ(self);
+
+	if (!PyArg_ParseTupleAndKeywords(
+	        args, kwds, "|O&:bind", (char **)(kwlist),
+	        PyC_ParseBool, &save))
+	{
 		return NULL;
+	}
 
 	GPU_offscreen_bind(self->ofs, save);
 	Py_RETURN_NONE;
 }
 
 PyDoc_STRVAR(pygpu_offscreen_unbind_doc,
-"unbind(restore)\n"
+"unbind(restore=True)\n"
 "\n"
 "   Unbind the offscreen object.\n"
 "\n"
@@ -123,11 +140,17 @@ PyDoc_STRVAR(pygpu_offscreen_unbind_doc,
 );
 static PyObject *pygpu_offscreen_unbind(PyGPUOffScreen *self, PyObject *args, PyObject *kwds)
 {
-	int restore;
+	bool restore = true;
 	static const char *kwlist[] = {"restore", NULL};
 
-	if (!PyArg_ParseTupleAndKeywords(args, kwds, "i:unbind", (char **)(kwlist), &restore))
+	BPY_GPU_OFFSCREEN_CHECK_OBJ(self);
+
+	if (!PyArg_ParseTupleAndKeywords(
+	        args, kwds, "|O&:unbind", (char **)(kwlist),
+	        PyC_ParseBool, &restore))
+	{
 		return NULL;
+	}
 
 	GPU_offscreen_unbind(self->ofs, restore);
 	Py_RETURN_NONE;
@@ -173,6 +196,8 @@ static PyObject *pygpu_offscreen_draw(PyGPUOffScreen *self, PyObject *args, PyOb
 
 	static const char *kwlist[] = {"projection_matrix", "modelview_matrix", NULL};
 
+	BPY_GPU_OFFSCREEN_CHECK_OBJ(self);
+
 	if (!PyArg_ParseTupleAndKeywords(args, kwds, "OO:draw", (char **)(kwlist),
 	                                 &PyProjectionMatrix, &PyModelViewMatrix))
 		return NULL;
@@ -197,6 +222,8 @@ PyDoc_STRVAR(pygpu_offscreen_free_doc,
 );
 static PyObject *pygpu_offscreen_free(PyGPUOffScreen *self)
 {
+	BPY_GPU_OFFSCREEN_CHECK_OBJ(self);
+
 	GPU_offscreen_free(self->ofs);
 	self->ofs = NULL;
 	Py_RETURN_NONE;
