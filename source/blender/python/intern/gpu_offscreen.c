@@ -66,7 +66,7 @@
 #define BPY_GPU_OFFSCREEN_CHECK_OBJ(self) \
     if (UNLIKELY(self->ofs == NULL)) { return NULL; } (void)0
 #define BPY_GPU_OFFSCREEN_CHECK_INT(self) \
-	 if (UNLIKELY(self->ofs == NULL)) { return PyLong_FromLong(-1); } (void)0
+	 if (UNLIKELY(self->ofs == NULL)) { return -1; } (void)0
 
 /* annoying since arg parsing won't check overflow */
 #define UINT_IS_NEG(n) ((n) > INT_MAX)
@@ -79,28 +79,28 @@ typedef struct {
 PyDoc_STRVAR(pygpu_offscreen_width_doc, "Texture width.\n\n:type: GLsizei");
 static PyObject *pygpu_offscreen_width_get(PyGPUOffScreen *self, void *UNUSED(type))
 {
-	BPY_GPU_OFFSCREEN_CHECK_INT(self);
+	BPY_GPU_OFFSCREEN_CHECK_OBJ(self);
 	return PyLong_FromLong(GPU_offscreen_width(self->ofs));
 }
 
 PyDoc_STRVAR(pygpu_offscreen_height_doc, "Texture height.\n\n:type: GLsizei");
 static PyObject *pygpu_offscreen_height_get(PyGPUOffScreen *self, void *UNUSED(type))
 {
-	BPY_GPU_OFFSCREEN_CHECK_INT(self);
+	BPY_GPU_OFFSCREEN_CHECK_OBJ(self);
 	return PyLong_FromLong(GPU_offscreen_height(self->ofs));
 }
 
 PyDoc_STRVAR(pygpu_offscreen_framebuffer_object_doc, "Framebuffer object.\n\n:type: GLuint");
 static PyObject *pygpu_offscreen_framebuffer_object_get(PyGPUOffScreen *self, void *UNUSED(type))
 {
-	BPY_GPU_OFFSCREEN_CHECK_INT(self);
+	BPY_GPU_OFFSCREEN_CHECK_OBJ(self);
 	return PyLong_FromLong(GPU_offscreen_fb_object(self->ofs));
 }
 
 PyDoc_STRVAR(pygpu_offscreen_color_object_doc, "Color object.\n\n:type: GLuint");
 static PyObject *pygpu_offscreen_color_object_get(PyGPUOffScreen *self, void *UNUSED(type))
 {
-	BPY_GPU_OFFSCREEN_CHECK_INT(self);
+	BPY_GPU_OFFSCREEN_CHECK_OBJ(self);
 	return PyLong_FromLong(GPU_offscreen_color_object(self->ofs));
 }
 
@@ -159,7 +159,7 @@ static PyObject *pygpu_offscreen_unbind(PyGPUOffScreen *self, PyObject *args, Py
 static bool pygpu_offscreen_check_matrix(MatrixObject *PyMat, const char *UNUSED(name))
 {
 	if (!MatrixObject_Check(PyMat)) {
-		PyErr_SetString(PyExc_TypeError, "matrix could not be converted to a matrix (sequence of sequences)");
+		PyErr_SetString(PyExc_TypeError, "matrix is not in a valid format (e.g., mathutils.Matrix)");
 		return false;
 	}
 
@@ -183,9 +183,9 @@ PyDoc_STRVAR(pygpu_offscreen_draw_doc,
 "   Draw the viewport in the offscreen object.\n"
 "\n"
 "   :param modelview_matrix: ModelView Matrix\n"
-"   :type modelview_matrix: :class:`bgl.Matrix`\n"
+"   :type modelview_matrix: :class:`mathutils.Matrix`\n"
 "   :param projection_matrix: Projection Matrix\n"
-"   :type projection_matrix: :class:`bgl.Matrix`"
+"   :type projection_matrix: :class:`mathutils.Matrix`"
 );
 static PyObject *pygpu_offscreen_draw(PyGPUOffScreen *self, PyObject *args, PyObject *kwds)
 {
@@ -294,8 +294,8 @@ static PyTypeObject PyGPUOffScreen_Type = {
 	NULL,                                        /* tp_descr_set */
 	0,                                           /* tp_dictoffset */
 	0,                                           /* tp_init */
-	(allocfunc)PyType_GenericAlloc,              /* tp_alloc */
-	(newfunc)PyType_GenericNew,                  /* tp_new */
+	NULL,                                        /* tp_alloc */
+	NULL,                                        /* tp_new */
 	(freefunc)0,                                 /* tp_free */
 	NULL,                                        /* tp_is_gc */
 	NULL,                                        /* tp_bases */
@@ -342,10 +342,9 @@ static PyObject *pygpu_offscreen_new(PyObject *UNUSED(self), PyObject *args, PyO
 	PyOfs->ofs = GPU_offscreen_create(width, height, err_out);
 
 	if (PyOfs->ofs == NULL) {
-		if (err_out[0] != '\0')
-			PyErr_SetString(PyExc_Exception, err_out);
-		else
-			PyErr_SetString(PyExc_Exception, "Error creating framebuffer");
+		PyErr_Format(PyExc_Exception,
+		             "gpu.offscreen.new(...) failed with '%s'",
+		             err_out[0] ? err_out : "unknown error");
 
 		Py_DecRef((PyObject *)PyOfs);
 		return NULL;
@@ -387,3 +386,7 @@ PyObject *BPyInit_gpu_offscreen(void)
 
 	return submodule;
 }
+
+#undef UINT_IS_NEG
+#undef BPY_GPU_OFFSCREEN_CHECK_INT
+#undef BPY_GPU_OFFSCREEN_CHECK_OBJ
