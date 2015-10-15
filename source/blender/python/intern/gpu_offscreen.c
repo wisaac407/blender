@@ -276,14 +276,14 @@ static PyGetSetDef bpy_gpu_offscreen_getseters[] = {
 static struct PyMethodDef bpy_gpu_offscreen_methods[] = {
 	{"bind", (PyCFunction)pygpu_offscreen_bind, METH_VARARGS | METH_KEYWORDS,pygpu_offscreen_bind_doc},
 	{"unbind", (PyCFunction)pygpu_offscreen_unbind, METH_VARARGS | METH_KEYWORDS, pygpu_offscreen_unbind_doc},
-	{"draw", (PyCFunction)pygpu_offscreen_draw, METH_VARARGS | METH_KEYWORDS, pygpu_offscreen_draw_doc},
+	{"draw_view3d", (PyCFunction)pygpu_offscreen_draw_view3d, METH_VARARGS | METH_KEYWORDS, pygpu_offscreen_draw_view3d_doc},
 	{"free", (PyCFunction)pygpu_offscreen_free, METH_NOARGS, pygpu_offscreen_free_doc},
 	{NULL, NULL, 0, NULL}
 };
 
 PyDoc_STRVAR(py_gpu_offscreen_doc,
-"GPUOffscreen(width, height) -> new GPU Offscreen object"
-"initialized to hold a framebuffer object of ``width`` x ``height``.\n"
+"GPUOffscreen(width, height, samples) -> new GPU Offscreen object"
+"initialized to hold a framebuffer object of ``width`` x ``height`` with ``samples``.\n"
 ""
 );
 static PyTypeObject PyGPUOffScreen_Type = {
@@ -348,22 +348,28 @@ static PyObject *BPy_GPU_OffScreen_CreatePyObject(GPUOffScreen *ofs)
 }
 
 PyDoc_STRVAR(pygpu_offscreen_new_doc,
-"new(width, height)\n"
+"new(width, height, samples)\n"
 "\n"
 "   Return a GPUOffScreen.\n"
 "\n"
+"   :param width: Horizontal dimension of the buffer\n"
+"   :type width: int`\n"
+"   :param width: Vertical dimension of the buffer\n"
+"   :type width: int`\n"
+"   :param samples: OpenGL samples\n"
+"   :type samples: int\n"
 "   :return: struct with GPUFrameBuffer, GPUTexture, GPUTexture.\n"
 "   :rtype: :class:`gpu.OffScreenObject`"
 );
 static PyObject *pygpu_offscreen_new(PyObject *UNUSED(self), PyObject *args, PyObject *kwds)
 {
 	GPUOffScreen *ofs;
-	int width, height;
+	int width, height, samples;
 	char err_out[256];
 
-	static const char *kwlist[] = {"width", "height", NULL};
+	static const char *kwlist[] = {"width", "height", "samples", NULL};
 
-	if (!PyArg_ParseTupleAndKeywords(args, kwds, "ii:new", (char **)(kwlist), &width, &height))
+	if (!PyArg_ParseTupleAndKeywords(args, kwds, "iii:new", (char **)(kwlist), &width, &height, &samples))
 		return NULL;
 
 	if (UINT_IS_NEG(width)) {
@@ -376,7 +382,12 @@ static PyObject *pygpu_offscreen_new(PyObject *UNUSED(self), PyObject *args, PyO
 		return NULL;
 	}
 
-	ofs = GPU_offscreen_create(width, height, 0, err_out);
+	if (UINT_IS_NEG(samples)) {
+		PyErr_SetString(PyExc_ValueError, "negative 'samples' given");
+		return NULL;
+	}
+
+	ofs = GPU_offscreen_create(width, height, samples, err_out);
 
 	if (ofs == NULL) {
 		PyErr_Format(PyExc_Exception,
