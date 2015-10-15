@@ -204,6 +204,8 @@ static PyObject *pygpu_offscreen_draw(PyGPUOffScreen *self, PyObject *args, PyOb
 	MatrixObject *PyModelViewMatrix;
 	MatrixObject *PyProjectionMatrix;
 	bContext *C;
+	View3D *v3d;
+	ARegion *ar;
 
 	static const char *kwlist[] = {"projection_matrix", "modelview_matrix", NULL};
 
@@ -220,6 +222,14 @@ static PyObject *pygpu_offscreen_draw(PyGPUOffScreen *self, PyObject *args, PyOb
 	}
 
 	C = BPy_GetContext();
+	v3d = CTX_wm_view3d(C);
+	ar = CTX_wm_region(C);
+
+	if ((v3d == NULL) || (ar == NULL)) {
+		PyErr_SetString(PyExc_SystemError, "draw: No valid view3d in the context");
+		return NULL;
+	}
+
 	GPU_offscreen_draw(self->ofs, C, (float(*)[4])PyProjectionMatrix->matrix, (float(*)[4])PyModelViewMatrix->matrix);
 
 	Py_RETURN_NONE;
