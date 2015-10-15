@@ -1680,7 +1680,7 @@ static void gpu_offscreen_draw_doit(
 	GPU_offscreen_unbind(ofs, true); /* unbind */
 }
 
-void GPU_offscreen_draw(GPUOffScreen *ofs, struct bContext *C, float projection_matrix[4][4], float modelview_matrix[4][4])
+void GPU_offscreen_draw_view3d(GPUOffScreen *ofs, struct bContext *C, float projection_matrix[4][4], float modelview_matrix[4][4])
 {
 	gpu_offscreen_draw_setup(ofs);
 	gpu_offscreen_draw_doit(ofs, C, projection_matrix, modelview_matrix);

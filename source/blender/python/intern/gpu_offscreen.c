@@ -200,17 +200,17 @@ static int pygpu_offscreen_check_matrix(PyObject *o, void *p)
 	return 1;
 }
 
-PyDoc_STRVAR(pygpu_offscreen_draw_doc,
-"draw(modelview_matrix, projection_matrix)\n"
+PyDoc_STRVAR(pygpu_offscreen_draw_view3d_doc,
+"draw_view3d(modelview_matrix, projection_matrix)\n"
 "\n"
-"   Draw the viewport in the offscreen object.\n"
+"   Draw the 3d viewport in the offscreen object.\n"
 "\n"
 "   :param modelview_matrix: ModelView Matrix\n"
 "   :type modelview_matrix: :class:`mathutils.Matrix`\n"
 "   :param projection_matrix: Projection Matrix\n"
 "   :type projection_matrix: :class:`mathutils.Matrix`"
 );
-static PyObject *pygpu_offscreen_draw(PyGPUOffScreen *self, PyObject *args, PyObject *kwds)
+static PyObject *pygpu_offscreen_draw_view3d(PyGPUOffScreen *self, PyObject *args, PyObject *kwds)
 {
 	MatrixObject *PyModelViewMatrix;
 	MatrixObject *PyProjectionMatrix;
@@ -220,9 +220,9 @@ static PyObject *pygpu_offscreen_draw(PyGPUOffScreen *self, PyObject *args, PyOb
 
 	static const char *kwlist[] = {"projection_matrix", "modelview_matrix", NULL};
 
-	BPY_GPU_OFFSCREEN_CHECK_OBJ(self, "draw");
+	BPY_GPU_OFFSCREEN_CHECK_OBJ(self, "draw_view3d");
 
-	if (!PyArg_ParseTupleAndKeywords(args, kwds, "O&O&:draw", (char **)(kwlist),
+	if (!PyArg_ParseTupleAndKeywords(args, kwds, "O&O&:draw_view3d", (char **)(kwlist),
 	                                 pygpu_offscreen_check_matrix, &PyProjectionMatrix,
 	                                 pygpu_offscreen_check_matrix, &PyModelViewMatrix))
 	{
@@ -234,11 +234,11 @@ static PyObject *pygpu_offscreen_draw(PyGPUOffScreen *self, PyObject *args, PyOb
 	ar = CTX_wm_region(C);
 
 	if ((v3d == NULL) || (ar == NULL)) {
-		PyErr_SetString(PyExc_SystemError, "draw: No valid view3d in the context");
+		PyErr_SetString(PyExc_SystemError, "draw_view3d: No valid view3d in the context");
 		return NULL;
 	}
 
-	GPU_offscreen_draw(self->ofs, C, (float(*)[4])PyProjectionMatrix->matrix, (float(*)[4])PyModelViewMatrix->matrix);
+	GPU_offscreen_draw_view3d(self->ofs, C, (float(*)[4])PyProjectionMatrix->matrix, (float(*)[4])PyModelViewMatrix->matrix);
 
 	Py_RETURN_NONE;
 }

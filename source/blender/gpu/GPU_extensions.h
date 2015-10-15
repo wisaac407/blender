@@ -185,7 +185,7 @@ void GPU_framebuffer_blur(GPUFrameBuffer *fb, GPUTexture *tex, GPUFrameBuffer *b
 GPUOffScreen *GPU_offscreen_create(int width, int height, int samples, char err_out[256]);
 void GPU_offscreen_free(GPUOffScreen *ofs);
 void GPU_offscreen_bind(GPUOffScreen *ofs, bool save);
-void GPU_offscreen_draw(GPUOffScreen *ofs, struct bContext *C, float projection_matrix[4][4], float modelview_matrix[4][4]);
+void GPU_offscreen_draw_view3d(GPUOffScreen *ofs, struct bContext *C, float projection_matrix[4][4], float modelview_matrix[4][4]);
 void GPU_offscreen_unbind(GPUOffScreen *ofs, bool restore);
 void GPU_offscreen_read_pixels(GPUOffScreen *ofs, int type, void *pixels);
 int GPU_offscreen_width(const GPUOffScreen *ofs);
