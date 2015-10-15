@@ -168,25 +168,36 @@ static PyObject *pygpu_offscreen_unbind(PyGPUOffScreen *self, PyObject *args, Py
 	Py_RETURN_NONE;
 }
 
-static bool pygpu_offscreen_check_matrix(MatrixObject *PyMat, const char *UNUSED(name))
+/**
+ * Use with PyArg_ParseTuple's "O&" formatting.
+ */
+static int pygpu_offscreen_check_matrix(PyObject *o, void *p)
 {
+	MatrixObject **PyMat_p = p;
+	MatrixObject *PyMat = (MatrixObject *)o;
+
 	if (!MatrixObject_Check(PyMat)) {
-		PyErr_SetString(PyExc_TypeError, "matrix is not in a valid format (e.g., mathutils.Matrix)");
-		return false;
+		PyErr_Format(PyExc_TypeError,
+		             "matrix is not in a valid format (e.g., mathutils.Matrix)",
+		             Py_TYPE(o)->tp_name);
+		return 0;
 	}
 
 	if (BaseMath_ReadCallback(PyMat) == -1) {
-		return false;
+		return 0;
 	}
 
 	if ((PyMat->num_col != 4) ||
 	    (PyMat->num_row != 4))
 	{
-		PyErr_SetString(PyExc_TypeError, "matrix need to have 4 rows and 4 columns");
-		return false;
+		PyErr_Format(PyExc_TypeError,
+		             "matrix must have 4 rows and 4 columns",
+		             Py_TYPE(o)->tp_name);
+		return 0;
 	}
 
-	return true;
+	*PyMat_p = PyMat;
+	return 1;
 }
 
 PyDoc_STRVAR(pygpu_offscreen_draw_doc,
@@ -211,12 +222,9 @@ static PyObject *pygpu_offscreen_draw(PyGPUOffScreen *self, PyObject *args, PyOb
 
 	BPY_GPU_OFFSCREEN_CHECK_OBJ(self, "draw");
 
-	if (!PyArg_ParseTupleAndKeywords(args, kwds, "OO:draw", (char **)(kwlist),
-	                                 &PyProjectionMatrix, &PyModelViewMatrix))
-		return NULL;
-
-	if ((!pygpu_offscreen_check_matrix(PyProjectionMatrix, "projection_matrix")) ||
-	    (!pygpu_offscreen_check_matrix(PyModelViewMatrix, "modelview_matrix")))
+	if (!PyArg_ParseTupleAndKeywords(args, kwds, "O&O&:draw", (char **)(kwlist),
+	                                 pygpu_offscreen_check_matrix, &PyProjectionMatrix,
+	                                 pygpu_offscreen_check_matrix, &PyModelViewMatrix))
 	{
 		return NULL;
 	}
