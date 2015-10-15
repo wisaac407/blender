@@ -1671,10 +1671,10 @@ static void gpu_offscreen_draw_doit(
 	            false,
 	            true,
 	            true,
-	            ofs,
+	            "",
 	            fx,
 	            &fx_settings,
-	            "");
+	            ofs);
 
 	GPU_fx_compositor_destroy(fx);
 	GPU_offscreen_unbind(ofs, true); /* unbind */
