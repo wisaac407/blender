@@ -321,6 +321,14 @@ static PyTypeObject PyGPUOffScreen_Type = {
 /* -------------------------------------------------------------------- */
 /* GPU offscreen methods */
 
+static PyObject *BPy_GPU_OffScreen_CreatePyObject(GPUOffScreen *ofs)
+{
+	PyGPUOffScreen *self;
+	self = PyObject_New(PyGPUOffScreen, &PyGPUOffScreen_Type);
+	self->ofs = ofs;
+	return (PyObject *)self;
+}
+
 PyDoc_STRVAR(pygpu_offscreen_new_doc,
 "new(width, height)\n"
 "\n"
@@ -331,7 +339,7 @@ PyDoc_STRVAR(pygpu_offscreen_new_doc,
 );
 static PyObject *pygpu_offscreen_new(PyObject *UNUSED(self), PyObject *args, PyObject *kwds)
 {
-	PyGPUOffScreen *PyOfs;
+	GPUOffScreen *ofs;
 	int width, height;
 	char err_out[256];
 
@@ -350,19 +358,16 @@ static PyObject *pygpu_offscreen_new(PyObject *UNUSED(self), PyObject *args, PyO
 		return NULL;
 	}
 
-	PyOfs = (PyGPUOffScreen *)PyObject_CallObject((PyObject *) &PyGPUOffScreen_Type, NULL);
-	PyOfs->ofs = GPU_offscreen_create(width, height, err_out);
+	ofs = GPU_offscreen_create(width, height, err_out);
 
-	if (PyOfs->ofs == NULL) {
+	if (ofs == NULL) {
 		PyErr_Format(PyExc_Exception,
 		             "gpu.offscreen.new(...) failed with '%s'",
 		             err_out[0] ? err_out : "unknown error");
-
-		Py_DecRef((PyObject *)PyOfs);
 		return NULL;
 	}
 
-	return (PyObject *)PyOfs;
+	return BPy_GPU_OffScreen_CreatePyObject(ofs);
 }
 
 static struct PyMethodDef BPy_GPU_offscreen_methods[] = {
