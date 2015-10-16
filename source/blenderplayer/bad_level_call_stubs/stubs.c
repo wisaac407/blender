@@ -443,11 +443,10 @@ void ED_node_tree_start(struct SpaceNode *snode, struct bNodeTree *ntree, struct
 void ED_node_tree_push(struct SpaceNode *snode, struct bNodeTree *ntree, struct bNode *gnode){}
 void ED_node_tree_pop(struct SpaceNode *snode){}
 void ED_view3d_draw_offscreen(
-         struct Scene *scene, struct View3D *v3d, struct ARegion *ar, int winx, int winy, float viewmat[4][4],
-         float winmat[4][4], bool do_bgpic, bool do_sky, bool is_persp,
-         struct GPUOffScreen *ofs,
-         struct GPUFX *fx, struct GPUFXSettings *fx_settings,
-         const char *viewname) RET_NONE
+        struct Scene *scene, struct View3D *v3d, struct ARegion *ar, int winx, int winy, float viewmat[4][4],
+        float winmat[4][4], bool do_bgpic, bool do_sky, bool is_persp, const char *viewname,
+        struct GPUFX *fx, struct GPUFXSettings *fx_settings,
+        struct GPUOffScreen *ofs) RET_NONE
 void ED_view3d_draw_offscreen_init(struct Scene *scene, struct View3D *v3d) RET_NONE
 int ED_view3d_scene_layer_set(int lay, const int *values, int *active) RET_ZERO
 void ED_view3d_quadview_update(struct ScrArea *sa, struct ARegion *ar, bool do_clip) RET_NONE
