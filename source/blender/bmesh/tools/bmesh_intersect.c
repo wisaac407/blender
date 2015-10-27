@@ -835,6 +835,10 @@ BLI_INLINE void raycast_append_depth(RaycastData *raycast_data, float depth)
 	BLI_buffer_append(&raycast_data->z_buffer, float, depth);
 }
 
+#ifdef USE_KDOPBVH_WATERTIGHT
+static const struct IsectRayPrecalc isect_precalc_x = {1, 2, 0, 0, 0, 1};
+#endif
+
 static void raycast_callback(void *userdata,
                              int index,
                              const BVHTreeRay *ray,
@@ -847,11 +851,12 @@ static void raycast_callback(void *userdata,
 	const float *v2 = looptris[index][2]->v->co;
 	float dist, uv[2];
 	(void) hit;  /* Ignored. */
-	if (isect_ray_tri_epsilon_v3(ray->origin, ray->direction,
-	                             v0, v1, v2,
-	                             &dist,
-	                             uv,
-	                             FLT_EPSILON))
+	if (
+#ifdef USE_KDOPBVH_WATERTIGHT
+	    isect_ray_tri_watertight_v3(ray->origin, &isect_precalc_x, v0, v1, v2, &dist, uv))
+#else
+	    isect_ray_tri_epsilon_v3(ray->origin, ray->direction, v0, v1, v2, &dist, uv, FLT_EPSILON))
+#endif
 	{
 		if (dist >= 0.0f && !raycast_has_depth(raycast_data, dist)) {
 #ifdef USE_DUMP
