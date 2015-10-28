@@ -1,3 +1,5 @@
+#define USE_BMESH
+#define WITH_MOD_BOOLEAN
 
 /*
  * ***** BEGIN GPL LICENSE BLOCK *****
@@ -186,9 +188,28 @@ static DerivedMesh *applyModifier(ModifierData *md, Object *ob,
 			TIMEIT_START(NewBooleanDerivedMesh);
 			bm = BM_mesh_create(&allocsize);
 
-			DM_to_bmesh_ex(derivedData, bm, true);
 			DM_to_bmesh_ex(dm, bm, true);
 
+			{
+				BMIter iter;
+				BMVert *eve;
+
+				float mat[4][4];
+				float omat[4][4];
+				invert_m4_m4(mat, ob->obmat);
+				mul_m4_m4m4(omat, mat, bmd->object->obmat);
+
+
+				BM_ITER_MESH (eve, &iter, bm, BM_VERTS_OF_MESH) {
+					mul_m4_v3(omat, eve->co);
+				}
+			}
+
+			DM_to_bmesh_ex(derivedData, bm, true);
+
+			/* not needed, but normals for 'dm' will be invalid,
+			 * currently this is ok for 'BM_mesh_intersect' */
+			// BM_mesh_normals_update(bm);
 
 			if (1) {
 				/* create tessface & intersect */
