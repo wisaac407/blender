@@ -1469,6 +1469,10 @@ bool BM_mesh_intersect(
 			        NULL, NULL,
 			        0, BM_EDGE);
 
+#ifdef USE_DUMP
+			printf("%s: Total face-groups: %d\n", __func__, group_tot);
+#endif
+
 			/* first check if island is inside */
 
 			/* TODO, find if islands are inside/outside,
@@ -1493,7 +1497,8 @@ bool BM_mesh_intersect(
 
 				if (is_inside) {
 					for (; fg != fg_end; fg++) {
-						BM_face_kill_loose(bm, ftable[groups_array[fg]]);
+//						BM_face_kill_loose(bm, ftable[groups_array[fg]]);
+						ftable[groups_array[fg]]->mat_nr = -1;
 					}
 				}
 				is_inside = !is_inside;
@@ -1501,8 +1506,19 @@ bool BM_mesh_intersect(
 
 			MEM_freeN(groups_array);
 			MEM_freeN(group_index);
-		}
 
+			{
+				int tot = bm->totface;
+				for (i = 0; i < tot; i++) {
+					if (ftable[i]->mat_nr == -1) {
+						BM_face_kill_loose(bm, ftable[i]);
+					}
+				}
+			}
+		}
+	}
+
+	if (boolean_mode != 0) {
 		/* no booleans, just free immediate */
 		BLI_bvhtree_free(tree_a);
 		if (tree_a != tree_b) {
