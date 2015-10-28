@@ -78,6 +78,7 @@
 #define USE_BVH
 
 #define USE_BOOLEAN_RAYCAST_DRAW
+// #define USE_BOOLEAN_RAYCAST_OVERLAP  /* use bvhtree overlap otherwise raycast */
 
 #ifdef USE_BOOLEAN_RAYCAST_DRAW
 /* add these locally when using these functions for testing */
@@ -787,12 +788,82 @@ static void bm_isect_tri_tri(
 
 #ifdef USE_BVH
 
-typedef struct RaycastData {
+
+/* overlap or raycast */
+#ifdef  USE_BOOLEAN_RAYCAST_OVERLAP
+struct OverlapData {
+	const float **looptris;
+
+	const float *co;
+	float dir[3];
+
+	int num_isect;
+};
+
+static bool bmbvh_overlap_cb(void *userdata, int index_a, int UNUSED(index_b), int UNUSED(thread))
+{
+	struct OverlapData *raycast_data = userdata;
+	const float **looptris = raycast_data->looptris;
+	const float *v0 = looptris[index_a * 3 + 0];
+	const float *v1 = looptris[index_a * 3 + 1];
+	const float *v2 = looptris[index_a * 3 + 2];
+	float dist;
+	float uv[2];
+
+	if (isect_ray_tri_watertight_v3_simple(raycast_data->co, raycast_data->dir, v0, v1, v2, &dist, uv)) {
+		raycast_data->num_isect++;
+		return true;
+	}
+	return false;
+}
+
+static int isect_bvhtree_point_v3(
+        BVHTree *tree,
+        const float **looptris,
+        const float co[3])
+{
+	struct OverlapData raycast_data = {
+		looptris,
+	};
+
+
+	float plane_cos[6];
+	BVHTree *planetree;
+	unsigned int tot = 0;
+	BVHTreeOverlap *results;
+
+	raycast_data.num_isect = 0;
+	raycast_data.co = co;
+	raycast_data.dir[0] = 1;
+	raycast_data.dir[1] = 0;
+	raycast_data.dir[2] = 0;
+
+
+	planetree = BLI_bvhtree_new(2, 0, 8, 8);
+
+	copy_v3_v3(plane_cos + 0, co);
+	copy_v3_v3(plane_cos + 3, co);
+	plane_cos[0] += 10;
+	BLI_bvhtree_insert(planetree, 0, plane_cos, 2);
+	BLI_bvhtree_balance(planetree);
+
+	results = BLI_bvhtree_overlap(tree, planetree, &tot, bmbvh_overlap_cb, &raycast_data);
+	BLI_bvhtree_free(planetree);
+	if (results)
+		MEM_freeN(results);
+//	return (tot & 1) == 1;
+//	return (raycast_data.num_isect & 1) == 1;
+	return raycast_data.num_isect;
+}
+
+#else  // raycast
+
+struct RaycastData {
 	const float **looptris;
 	BLI_Buffer z_buffer;
 	float z_buffer_storage[64];
 	int num_isect;
-} RaycastData;
+};
 
 #define BLI_buffer_init_static(type_, flag_, static_storage_, static_count_) \
 	{ \
@@ -807,7 +878,7 @@ typedef struct RaycastData {
 	                    BLI_BUFFER_USE_STATIC | flag_}
 
 /* TODO(sergey): Make inline? */
-BLI_INLINE bool raycast_has_depth(const RaycastData *raycast_data, float depth)
+BLI_INLINE bool raycast_has_depth(const struct RaycastData *raycast_data, float depth)
 {
 	size_t i;
 #ifdef USE_DUMP
@@ -836,7 +907,7 @@ BLI_INLINE bool raycast_has_depth(const RaycastData *raycast_data, float depth)
 }
 
 /* TODO(sergey): Make inline? */
-BLI_INLINE void raycast_append_depth(RaycastData *raycast_data, float depth)
+BLI_INLINE void raycast_append_depth(struct RaycastData *raycast_data, float depth)
 {
 #ifdef USE_DUMP
 	printf("%s: Adding depth %f\n", __func__, (double)depth);
@@ -854,7 +925,7 @@ static void raycast_callback(void *userdata,
                              const BVHTreeRay *ray,
                              BVHTreeRayHit *hit)
 {
-	RaycastData *raycast_data = userdata;
+	struct RaycastData *raycast_data = userdata;
 	const float **looptris = raycast_data->looptris;
 	const float *v0 = looptris[index * 3 + 0];
 	const float *v1 = looptris[index * 3 + 1];
@@ -891,7 +962,7 @@ static int isect_bvhtree_point_v3(
         const float **looptris,
         const float co[3])
 {
-	RaycastData raycast_data = {
+	struct RaycastData raycast_data = {
 		looptris,
 		BLI_buffer_init_static(float,
 		                       0,
@@ -926,6 +997,8 @@ static int isect_bvhtree_point_v3(
 //	return (raycast_data.num_isect & 1) == 1;
 	return raycast_data.num_isect;
 }
+#endif  // USE_BOOLEAN_RAYCAST_OVERLAP
+
 
 #endif
 
