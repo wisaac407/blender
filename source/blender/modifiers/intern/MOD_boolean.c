@@ -157,6 +157,7 @@ static int bm_face_isect_pair(BMFace *f, void *user_data)
 {
 	struct BMIsectUserData *data = user_data;
 
+	// return (f->mat_nr == 0);  /* quick test */
 	return (BM_elem_index_get(f) < data->face_tot_first_mesh);
 }
 

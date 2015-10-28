@@ -788,7 +788,7 @@ static void bm_isect_tri_tri(
 #ifdef USE_BVH
 
 typedef struct RaycastData {
-	/*const*/ BMLoop *(*looptris)[3];
+	const float **looptris;
 	BLI_Buffer z_buffer;
 	float z_buffer_storage[64];
 	int num_isect;
@@ -855,15 +855,16 @@ static void raycast_callback(void *userdata,
                              BVHTreeRayHit *hit)
 {
 	RaycastData *raycast_data = userdata;
-	/*const*/ BMLoop *(*looptris)[3] = raycast_data->looptris;
-	const float *v0 = looptris[index][0]->v->co;
-	const float *v1 = looptris[index][1]->v->co;
-	const float *v2 = looptris[index][2]->v->co;
+	const float **looptris = raycast_data->looptris;
+	const float *v0 = looptris[index * 3 + 0];
+	const float *v1 = looptris[index * 3 + 1];
+	const float *v2 = looptris[index * 3 + 2];
 	float dist, uv[2];
 	(void) hit;  /* Ignored. */
 	if (
 #ifdef USE_KDOPBVH_WATERTIGHT
-	    isect_ray_tri_watertight_v3(ray->origin, &isect_precalc_x, v0, v1, v2, &dist, uv))
+	    isect_ray_tri_watertight_v3_simple(ray->origin, ray->direction, v0, v1, v2, &dist, uv))
+//		isect_ray_tri_watertight_v3(ray->origin, &isect_precalc_x, v0, v1, v2, &dist, uv))
 #else
 	    isect_ray_tri_epsilon_v3(ray->origin, ray->direction, v0, v1, v2, &dist, uv, FLT_EPSILON))
 #endif
@@ -887,7 +888,7 @@ static void raycast_callback(void *userdata,
 
 static int isect_bvhtree_point_v3(
         BVHTree *tree,
-        BMLoop *(*looptris)[3],
+        const float **looptris,
         const float co[3])
 {
 	RaycastData raycast_data = {
@@ -946,6 +947,9 @@ bool BM_mesh_intersect(
 	struct ISectState s;
 	bool has_isect;
 	const int totface_orig = bm->totface;
+
+	/* needed for boolean, since cutting up faces moves the loops within the face */
+	const float **looptri_coords = NULL;
 
 #ifdef USE_BVH
 	BVHTree *tree_a, *tree_b;
@@ -1006,6 +1010,20 @@ bool BM_mesh_intersect(
 #ifdef USE_DUMP
 	printf("data = [\n");
 #endif
+
+	if (boolean_mode != 0) {
+		/* keep original geometrty for raycast callbacks */
+		float **cos;
+		int i, j;
+
+		cos = MEM_mallocN((size_t)looptris_tot * sizeof(*looptri_coords) * 3, __func__);
+		for (i = 0, j = 0; i < looptris_tot; i++) {
+			cos[j++] = looptris[i][0]->v->co;
+			cos[j++] = looptris[i][1]->v->co;
+			cos[j++] = looptris[i][2]->v->co;
+		}
+		looptri_coords = (const float **)cos;
+	}
 
 #ifdef USE_BVH
 	{
@@ -1143,7 +1161,7 @@ bool BM_mesh_intersect(
 			}
 
 #ifdef USE_DUMP
-			printf("# SPLITTING EDGE: %d, %d\n", e_index, v_ls_base->list_len);
+			printf("# SPLITTING EDGE: %d, %d\n", BM_elem_index_get(e), v_ls_base->list_len);
 #endif
 			/* intersect */
 			is_wire = BLI_gset_haskey(s.wire_edges,  e);
@@ -1508,8 +1526,7 @@ bool BM_mesh_intersect(
 
 					BM_face_calc_center_mean(f, co);
 
-					hits = isect_bvhtree_point_v3(test_fn(f, user_data) == 1 ? tree_a : tree_b, looptris, co);
-
+					hits = isect_bvhtree_point_v3(test_fn(f, user_data) == 1 ? tree_a : tree_b, looptri_coords, co);
 					if ((hits & 1) == 1) {
 						is_inside = false;
 					}
@@ -1548,6 +1565,8 @@ bool BM_mesh_intersect(
 			}
 		}
 	}
+
+	MEM_freeN(looptri_coords);
 
 	if (boolean_mode != 0) {
 		/* no booleans, just free immediate */
