@@ -77,6 +77,16 @@
 /* use accelerated overlap check */
 #define USE_BVH
 
+#define USE_BOOLEAN_RAYCAST_DRAW
+
+#ifdef USE_BOOLEAN_RAYCAST_DRAW
+/* add these locally when using these functions for testing */
+extern void bl_debug_draw_quad_clear(void);
+extern void bl_debug_draw_quad_add(const float v0[3], const float v1[3], const float v2[3], const float v3[3]);
+extern void bl_debug_draw_edge_add(const float v0[3], const float v1[3]);
+extern void bl_debug_color_set(const unsigned int col);
+#endif
+
 
 static void tri_v3_scale(
         float v1[3], float v2[3], float v3[3],
@@ -875,7 +885,7 @@ static void raycast_callback(void *userdata,
 	}
 }
 
-static bool isect_bvhtree_point_v3(
+static int isect_bvhtree_point_v3(
         BVHTree *tree,
         BMLoop *(*looptris)[3],
         const float co[3])
@@ -912,7 +922,8 @@ static bool isect_bvhtree_point_v3(
 	printf("%s: Total intersections: %d\n", __func__, raycast_data.num_isect);
 #endif
 
-	return (raycast_data.num_isect & 1) == 1;
+//	return (raycast_data.num_isect & 1) == 1;
+	return raycast_data.num_isect;
 }
 
 #endif
@@ -942,6 +953,10 @@ bool BM_mesh_intersect(
 	BVHTreeOverlap *overlap;
 #else
 	int i_a, i_b;
+#endif
+
+#ifdef USE_BOOLEAN_RAYCAST_DRAW
+	bl_debug_draw_quad_clear();
 #endif
 
 	s.bm = bm;
@@ -1489,10 +1504,26 @@ bool BM_mesh_intersect(
 					/* for now assyme this is an OK face to test with (not degenerate!) */
 					BMFace *f = ftable[groups_array[fg]];
 					float co[3];
+					int hits;
+
 					BM_face_calc_center_mean(f, co);
-					if (isect_bvhtree_point_v3(test_fn(f, user_data) == 1 ? tree_a : tree_b, looptris, co)) {
+
+					hits = isect_bvhtree_point_v3(test_fn(f, user_data) == 1 ? tree_a : tree_b, looptris, co);
+
+					if ((hits & 1) == 1) {
 						is_inside = false;
 					}
+
+#ifdef USE_BOOLEAN_RAYCAST_DRAW
+					{
+						unsigned int colors[4] = {0x00000000, 0xffffffff, 0xff000000, 0x0000ff};
+						float co_other[3] = {UNPACK3(co)};
+						co_other[0] += 1000.0f;
+						bl_debug_color_set(hits < 3 ? colors[hits] : 0xAAAAAA);
+						bl_debug_draw_edge_add(co, co_other);
+					}
+#endif
+
 				}
 
 				if (is_inside) {
