@@ -190,27 +190,7 @@ static DerivedMesh *applyModifier(
 			bm = BM_mesh_create(&allocsize);
 
 			DM_to_bmesh_ex(dm_other, bm, true);
-
-			{
-				BMIter iter;
-				BMVert *eve;
-
-				float mat[4][4];
-				float omat[4][4];
-				invert_m4_m4(mat, ob->obmat);
-				mul_m4_m4m4(omat, mat, bmd->object->obmat);
-
-
-				BM_ITER_MESH (eve, &iter, bm, BM_VERTS_OF_MESH) {
-					mul_m4_v3(omat, eve->co);
-				}
-			}
-
 			DM_to_bmesh_ex(dm, bm, true);
-
-			/* not needed, but normals for 'dm' will be invalid,
-			 * currently this is ok for 'BM_mesh_intersect' */
-			// BM_mesh_normals_update(bm);
 
 			if (1) {
 				/* create tessface & intersect */
@@ -225,6 +205,31 @@ static DerivedMesh *applyModifier(
 				BM_bmesh_calc_tessellation(bm, looptris, &tottri);
 
 				user_data.face_tot_first_mesh = dm_other->getNumPolys(dm_other);
+
+				/* postpone this until after tessellating
+				 * so we can use the original normals before the vertex are moved */
+				{
+					BMIter iter;
+					BMVert *eve;
+					int i = 0, i_end = dm_other->getNumVerts(dm_other);
+
+					float mat[4][4];
+					float omat[4][4];
+					invert_m4_m4(mat, ob->obmat);
+					mul_m4_m4m4(omat, mat, bmd->object->obmat);
+
+
+					BM_ITER_MESH (eve, &iter, bm, BM_VERTS_OF_MESH) {
+						mul_m4_v3(omat, eve->co);
+						if (++i == i_end) {
+							break;
+						}
+					}
+				}
+
+				/* not needed, but normals for 'dm' will be invalid,
+				 * currently this is ok for 'BM_mesh_intersect' */
+				// BM_mesh_normals_update(bm);
 
 				BM_mesh_intersect(
 				        bm,
