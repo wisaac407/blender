@@ -88,6 +88,14 @@ extern void bl_debug_draw_edge_add(const float v0[3], const float v1[3]);
 extern void bl_debug_color_set(const unsigned int col);
 #endif
 
+enum {
+	BOOLEAN_NONE = -1,
+	/* aligned with BooleanModifierOp */
+	BOOLEAN_ISECT = 0,
+	BOOLEAN_UNION = 1,
+	BOOLEAN_DIFFERENCE = 2,
+};
+
 
 static void tri_v3_scale(
         float v1[3], float v2[3], float v3[3],
@@ -1084,7 +1092,7 @@ bool BM_mesh_intersect(
 	printf("data = [\n");
 #endif
 
-	if (boolean_mode != 0) {
+	if (boolean_mode != BOOLEAN_NONE) {
 		/* keep original geometrty for raycast callbacks */
 		float **cos;
 		int i, j;
@@ -1160,7 +1168,7 @@ bool BM_mesh_intersect(
 		MEM_freeN(overlap);
 	}
 
-	if (boolean_mode == 0) {
+	if (boolean_mode == BOOLEAN_NONE) {
 		/* no booleans, just free immediate */
 		BLI_bvhtree_free(tree_a);
 		if (tree_a != tree_b) {
@@ -1543,7 +1551,7 @@ bool BM_mesh_intersect(
 	(void)use_separate;
 #endif  /* USE_SEPARATE */
 
-	if ((boolean_mode != 0) && BLI_gset_size(s.wire_edges)) {
+	if ((boolean_mode != BOOLEAN_NONE) && BLI_gset_size(s.wire_edges)) {
 
 		{
 			GSetIterator gs_iter;
@@ -1558,12 +1566,13 @@ bool BM_mesh_intersect(
 		}
 
 		{
+			BVHTree *tree_pair[2] = {tree_a, tree_b};
+
 			/* group vars */
 			int *groups_array;
 			int (*group_index)[2];
 			int group_tot;
 			int i;
-			bool is_inside;
 			BMFace **ftable;
 
 			BM_mesh_elem_table_ensure(bm, BM_FACE);
@@ -1588,20 +1597,32 @@ bool BM_mesh_intersect(
 			for (i = 0; i < group_tot; i++) {
 				int fg     = group_index[i][0];
 				int fg_end = group_index[i][1] + fg;
-
-				is_inside = true;
+				bool do_remove, do_flip;
 
 				{
 					/* for now assyme this is an OK face to test with (not degenerate!) */
 					BMFace *f = ftable[groups_array[fg]];
 					float co[3];
 					int hits;
+					int side = test_fn(f, user_data) == 0;
 
 					BM_face_calc_center_mean(f, co);
 
-					hits = isect_bvhtree_point_v3(test_fn(f, user_data) == 1 ? tree_a : tree_b, looptri_coords, co);
-					if ((hits & 1) == 1) {
-						is_inside = false;
+					hits = isect_bvhtree_point_v3(tree_pair[side], looptri_coords, co);
+
+					switch (boolean_mode) {
+						case BOOLEAN_ISECT:
+							do_remove = ((hits & 1) != 1);
+							do_flip = false;
+							break;
+						case BOOLEAN_UNION:
+							do_remove = ((hits & 1) == 1);
+							do_flip = false;
+							break;
+						case BOOLEAN_DIFFERENCE:
+							do_remove = ((hits & 1) == 1) == side;
+							do_flip = (side == 0);
+							break;
 					}
 
 #ifdef USE_BOOLEAN_RAYCAST_DRAW
@@ -1616,13 +1637,17 @@ bool BM_mesh_intersect(
 
 				}
 
-				if (is_inside) {
+				if (do_remove) {
 					for (; fg != fg_end; fg++) {
 //						BM_face_kill_loose(bm, ftable[groups_array[fg]]);
 						ftable[groups_array[fg]]->mat_nr = -1;
 					}
 				}
-				is_inside = !is_inside;
+				else if (do_flip) {
+					for (; fg != fg_end; fg++) {
+						BM_face_normal_flip(bm, ftable[groups_array[fg]]);
+					}
+				}
 			}
 
 			MEM_freeN(groups_array);
@@ -1641,7 +1666,7 @@ bool BM_mesh_intersect(
 
 	MEM_freeN(looptri_coords);
 
-	if (boolean_mode != 0) {
+	if (boolean_mode != BOOLEAN_NONE) {
 		/* no booleans, just free immediate */
 		BLI_bvhtree_free(tree_a);
 		if (tree_a != tree_b) {
