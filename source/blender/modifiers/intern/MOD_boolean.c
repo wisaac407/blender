@@ -161,35 +161,35 @@ static int bm_face_isect_pair(BMFace *f, void *user_data)
 	return (BM_elem_index_get(f) < data->face_tot_first_mesh);
 }
 
-static DerivedMesh *applyModifier(ModifierData *md, Object *ob,
-                                  DerivedMesh *derivedData,
-                                  ModifierApplyFlag flag)
+static DerivedMesh *applyModifier(
+        ModifierData *md, Object *ob,
+        DerivedMesh *dm,
+        ModifierApplyFlag flag)
 {
 	BooleanModifierData *bmd = (BooleanModifierData *) md;
-	DerivedMesh *dm;
+	DerivedMesh *dm_other;
 
 	if (!bmd->object)
-		return derivedData;
+		return dm;
 
-	dm = get_dm_for_modifier(bmd->object, flag);
+	dm_other = get_dm_for_modifier(bmd->object, flag);
 
-	if (dm) {
+	if (dm_other) {
 		DerivedMesh *result;
 
 		/* when one of objects is empty (has got no faces) we could speed up
 		 * calculation a bit returning one of objects' derived meshes (or empty one)
 		 * Returning mesh is depended on modifiers operation (sergey) */
-		result = get_quick_derivedMesh(derivedData, dm, bmd->operation);
+		result = get_quick_derivedMesh(dm, dm_other, bmd->operation);
 
 		if (result == NULL) {
 			BMesh *bm;
-			const BMAllocTemplate allocsize = BMALLOC_TEMPLATE_FROM_DM(derivedData, dm);
-			(void)ob;
+			const BMAllocTemplate allocsize = BMALLOC_TEMPLATE_FROM_DM(dm, dm_other);
 
 			TIMEIT_START(NewBooleanDerivedMesh);
 			bm = BM_mesh_create(&allocsize);
 
-			DM_to_bmesh_ex(dm, bm, true);
+			DM_to_bmesh_ex(dm_other, bm, true);
 
 			{
 				BMIter iter;
@@ -206,7 +206,7 @@ static DerivedMesh *applyModifier(ModifierData *md, Object *ob,
 				}
 			}
 
-			DM_to_bmesh_ex(derivedData, bm, true);
+			DM_to_bmesh_ex(dm, bm, true);
 
 			/* not needed, but normals for 'dm' will be invalid,
 			 * currently this is ok for 'BM_mesh_intersect' */
@@ -224,14 +224,14 @@ static DerivedMesh *applyModifier(ModifierData *md, Object *ob,
 
 				BM_bmesh_calc_tessellation(bm, looptris, &tottri);
 
-				user_data.face_tot_first_mesh = dm->getNumPolys(dm);
+				user_data.face_tot_first_mesh = dm_other->getNumPolys(dm_other);
 
 				BM_mesh_intersect(
 				        bm,
 				        looptris, tottri,
 				        bm_face_isect_pair, &user_data,
 				        false, true,
-				        1,
+				        bmd->operation,
 				        FLT_EPSILON);
 
 				MEM_freeN(looptris);
@@ -256,7 +256,7 @@ static DerivedMesh *applyModifier(ModifierData *md, Object *ob,
 			modifier_setError(md, "Cannot execute boolean operation");
 	}
 
-	return derivedData;
+	return dm;
 }
 #else // USE_BMESH
 static DerivedMesh *applyModifier(ModifierData *md, Object *ob,
