@@ -235,7 +235,7 @@ static DerivedMesh *applyModifier(
 				        bm,
 				        looptris, tottri,
 				        bm_face_isect_pair, &user_data,
-				        false, true,
+				        false, true, false,
 				        bmd->operation,
 				        FLT_EPSILON);
 

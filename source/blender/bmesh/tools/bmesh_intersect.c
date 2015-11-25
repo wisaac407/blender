@@ -1021,7 +1021,7 @@ bool BM_mesh_intersect(
         BMesh *bm,
         struct BMLoop *(*looptris)[3], const int looptris_tot,
         int (*test_fn)(BMFace *f, void *user_data), void *user_data,
-        const bool use_self, const bool use_separate,
+        const bool use_self, const bool use_separate, const bool use_dissolve,
         const int boolean_mode,
         const float eps)
 {
@@ -1085,7 +1085,9 @@ bool BM_mesh_intersect(
 	        0);
 
 #ifdef USE_DISSOLVE
-	BM_mesh_elem_hflag_disable_all(bm, BM_EDGE | BM_VERT, BM_ELEM_TAG, false);
+	if (use_dissolve) {
+		BM_mesh_elem_hflag_disable_all(bm, BM_EDGE | BM_VERT, BM_ELEM_TAG, false);
+	}
 #endif
 
 #ifdef USE_DUMP
@@ -1288,7 +1290,7 @@ bool BM_mesh_intersect(
 
 	/* important to handle before edgenet */
 #ifdef USE_DISSOLVE
-	{
+	if (use_dissolve) {
 		/* first pass */
 		BMVert *(*splice_ls)[2];
 		STACK_DECLARE(splice_ls);
