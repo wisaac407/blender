@@ -210,18 +210,37 @@ static DerivedMesh *applyModifier(
 				 * so we can use the original normals before the vertex are moved */
 				{
 					BMIter iter;
-					BMVert *eve;
-					int i = 0, i_end = dm_other->getNumVerts(dm_other);
+					int i;
+					const int i_verts_end = dm_other->getNumVerts(dm_other);
+					const int i_faces_end = dm_other->getNumPolys(dm_other);
 
-					float mat[4][4];
+					float imat[4][4];
 					float omat[4][4];
-					invert_m4_m4(mat, ob->obmat);
-					mul_m4_m4m4(omat, mat, bmd->object->obmat);
+
+					invert_m4_m4(imat, ob->obmat);
+					mul_m4_m4m4(omat, imat, bmd->object->obmat);
 
 
+					BMVert *eve;
+					i = 0;
 					BM_ITER_MESH (eve, &iter, bm, BM_VERTS_OF_MESH) {
 						mul_m4_v3(omat, eve->co);
-						if (++i == i_end) {
+						if (++i == i_verts_end) {
+							break;
+						}
+					}
+
+					/* we need face normals because of 'BM_face_split_edgenet'
+					 * we could calculate on the fly too (before calling split). */
+					float nmat[4][4];
+					invert_m4_m4(nmat, omat);
+
+					BMFace *efa;
+					i = 0;
+					BM_ITER_MESH (efa, &iter, bm, BM_FACES_OF_MESH) {
+						mul_transposed_mat3_m4_v3(nmat, efa->no);
+						normalize_v3(efa->no);
+						if (++i == i_faces_end) {
 							break;
 						}
 					}
