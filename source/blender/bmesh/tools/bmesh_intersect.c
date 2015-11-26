@@ -1666,9 +1666,9 @@ bool BM_mesh_intersect(
 		}
 	}
 
-	MEM_freeN(looptri_coords);
-
 	if (boolean_mode != BOOLEAN_NONE) {
+		MEM_freeN(looptri_coords);
+
 		/* no booleans, just free immediate */
 		BLI_bvhtree_free(tree_a);
 		if (tree_a != tree_b) {
