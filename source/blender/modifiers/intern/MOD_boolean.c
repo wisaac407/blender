@@ -237,7 +237,7 @@ static DerivedMesh *applyModifier(
 				        bm_face_isect_pair, &user_data,
 				        false, true, false,
 				        bmd->operation,
-				        FLT_EPSILON);
+				        bmd->threshold);
 
 				MEM_freeN(looptris);
 			}

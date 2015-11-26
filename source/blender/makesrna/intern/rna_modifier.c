@@ -1883,6 +1883,13 @@ static void rna_def_modifier_boolean(BlenderRNA *brna)
 	RNA_def_property_enum_items(prop, prop_operation_items);
 	RNA_def_property_ui_text(prop, "Operation", "");
 	RNA_def_property_update(prop, 0, "rna_Modifier_update");
+
+	prop = RNA_def_property(srna, "threshold", PROP_FLOAT, PROP_DISTANCE);
+	RNA_def_property_float_sdna(prop, NULL, "threshold");
+	RNA_def_property_range(prop, 0, 1.0f);
+	RNA_def_property_ui_range(prop, 0, 1, 1, 7);
+	RNA_def_property_ui_text(prop, "Threshold",  "");
+	RNA_def_property_update(prop, 0, "rna_Modifier_update");
 }
 
 static void rna_def_modifier_array(BlenderRNA *brna)

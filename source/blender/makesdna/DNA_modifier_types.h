@@ -640,7 +640,8 @@ typedef struct BooleanModifierData {
 	ModifierData modifier;
 
 	struct Object *object;
-	int operation, pad;
+	int operation;
+	float threshold;
 } BooleanModifierData;
 
 typedef enum {

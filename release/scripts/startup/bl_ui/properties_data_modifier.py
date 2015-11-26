@@ -151,6 +151,7 @@ class DATA_PT_modifiers(ModifierButtonsPanel, Panel):
         col = split.column()
         col.label(text="Operation:")
         col.prop(md, "operation", text="")
+        col.prop(md, "threshold")
 
         col = split.column()
         col.label(text="Object:")
