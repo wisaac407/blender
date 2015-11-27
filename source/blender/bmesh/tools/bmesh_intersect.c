@@ -1594,9 +1594,10 @@ bool BM_mesh_intersect(
 	(void)use_separate;
 #endif  /* USE_SEPARATE */
 
-	if ((boolean_mode != BOOLEAN_NONE) && BLI_gset_size(s.wire_edges)) {
+	if ((boolean_mode != BOOLEAN_NONE)) {
 
-		{
+		/* any intersections? */
+		if (BLI_gset_size(s.wire_edges)) {
 			GSetIterator gs_iter;
 
 			/* TODO, avoid calling? */
