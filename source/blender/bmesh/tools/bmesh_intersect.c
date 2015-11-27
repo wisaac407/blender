@@ -1595,115 +1595,99 @@ bool BM_mesh_intersect(
 #endif  /* USE_SEPARATE */
 
 	if ((boolean_mode != BOOLEAN_NONE)) {
+			BVHTree *tree_pair[2] = {tree_a, tree_b};
 
-		/* any intersections? */
-		if (BLI_gset_size(s.wire_edges)) {
-			GSetIterator gs_iter;
+		/* group vars */
+		int *groups_array;
+		int (*group_index)[2];
+		int group_tot;
+		int i;
+		BMFace **ftable;
 
-			/* TODO, avoid calling? */
-			BM_mesh_elem_hflag_disable_all(bm, BM_EDGE, BM_ELEM_TAG, false);
+		BM_mesh_elem_table_ensure(bm, BM_FACE);
+		ftable = bm->ftable;
 
-			GSET_ITER (gs_iter, s.wire_edges) {
-				BMEdge *e = BLI_gsetIterator_getKey(&gs_iter);
-				BM_elem_flag_enable(e, BM_ELEM_TAG);
+		groups_array = MEM_mallocN(sizeof(*groups_array) * (size_t)bm->totface, __func__);
+		group_tot = BM_mesh_calc_face_groups(
+		        bm, groups_array, &group_index,
+		        NULL, NULL,
+		        0, BM_EDGE);
+
+#ifdef USE_DUMP
+		printf("%s: Total face-groups: %d\n", __func__, group_tot);
+#endif
+
+		/* first check if island is inside */
+
+		/* TODO, find if islands are inside/outside,
+		 * for now remove alternate islands, as simple testcase */
+
+		printf("Found %d\n", group_tot);
+		for (i = 0; i < group_tot; i++) {
+			int fg     = group_index[i][0];
+			int fg_end = group_index[i][1] + fg;
+			bool do_remove, do_flip;
+
+			{
+				/* for now assyme this is an OK face to test with (not degenerate!) */
+				BMFace *f = ftable[groups_array[fg]];
+				float co[3];
+				int hits;
+				int side = test_fn(f, user_data) == 0;
+
+				// BM_face_calc_center_mean(f, co);
+				bm_face_calc_point_on_face(f, co);
+
+				hits = isect_bvhtree_point_v3(tree_pair[side], looptri_coords, co);
+
+				switch (boolean_mode) {
+					case BOOLEAN_ISECT:
+						do_remove = ((hits & 1) != 1);
+						do_flip = false;
+						break;
+					case BOOLEAN_UNION:
+						do_remove = ((hits & 1) == 1);
+						do_flip = false;
+						break;
+					case BOOLEAN_DIFFERENCE:
+						do_remove = ((hits & 1) == 1) == side;
+						do_flip = (side == 0);
+						break;
+				}
+
+#ifdef USE_BOOLEAN_RAYCAST_DRAW
+				{
+					unsigned int colors[4] = {0x00000000, 0xffffffff, 0xff000000, 0x0000ff};
+					float co_other[3] = {UNPACK3(co)};
+					co_other[0] += 1000.0f;
+					bl_debug_color_set(colors[(hits & 1) == 1]);
+					bl_debug_draw_edge_add(co, co_other);
+				}
+#endif
+
+			}
+
+			if (do_remove) {
+				for (; fg != fg_end; fg++) {
+//					BM_face_kill_loose(bm, ftable[groups_array[fg]]);
+					ftable[groups_array[fg]]->mat_nr = -1;
+				}
+			}
+			else if (do_flip) {
+				for (; fg != fg_end; fg++) {
+					BM_face_normal_flip(bm, ftable[groups_array[fg]]);
+				}
 			}
 		}
 
+		MEM_freeN(groups_array);
+		MEM_freeN(group_index);
+
 		{
-			BVHTree *tree_pair[2] = {tree_a, tree_b};
-
-			/* group vars */
-			int *groups_array;
-			int (*group_index)[2];
-			int group_tot;
-			int i;
-			BMFace **ftable;
-
-			BM_mesh_elem_table_ensure(bm, BM_FACE);
-			ftable = bm->ftable;
-
-			groups_array = MEM_mallocN(sizeof(*groups_array) * (size_t)bm->totface, __func__);
-			group_tot = BM_mesh_calc_face_groups(
-			        bm, groups_array, &group_index,
-			        NULL, NULL,
-			        0, BM_EDGE);
-
-#ifdef USE_DUMP
-			printf("%s: Total face-groups: %d\n", __func__, group_tot);
-#endif
-
-			/* first check if island is inside */
-
-			/* TODO, find if islands are inside/outside,
-			 * for now remove alternate islands, as simple testcase */
-
-			printf("Found %d\n", group_tot);
-			for (i = 0; i < group_tot; i++) {
-				int fg     = group_index[i][0];
-				int fg_end = group_index[i][1] + fg;
-				bool do_remove, do_flip;
-
-				{
-					/* for now assyme this is an OK face to test with (not degenerate!) */
-					BMFace *f = ftable[groups_array[fg]];
-					float co[3];
-					int hits;
-					int side = test_fn(f, user_data) == 0;
-
-					// BM_face_calc_center_mean(f, co);
-					bm_face_calc_point_on_face(f, co);
-
-					hits = isect_bvhtree_point_v3(tree_pair[side], looptri_coords, co);
-
-					switch (boolean_mode) {
-						case BOOLEAN_ISECT:
-							do_remove = ((hits & 1) != 1);
-							do_flip = false;
-							break;
-						case BOOLEAN_UNION:
-							do_remove = ((hits & 1) == 1);
-							do_flip = false;
-							break;
-						case BOOLEAN_DIFFERENCE:
-							do_remove = ((hits & 1) == 1) == side;
-							do_flip = (side == 0);
-							break;
-					}
-
-#ifdef USE_BOOLEAN_RAYCAST_DRAW
-					{
-						unsigned int colors[4] = {0x00000000, 0xffffffff, 0xff000000, 0x0000ff};
-						float co_other[3] = {UNPACK3(co)};
-						co_other[0] += 1000.0f;
-						bl_debug_color_set(colors[(hits & 1) == 1]);
-						bl_debug_draw_edge_add(co, co_other);
-					}
-#endif
-
-				}
-
-				if (do_remove) {
-					for (; fg != fg_end; fg++) {
-//						BM_face_kill_loose(bm, ftable[groups_array[fg]]);
-						ftable[groups_array[fg]]->mat_nr = -1;
-					}
-				}
-				else if (do_flip) {
-					for (; fg != fg_end; fg++) {
-						BM_face_normal_flip(bm, ftable[groups_array[fg]]);
-					}
-				}
-			}
-
-			MEM_freeN(groups_array);
-			MEM_freeN(group_index);
-
-			{
-				int tot = bm->totface;
-				for (i = 0; i < tot; i++) {
-					if (ftable[i]->mat_nr == -1) {
-						BM_face_kill_loose(bm, ftable[i]);
-					}
+			int tot = bm->totface;
+			for (i = 0; i < tot; i++) {
+				if (ftable[i]->mat_nr == -1) {
+					BM_face_kill_loose(bm, ftable[i]);
 				}
 			}
 		}
