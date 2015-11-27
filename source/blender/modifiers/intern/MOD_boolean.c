@@ -146,19 +146,15 @@ static DerivedMesh *get_quick_derivedMesh(DerivedMesh *derivedData, DerivedMesh 
 
 #ifdef USE_BMESH
 
-struct BMIsectUserData {
-	int face_tot_first_mesh;
-};
+/* has no meaning for faces, do this so we can tell which face is which */
+#define BM_FACE_TAG BM_ELEM_DRAW
 
 /**
  * Compare selected/unselected.
  */
-static int bm_face_isect_pair(BMFace *f, void *user_data)
+static int bm_face_isect_pair(BMFace *f, void *UNUSED(user_data))
 {
-	struct BMIsectUserData *data = user_data;
-
-	// return (f->mat_nr == 0);  /* quick test */
-	return (BM_elem_index_get(f) < data->face_tot_first_mesh);
+	return BM_elem_flag_test_bool(f, BM_FACE_TAG);
 }
 
 static DerivedMesh *applyModifier(
@@ -198,13 +194,9 @@ static DerivedMesh *applyModifier(
 				int tottri;
 				BMLoop *(*looptris)[3];
 
-				struct BMIsectUserData user_data = {0};
-
 				looptris = MEM_mallocN(sizeof(*looptris) * looptris_tot, __func__);
 
 				BM_bmesh_calc_tessellation(bm, looptris, &tottri);
-
-				user_data.face_tot_first_mesh = dm_other->getNumPolys(dm_other);
 
 				/* postpone this until after tessellating
 				 * so we can use the original normals before the vertex are moved */
@@ -240,6 +232,7 @@ static DerivedMesh *applyModifier(
 					BM_ITER_MESH (efa, &iter, bm, BM_FACES_OF_MESH) {
 						mul_transposed_mat3_m4_v3(nmat, efa->no);
 						normalize_v3(efa->no);
+						BM_elem_flag_enable(efa, BM_FACE_TAG);  /* temp tag to test which side split faces are from */
 						if (++i == i_faces_end) {
 							break;
 						}
@@ -253,7 +246,7 @@ static DerivedMesh *applyModifier(
 				BM_mesh_intersect(
 				        bm,
 				        looptris, tottri,
-				        bm_face_isect_pair, &user_data,
+				        bm_face_isect_pair, NULL,
 				        false, true, false,
 				        bmd->operation,
 				        bmd->threshold);
