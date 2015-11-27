@@ -794,46 +794,6 @@ static void bm_isect_tri_tri(
 	}
 }
 
-/* copy of #edbm_mesh_knife_face_point. we could de-duplicate these */
-static void bm_face_calc_point_on_face(BMFace *f, float r_cent[3])
-{
-	if (f->len == 3) {
-		BM_face_calc_center_mean(f, r_cent);
-		return;
-	}
-
-	const int tottri = f->len - 2;
-	BMLoop **loops = BLI_array_alloca(loops, (unsigned int)f->len);
-	unsigned int  (*index)[3] = BLI_array_alloca(index, (unsigned int)tottri);
-	int j;
-	int j_best = 0;  /* use as fallback when unset */
-	float area_best  = -1.0f;
-
-	/* XXX, needed? (probably the one copied from the original face is close enough) */
-	BM_face_normal_update(f);
-
-	BM_face_calc_tessellation(f, loops, index);
-
-	for (j = 0; j < tottri; j++) {
-		const float *p1 = loops[index[j][0]]->v->co;
-		const float *p2 = loops[index[j][1]]->v->co;
-		const float *p3 = loops[index[j][2]]->v->co;
-		float area;
-
-		area = area_squared_tri_v3(p1, p2, p3);
-		if (area > area_best) {
-			j_best = j;
-			area_best = area;
-		}
-	}
-
-	mid_v3_v3v3v3(
-	        r_cent,
-	        loops[index[j_best][0]]->v->co,
-	        loops[index[j_best][1]]->v->co,
-	        loops[index[j_best][2]]->v->co);
-}
-
 #ifdef USE_BVH
 
 
@@ -1636,7 +1596,7 @@ bool BM_mesh_intersect(
 				int side = test_fn(f, user_data) == 0;
 
 				// BM_face_calc_center_mean(f, co);
-				bm_face_calc_point_on_face(f, co);
+				BM_face_calc_point_in_face(f, co);
 
 				hits = isect_bvhtree_point_v3(tree_pair[side], looptri_coords, co);
 
