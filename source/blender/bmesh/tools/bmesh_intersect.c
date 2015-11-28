@@ -481,6 +481,22 @@ static BMVert *bm_isect_edge_tri(
 	return NULL;
 }
 
+static bool bm_loop_filter_fn(const BMLoop *l, void *UNUSED(user_data))
+{
+	if (l->radial_next != l) {
+		BMLoop *l_iter = l->radial_next;
+		const char hflag_test = BM_ELEM_DRAW;  /* XXX, set in MOD_boolean.c */
+		const char hflag = BM_elem_flag_test(l->f, hflag_test);
+		do {
+			if (BM_elem_flag_test(l_iter->f, hflag_test) != hflag) {
+				return false;
+			}
+		} while ((l_iter = l_iter->radial_next) != l);
+		return true;
+	}
+	return false;
+}
+
 /**
  * Return true if we have any intersections.
  */
@@ -1570,7 +1586,7 @@ bool BM_mesh_intersect(
 		groups_array = MEM_mallocN(sizeof(*groups_array) * (size_t)bm->totface, __func__);
 		group_tot = BM_mesh_calc_face_groups(
 		        bm, groups_array, &group_index,
-		        NULL, NULL,
+		        bm_loop_filter_fn, NULL,
 		        0, BM_EDGE);
 
 #ifdef USE_DUMP

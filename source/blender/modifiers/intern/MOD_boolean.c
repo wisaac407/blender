@@ -247,7 +247,7 @@ static DerivedMesh *applyModifier(
 				        bm,
 				        looptris, tottri,
 				        bm_face_isect_pair, NULL,
-				        false, true, false,
+				        false, false, false,
 				        bmd->operation,
 				        bmd->threshold);
 
