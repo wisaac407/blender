@@ -152,13 +152,15 @@ class DATA_PT_modifiers(ModifierButtonsPanel, Panel):
         col = split.column()
         col.label(text="Operation:")
         col.prop(md, "operation", text="")
-        if md.method == 'BMESH':
-            col.prop(md, "threshold")
-            col.prop(md, "options", expand=True)
 
         col = split.column()
         col.label(text="Object:")
         col.prop(md, "object", text="")
+
+        if md.method == 'BMESH':
+            layout.label("BMesh Options:")
+            layout.prop(md, "threshold")
+            layout.row().prop(md, "options", expand=True)
 
     def BUILD(self, layout, ob, md):
         split = layout.split()

@@ -62,6 +62,13 @@
 #include "PIL_time.h"
 #include "PIL_time_utildefines.h"
 
+static void initData(ModifierData *md)
+{
+	BooleanModifierData *bmd = (BooleanModifierData *)md;
+
+	bmd->flag = eBooleanModifierFlag_Dissolve;
+}
+
 static void copyData(ModifierData *md, ModifierData *target)
 {
 #if 0
@@ -387,7 +394,7 @@ ModifierTypeInfo modifierType_Boolean = {
 	/* deformMatricesEM */  NULL,
 	/* applyModifier */     applyModifier,
 	/* applyModifierEM */   NULL,
-	/* initData */          NULL,
+	/* initData */          initData,
 	/* requiredDataMask */  requiredDataMask,
 	/* freeData */          NULL,
 	/* isDisabled */        isDisabled,
