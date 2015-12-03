@@ -177,7 +177,11 @@ void color3ubv_from_seq(Scene *curscene, Sequence *seq, unsigned char col[3])
 			blendcol[0] = blendcol[1] = blendcol[2] = 128;
 			if (seq->flag & SEQ_MUTE) UI_GetColorPtrBlendShade3ubv(col, blendcol, col, 0.5, 20);
 			break;
-		
+
+		case SEQ_TYPE_TEXT:
+			UI_GetThemeColor3ubv(TH_SEQ_TEXT, col);
+			break;
+
 		default:
 			col[0] = 10; col[1] = 255; col[2] = 40;
 			break;
@@ -1093,7 +1097,6 @@ void draw_image_seq(const bContext *C, Scene *scene, ARegion *ar, SpaceSeq *sseq
 	float viewrect[2];
 	float col[3];
 	GLuint texid;
-	GLuint last_texid;
 	void *display_buffer;
 	void *cache_handle = NULL;
 	const bool is_imbuf = ED_space_sequencer_check_show_imbuf(sseq);
@@ -1289,10 +1292,8 @@ void draw_image_seq(const bContext *C, Scene *scene, ARegion *ar, SpaceSeq *sseq
 		}
 	}
 
-	glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
 	glColor4f(1.0, 1.0, 1.0, 1.0);
 
-	last_texid = glaGetOneInteger(GL_TEXTURE_2D);
 	glEnable(GL_TEXTURE_2D);
 	glGenTextures(1, (GLuint *)&texid);
 
@@ -1367,7 +1368,7 @@ void draw_image_seq(const bContext *C, Scene *scene, ARegion *ar, SpaceSeq *sseq
 	}
 	glEnd();
 
-	glBindTexture(GL_TEXTURE_2D, last_texid);
+	glBindTexture(GL_TEXTURE_2D, 0);
 	glDisable(GL_TEXTURE_2D);
 	if (sseq->mainb == SEQ_DRAW_IMG_IMBUF && sseq->flag & SEQ_USE_ALPHA)
 		glDisable(GL_BLEND);

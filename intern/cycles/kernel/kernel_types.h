@@ -87,7 +87,6 @@ CCL_NAMESPACE_BEGIN
 /* Experimental on GPU */
 #ifdef __KERNEL_EXPERIMENTAL__
 #define __SUBSURFACE__
-#define __SUBSURFACE_DELAYED_INDIRECT__
 #define __CMJ__
 #endif
 
@@ -762,7 +761,7 @@ struct SubsurfaceIntersection
 	float3 weight[BSSRDF_MAX_HITS];
 
 	int num_hits;
-	Intersection hits[BSSRDF_MAX_HITS];
+	struct Intersection hits[BSSRDF_MAX_HITS];
 	float3 Ng[BSSRDF_MAX_HITS];
 };
 
@@ -770,11 +769,14 @@ struct SubsurfaceIntersection
 struct SubsurfaceIndirectRays
 {
 	bool need_update_volume_stack;
-	PathState state;
+	bool tracing;
+	PathState state[BSSRDF_MAX_HITS];
+	struct PathRadiance direct_L;
 
 	int num_rays;
-	Ray rays[BSSRDF_MAX_HITS];
+	struct Ray rays[BSSRDF_MAX_HITS];
 	float3 throughputs[BSSRDF_MAX_HITS];
+	struct PathRadiance L[BSSRDF_MAX_HITS];
 };
 
 /* Constant Kernel Data
