@@ -146,12 +146,14 @@ class DATA_PT_modifiers(ModifierButtonsPanel, Panel):
         layout.row().prop(md, "offset_type", expand=True)
 
     def BOOLEAN(self, layout, ob, md):
+        layout.row().prop(md, "method", expand=True)
         split = layout.split()
 
         col = split.column()
         col.label(text="Operation:")
         col.prop(md, "operation", text="")
-        col.prop(md, "threshold")
+        if md.method == 'BMESH':
+            col.prop(md, "threshold")
 
         col = split.column()
         col.label(text="Object:")

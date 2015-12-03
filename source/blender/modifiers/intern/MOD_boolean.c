@@ -1,6 +1,3 @@
-#define USE_BMESH
-#define WITH_MOD_BOOLEAN
-
 /*
  * ***** BEGIN GPL LICENSE BLOCK *****
  *
@@ -34,6 +31,9 @@
 /** \file blender/modifiers/intern/MOD_boolean.c
  *  \ingroup modifiers
  */
+
+#define USE_BMESH
+#define USE_CARVE WITH_MOD_BOOLEAN
 
 #include <stdio.h>
 
@@ -118,7 +118,8 @@ static void updateDepsgraph(ModifierData *md,
 	DEG_add_object_relation(node, ob, DEG_OB_COMP_TRANSFORM, "Boolean Modifier");
 }
 
-#ifdef WITH_MOD_BOOLEAN
+#if defined(USE_CARVE) || defined(USE_BMESH)
+
 static DerivedMesh *get_quick_derivedMesh(DerivedMesh *derivedData, DerivedMesh *dm, int operation)
 {
 	DerivedMesh *result = NULL;
@@ -143,6 +144,11 @@ static DerivedMesh *get_quick_derivedMesh(DerivedMesh *derivedData, DerivedMesh 
 
 	return result;
 }
+#endif  /* defined(USE_CARVE) || defined(USE_BMESH) */
+
+
+/* -------------------------------------------------------------------- */
+/* BMESH */
 
 #ifdef USE_BMESH
 
@@ -157,7 +163,7 @@ static int bm_face_isect_pair(BMFace *f, void *UNUSED(user_data))
 	return BM_elem_flag_test_bool(f, BM_FACE_TAG);
 }
 
-static DerivedMesh *applyModifier(
+static DerivedMesh *applyModifier_bmesh(
         ModifierData *md, Object *ob,
         DerivedMesh *dm,
         ModifierApplyFlag flag)
@@ -182,7 +188,7 @@ static DerivedMesh *applyModifier(
 			BMesh *bm;
 			const BMAllocTemplate allocsize = BMALLOC_TEMPLATE_FROM_DM(dm, dm_other);
 
-			TIMEIT_START(NewBooleanDerivedMesh);
+			TIMEIT_START(boolean_bmesh);
 			bm = BM_mesh_create(&allocsize);
 
 			DM_to_bmesh_ex(dm_other, bm, true);
@@ -260,7 +266,7 @@ static DerivedMesh *applyModifier(
 
 			result->dirty |= DM_DIRTY_NORMALS;
 
-			TIMEIT_END(NewBooleanDerivedMesh);
+			TIMEIT_END(boolean_bmesh);
 
 			return result;
 		}
@@ -275,10 +281,17 @@ static DerivedMesh *applyModifier(
 
 	return dm;
 }
-#else // USE_BMESH
-static DerivedMesh *applyModifier(ModifierData *md, Object *ob,
-                                  DerivedMesh *derivedData,
-                                  ModifierApplyFlag flag)
+#endif  /* USE_BMESH */
+
+
+/* -------------------------------------------------------------------- */
+/* CARVE */
+
+#ifdef USE_CARVE
+static DerivedMesh *applyModifier_carve(
+        ModifierData *md, Object *ob,
+        DerivedMesh *derivedData,
+        ModifierApplyFlag flag)
 {
 	BooleanModifierData *bmd = (BooleanModifierData *) md;
 	DerivedMesh *dm;
@@ -297,12 +310,12 @@ static DerivedMesh *applyModifier(ModifierData *md, Object *ob,
 		result = get_quick_derivedMesh(derivedData, dm, bmd->operation);
 
 		if (result == NULL) {
-			TIMEIT_START(NewBooleanDerivedMesh);
+			TIMEIT_START(boolean_carve);
 
 			result = NewBooleanDerivedMesh(dm, bmd->object, derivedData, ob,
 			                               1 + bmd->operation);
 
-			TIMEIT_END(NewBooleanDerivedMesh);
+			TIMEIT_END(boolean_carve);
 		}
 
 		/* if new mesh returned, return it; otherwise there was
@@ -315,15 +328,16 @@ static DerivedMesh *applyModifier(ModifierData *md, Object *ob,
 	
 	return derivedData;
 }
-#endif // USE_BMESH
-#else // WITH_MOD_BOOLEAN
-static DerivedMesh *applyModifier(ModifierData *UNUSED(md), Object *UNUSED(ob),
-                                  DerivedMesh *derivedData,
-                                  ModifierApplyFlag UNUSED(flag))
+#endif  /* USE_CARVE */
+
+
+static DerivedMesh *applyModifier_nop(
+        ModifierData *UNUSED(md), Object *UNUSED(ob),
+        DerivedMesh *derivedData,
+        ModifierApplyFlag UNUSED(flag))
 {
 	return derivedData;
 }
-#endif // WITH_MOD_BOOLEAN
 
 static CustomDataMask requiredDataMask(Object *UNUSED(ob), ModifierData *UNUSED(md))
 {
@@ -332,6 +346,27 @@ static CustomDataMask requiredDataMask(Object *UNUSED(ob), ModifierData *UNUSED(
 	dataMask |= CD_MASK_MDEFORMVERT;
 	
 	return dataMask;
+}
+
+static DerivedMesh *applyModifier(
+        ModifierData *md, Object *ob,
+        DerivedMesh *derivedData,
+        ModifierApplyFlag flag)
+{
+	BooleanModifierData *bmd = (BooleanModifierData *)md;
+
+	switch (bmd->method) {
+#ifdef USE_CARVE
+		case eBooleanModifierMethod_Carve:
+			return applyModifier_carve(md, ob, derivedData, flag);
+#endif
+#ifdef USE_BMESH
+		case eBooleanModifierMethod_BMesh:
+			return applyModifier_bmesh(md, ob, derivedData, flag);
+#endif
+		default:
+			return applyModifier_nop(md, ob, derivedData, flag);
+	}
 }
 
 
