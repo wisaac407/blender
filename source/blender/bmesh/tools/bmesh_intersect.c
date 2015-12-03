@@ -1307,7 +1307,7 @@ bool BM_mesh_intersect(
 
 	/* important to handle before edgenet */
 #ifdef USE_DISSOLVE
-	if (use_dissolve) {
+	if (use_dissolve && (boolean_mode == BOOLEAN_NONE)) {
 		/* first pass */
 		BMVert *(*splice_ls)[2];
 		STACK_DECLARE(splice_ls);
@@ -1658,6 +1658,37 @@ bool BM_mesh_intersect(
 
 		MEM_freeN(groups_array);
 		MEM_freeN(group_index);
+
+#ifdef USE_DISSOLVE
+		/* We have dissolve code above, this is alternative logic,
+		 * we need to do it after the boolean is executed. */
+		if (use_dissolve) {
+			LinkNode *node;
+			for (node = s.vert_dissolve; node; node = node->next) {
+				BMVert *v = node->link;
+				if (BM_vert_is_edge_pair(v)) {
+					/* we wont create degenerate faces from this */
+					bool ok = true;
+
+					/* would we create a 2-sided-face?
+					 * if so, don't dissolve this since we may */
+					if (v->e->l) {
+						BMLoop *l_iter = v->e->l;
+						do {
+							if (l_iter->f->len == 3) {
+								ok = false;
+								break;
+							}
+						} while ((l_iter = l_iter->radial_next) != v->e->l);
+					}
+
+					if (ok) {
+						BM_vert_collapse_edge(bm, v->e, v, true, false);
+					}
+				}
+			}
+		}
+#endif
 
 		{
 			int tot = bm->totface;

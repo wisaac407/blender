@@ -253,7 +253,9 @@ static DerivedMesh *applyModifier_bmesh(
 				        bm,
 				        looptris, tottri,
 				        bm_face_isect_pair, NULL,
-				        false, false, false,
+				        false,
+				        (bmd->flag & eBooleanModifierFlag_Separate) != 0,
+				        (bmd->flag & eBooleanModifierFlag_Dissolve) != 0,
 				        bmd->operation,
 				        bmd->threshold);
 

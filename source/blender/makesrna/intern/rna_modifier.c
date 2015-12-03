@@ -1874,6 +1874,12 @@ static void rna_def_modifier_boolean(BlenderRNA *brna)
 		{0, NULL, 0, NULL, NULL}
 	};
 
+	static EnumPropertyItem prop_option_items[] = {
+		{eBooleanModifierFlag_Dissolve, "DISSOLVE", 0, "Dissolve", ""},
+		{eBooleanModifierFlag_Separate, "SEPARATE", 0, "Separate", ""},
+		{0, NULL, 0, NULL, NULL}
+	};
+
 	srna = RNA_def_struct(brna, "BooleanModifier", "Modifier");
 	RNA_def_struct_ui_text(srna, "Boolean Modifier", "Boolean operations modifier");
 	RNA_def_struct_sdna(srna, "BooleanModifierData");
@@ -1893,6 +1899,14 @@ static void rna_def_modifier_boolean(BlenderRNA *brna)
 	prop = RNA_def_property(srna, "method", PROP_ENUM, PROP_NONE);
 	RNA_def_property_enum_items(prop, prop_method_items);
 	RNA_def_property_ui_text(prop, "Method", "");
+	RNA_def_property_update(prop, 0, "rna_Modifier_update");
+
+	prop = RNA_def_property(srna, "options", PROP_ENUM, PROP_NONE);
+	RNA_def_property_enum_sdna(prop, NULL, "flag");
+	RNA_def_property_enum_items(prop, prop_option_items);
+	RNA_def_property_flag(prop, PROP_ENUM_FLAG);
+	RNA_def_property_ui_text(prop, "Options", "");
+	RNA_def_property_flag(prop, PROP_ENUM_FLAG);
 	RNA_def_property_update(prop, 0, "rna_Modifier_update");
 
 	prop = RNA_def_property(srna, "threshold", PROP_FLOAT, PROP_DISTANCE);

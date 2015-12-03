@@ -154,6 +154,7 @@ class DATA_PT_modifiers(ModifierButtonsPanel, Panel):
         col.prop(md, "operation", text="")
         if md.method == 'BMESH':
             col.prop(md, "threshold")
+            col.prop(md, "options", expand=True)
 
         col = split.column()
         col.label(text="Object:")

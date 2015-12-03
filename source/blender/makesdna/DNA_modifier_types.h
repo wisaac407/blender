@@ -640,7 +640,7 @@ typedef struct BooleanModifierData {
 	ModifierData modifier;
 
 	struct Object *object;
-	short operation, method;
+	char operation, method, flag, _pad, pad[8];
 	float threshold;
 } BooleanModifierData;
 
@@ -654,6 +654,11 @@ typedef enum {
 	eBooleanModifierMethod_Carve  = 0,
 	eBooleanModifierMethod_BMesh  = 1,
 } BooleanModifierMethod;
+
+typedef enum {
+	eBooleanModifierFlag_Dissolve   = (1 << 0),
+	eBooleanModifierFlag_Separate   = (1 << 1),
+} BooleanModifierFlag;
 
 typedef struct MDefInfluence {
 	int vertex;
