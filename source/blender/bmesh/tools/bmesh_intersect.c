@@ -483,6 +483,10 @@ static BMVert *bm_isect_edge_tri(
 
 static bool bm_loop_filter_fn(const BMLoop *l, void *UNUSED(user_data))
 {
+	if (BM_elem_flag_test(l->e, BM_ELEM_TAG)) {
+		return false;
+	}
+
 	if (l->radial_next != l) {
 		BMLoop *l_iter = l->radial_next;
 		const char hflag_test = BM_ELEM_DRAW;  /* XXX, set in MOD_boolean.c */
@@ -1565,6 +1569,16 @@ bool BM_mesh_intersect(
 		}
 
 		BM_mesh_edgesplit(bm, false, true, false);
+	}
+	else if (boolean_mode != BOOLEAN_NONE) {
+		GSetIterator gs_iter;
+
+		/* no need to clear for boolean */
+
+		GSET_ITER (gs_iter, s.wire_edges) {
+			BMEdge *e = BLI_gsetIterator_getKey(&gs_iter);
+			BM_elem_flag_enable(e, BM_ELEM_TAG);
+		}
 	}
 #else
 	(void)use_separate;
