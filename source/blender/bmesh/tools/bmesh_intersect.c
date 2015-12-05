@@ -71,6 +71,13 @@
 #define USE_SEPARATE
 /* remove verts created by intersecting triangles */
 #define USE_DISSOLVE
+/* detect isolated holes and fill them */
+#define USE_HOLE_FILL
+
+#ifdef USE_HOLE_FILL
+#  include "BLI_kdtree.h"
+#  include "BLI_sort.h"
+#endif
 
 /* strict asserts that may fail in practice (handy for debugging cases which should succeed) */
 // #define USE_PARANOID
@@ -87,6 +94,293 @@ extern void bl_debug_draw_quad_add(const float v0[3], const float v1[3], const f
 extern void bl_debug_draw_edge_add(const float v0[3], const float v1[3]);
 extern void bl_debug_color_set(const unsigned int col);
 #endif
+
+#ifdef USE_HOLE_FILL
+
+static int edge_xmin_cmp_fn(const void *p1, const void *p2, void *pdir)
+{
+	const float *f_dir = pdir;
+	const BMEdge *e1 = *(BMEdge **)p1;
+	const BMEdge *e2 = *(BMEdge **)p2;
+	const float f1 = min_ff(dot_v3v3(f_dir, e1->v1->co), dot_v3v3(f_dir, e1->v2->co));
+	const float f2 = min_ff(dot_v3v3(f_dir, e2->v1->co), dot_v3v3(f_dir, e2->v2->co));
+
+	if (f1 < f2) return -1;
+	if (f1 > f2) return  1;
+	else         return  0;
+}
+
+/**
+ * For when the edge-net has holes in it-this connects them.
+ *
+ * \warning This is wip test version of the functionality
+ * (to test how having holes works with booleans).
+ */
+static bool  bm_face_split_edgenet_prepare_holes(
+        BMesh *bm,
+        BMFace *f, BMEdge **edge_net_init, const unsigned int edge_net_init_len,
+        BMEdge ***r_edge_net_new, unsigned int *r_edge_net_new_len)
+{
+	const unsigned int edge_arr_len = (unsigned int)edge_net_init_len + (unsigned int)f->len;
+	BMEdge **edge_arr = BLI_array_alloca(edge_arr, edge_arr_len);
+	bool ok = false;
+
+	memcpy(edge_arr, edge_net_init, sizeof(*edge_arr) * (size_t)edge_net_init_len);
+
+	/* _must_ clear on exit */
+#define VERT_NOT_IN_KDTREE BM_ELEM_INTERNAL_TAG
+#define EDGE_NOT_IN_STACK  BM_ELEM_INTERNAL_TAG
+	/* XXX this is wrong, we need some better way to know if an edge is in the net */
+#define EDGE_IS_NET  BM_ELEM_SEAM
+
+	{
+		unsigned int i = edge_net_init_len;
+		BMLoop *l_iter, *l_first;
+		l_iter = l_first = BM_FACE_FIRST_LOOP(f);
+		do {
+			edge_arr[i++] = l_iter->e;
+		} while ((l_iter = l_iter->next) != l_first);
+		BLI_assert(i == edge_arr_len);
+	}
+
+	/* we don't care what axis we sort along, just that its from one side to another (across the face)
+	 * so the first group is always the outer-most */
+	float f_ortho_dir[3];
+	ortho_v3_v3(f_ortho_dir, f->no);
+	BLI_qsort_r(edge_arr, edge_arr_len, sizeof(BMEdge *), edge_xmin_cmp_fn, f_ortho_dir);
+
+	for (unsigned int i = 0; i < edge_arr_len; i++) {
+		BM_elem_flag_enable(edge_arr[i], EDGE_IS_NET);
+		BM_elem_flag_enable(edge_arr[i], EDGE_NOT_IN_STACK);
+		BM_elem_flag_enable(edge_arr[i]->v1, VERT_NOT_IN_KDTREE);
+		BM_elem_flag_enable(edge_arr[i]->v2, VERT_NOT_IN_KDTREE);
+	}
+
+	LinkNode *groups = NULL;
+	unsigned int groups_len = 0;
+	{
+		unsigned int edge_index = 0;
+		unsigned int edge_in_group_tot = 0;
+
+		BLI_SMALLSTACK_DECLARE(estack, BMEdge *);
+
+		while (true) {
+			LinkNode *g = NULL;
+			unsigned int g_len = 0;
+
+			/* list of groups */
+			BLI_SMALLSTACK_PUSH(estack, edge_arr[edge_index]);
+			BM_elem_flag_disable(edge_arr[edge_index], EDGE_NOT_IN_STACK);
+
+			BMEdge *e;
+			while ((e = BLI_SMALLSTACK_POP(estack))) {
+				BLI_linklist_prepend_alloca(&g, e);
+				g_len++;
+
+				edge_in_group_tot++;
+
+				for (int i = 0; i < 2; i++) {
+					BMVert *v_iter = (&e->v1)[i];
+					BMEdge *e_iter = v_iter->e;
+					do {
+						if ((e_iter != e) &&
+						    (BM_elem_flag_test(e_iter, EDGE_NOT_IN_STACK)))
+						{
+							BLI_SMALLSTACK_PUSH(estack, e_iter);
+							BM_elem_flag_disable(e_iter, EDGE_NOT_IN_STACK);
+						}
+					} while ((e_iter = BM_DISK_EDGE_NEXT(e_iter, v_iter)) != v_iter->e);
+				}
+			}
+
+			struct {
+				LinkNode node;
+				unsigned int edge_len, vert_len;
+			} *group_base = alloca(sizeof(*group_base));
+			group_base->edge_len = g_len;
+			group_base->vert_len = 0;
+			BLI_linklist_prepend_nlink(&groups, g, (LinkNode *)group_base);
+
+			groups_len++;
+
+			if (edge_in_group_tot == edge_arr_len) {
+				break;
+			}
+
+			/* skip edges in the stack */
+			while (BM_elem_flag_test(edge_arr[edge_index], EDGE_NOT_IN_STACK) == false) {
+				edge_index++;
+			}
+		}
+	}
+
+	/* single group - no holes */
+	if (groups_len == 1) {
+		goto finally;
+	}
+
+	struct {
+		LinkNode node;
+		unsigned int edge_len, vert_len;
+	} *group_base, **groups_arr = BLI_array_alloca(groups_arr, groups_len);
+	KDTree **tree_arr = BLI_array_alloca(tree_arr, groups_len);
+	BMVert ***verts_arr = BLI_array_alloca(verts_arr, groups_len);
+
+	{
+		group_base = (void *)groups;
+		for (unsigned int i = 0; i < groups_len; i++, group_base = (void *)group_base->node.next) {
+
+			/* fill the kdtree */
+			BMVert **g_verts_arr = BLI_array_alloca(g_verts_arr, group_base->edge_len * 2);  /* over alloc */
+			unsigned int g_verts_index = 0;
+
+			LinkNode *g = group_base->node.link;
+			do {
+				BMEdge *e = g->link;
+				BLI_assert(e->head.htype == BM_EDGE);
+
+				for (int j = 0; j < 2; j++) {
+					BMVert *v_iter = (&e->v1)[j];
+					BLI_assert(v_iter->head.htype == BM_VERT);
+					if (BM_elem_flag_test(v_iter, VERT_NOT_IN_KDTREE)) {
+						g_verts_arr[g_verts_index++] = v_iter;
+						BM_elem_flag_disable(v_iter, VERT_NOT_IN_KDTREE);
+					}
+				}
+			} while ((g = g->next));
+
+			group_base->vert_len = g_verts_index;
+
+			verts_arr[i] = g_verts_arr;
+			groups_arr[i] = group_base;
+
+			tree_arr[i] = BLI_kdtree_new(g_verts_index);
+			for (unsigned int j = 0; j < group_base->vert_len; j++) {
+				BLI_kdtree_insert(tree_arr[i], (int)j, g_verts_arr[j]->co);
+			}
+			BLI_kdtree_balance(tree_arr[i]);
+		}
+	}
+
+	const unsigned int edge_net_new_len = (unsigned int)edge_net_init_len + ((groups_len - 1) * 2);
+
+	BMEdge **edge_net_new = MEM_mallocN(sizeof(*edge_net_new) * edge_net_new_len, __func__);
+
+	memcpy(edge_net_new, edge_net_init, sizeof(*edge_net_new) * (size_t)edge_net_init_len);
+
+	{
+		const unsigned int refine = 4;
+		unsigned int edge_net_new_index = edge_net_init_len;
+		for (unsigned int g_a_index = 1; g_a_index < groups_len; g_a_index++) {
+			BMVert *v_start;
+			/* left most vert of left most edge */
+			{
+				BMEdge *e = groups_arr[g_a_index]->node.link;
+				v_start = (dot_v3v3(f_ortho_dir, e->v1->co) <
+				           dot_v3v3(f_ortho_dir, e->v2->co)) ? e->v1 : e->v2;
+			}
+
+			BMVert *vpair_best[2] = {NULL, NULL};
+			float vpair_best_length = -1.0f;
+			for (unsigned int g_b_index = 0; g_b_index < g_a_index; g_b_index++) {
+				BMVert *vpair_test[2] = {v_start, NULL};
+				for (unsigned int i = 0; i < refine; i++) {
+					unsigned int dst_index, src_side, dst_side;
+					if (i % 2) {
+						// src_index = g_b_index;
+						dst_index = g_a_index;
+						src_side = 1;
+						dst_side = 0;
+					}
+					else {
+						// src_index = g_a_index;
+						dst_index = g_b_index;
+						src_side = 0;
+						dst_side = 1;
+					}
+
+					int index = BLI_kdtree_find_nearest(tree_arr[dst_index], vpair_test[src_side]->co, NULL);
+					BLI_assert(index >= 0);
+					BLI_assert(index < (int)groups_arr[dst_index]->vert_len);
+					vpair_test[dst_side] = verts_arr[dst_index][index];
+				}
+
+				const float vs_test_length = len_squared_v3v3(vpair_test[0]->co, vpair_test[1]->co);
+				if ((vpair_best_length == -1.0f) || (vs_test_length < vpair_best_length)) {
+					vpair_best[0] = vpair_test[0];
+					vpair_best[1] = vpair_test[1];
+					vpair_best_length = vs_test_length;
+				}
+			}
+
+			BMVert *vpair_other[2] = {NULL, NULL};
+
+			/* find closest pair */
+			{
+				BMVert *v_a = vpair_best[0];
+				BMEdge *e_a = v_a->e;
+				float vpair_other_best_length = -1.0f;
+				do {
+					if (BM_elem_flag_test(e_a, EDGE_IS_NET)) {
+						BMVert *v_b = vpair_best[1];
+						BMEdge *e_b = v_b->e;
+						do {
+							if (BM_elem_flag_test(e_b, EDGE_IS_NET)) {
+								BMVert *v_a_other = BM_edge_other_vert(e_a, v_a);
+								BMVert *v_b_other = BM_edge_other_vert(e_b, v_b);
+
+								const float vpair_other_test_length = len_squared_v3v3(v_a_other->co, v_b_other->co);
+
+								if ((vpair_other_best_length == -1.0f) ||
+								    (vpair_other_test_length < vpair_other_best_length))
+								{
+									vpair_other[0] = v_a_other;
+									vpair_other[1] = v_b_other;
+									vpair_other_best_length = vpair_other_test_length;
+								}
+							}
+						} while ((e_b = BM_DISK_EDGE_NEXT(e_b, v_b)) != v_b->e);
+					}
+				} while ((e_a = BM_DISK_EDGE_NEXT(e_a, v_a)) != v_a->e);
+			}
+
+			edge_net_new[edge_net_new_index] = BM_edge_create(bm, UNPACK2(vpair_best), NULL, 0);
+			BM_elem_flag_enable(edge_net_new[edge_net_new_index], BM_ELEM_TAG);
+			edge_net_new_index++;
+
+			edge_net_new[edge_net_new_index] = BM_edge_create(bm, UNPACK2(vpair_other), NULL, 0);
+			BM_elem_flag_enable(edge_net_new[edge_net_new_index], BM_ELEM_TAG);
+			edge_net_new_index++;
+		}
+		BLI_assert(edge_net_new_len == edge_net_new_index);
+	}
+
+	{
+		for (unsigned int i = 0; i < groups_len; i++) {
+			BLI_kdtree_free(tree_arr[i]);
+		}
+	}
+
+	*r_edge_net_new = edge_net_new;
+	*r_edge_net_new_len = edge_net_new_len;
+	ok = true;
+
+finally:
+	for (unsigned int i = 0; i < edge_arr_len; i++) {
+		BM_elem_flag_disable(edge_arr[i], EDGE_IS_NET);
+		BM_elem_flag_disable(edge_arr[i], EDGE_NOT_IN_STACK);
+		BM_elem_flag_disable(edge_arr[i]->v1, VERT_NOT_IN_KDTREE);
+		BM_elem_flag_disable(edge_arr[i]->v2, VERT_NOT_IN_KDTREE);
+	}
+
+#undef VERT_NOT_IN_KDTREE
+#undef EDGE_NOT_IN_STACK
+#undef EDGE_IS_NET
+
+	return ok;
+}
+#endif  /* USE_HOLE_FILL */
+
 
 enum {
 	BOOLEAN_NONE = -1,
@@ -256,7 +550,11 @@ static void face_edges_split(
         struct LinkBase *e_ls_base)
 {
 	unsigned int i;
-	BMEdge **edge_arr = BLI_array_alloca(edge_arr, e_ls_base->list_len);
+	unsigned int edge_arr_len = e_ls_base->list_len;
+	BMEdge **edge_arr = BLI_array_alloca(edge_arr, edge_arr_len);
+#ifdef USE_HOLE_FILL
+	bool edge_arr_free = false;
+#endif
 	LinkNode *node;
 	BLI_assert(f->head.htype == BM_FACE);
 
@@ -269,7 +567,29 @@ static void face_edges_split(
 	printf("# %s: %d %u\n", __func__, BM_elem_index_get(f), e_ls_base->list_len);
 #endif
 
-	BM_face_split_edgenet(bm, f, edge_arr, (int)e_ls_base->list_len, NULL, NULL);
+#ifdef USE_HOLE_FILL
+	{
+		unsigned int edge_arr_holes_len;
+		BMEdge **edge_arr_holes;
+		if (bm_face_split_edgenet_prepare_holes(
+		        bm, f,
+		        edge_arr, edge_arr_len,
+		        &edge_arr_holes, &edge_arr_holes_len))
+		{
+			edge_arr_len = edge_arr_holes_len;
+			edge_arr = edge_arr_holes;
+			edge_arr_free = true;
+		}
+	}
+#endif
+
+	BM_face_split_edgenet(bm, f, edge_arr, (int)edge_arr_len, NULL, NULL);
+
+#ifdef USE_HOLE_FILL
+	if (edge_arr_free) {
+		MEM_freeN(edge_arr);
+	}
+#endif
 }
 #endif
 

@@ -797,6 +797,7 @@ bool BM_face_split_edgenet(
 
 #ifdef DEBUG
 	for (i = 0; i < edge_net_len; i++) {
+		BLI_assert(edge_net[i]->head.htype == BM_EDGE);
 		BLI_assert(BM_ELEM_API_FLAG_TEST(edge_net[i], EDGE_NET) == 0);
 		BLI_assert(BM_edge_in_face(edge_net[i], f) == false);
 	}
