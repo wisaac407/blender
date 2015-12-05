@@ -315,6 +315,15 @@ static bool  bm_face_split_edgenet_prepare_holes(
 
 			BMVert *vpair_other[2] = {NULL, NULL};
 
+			/* define a plane to make sure we don't create bow-tie */
+			float v_best_plane[4];
+			{
+				float dir[3];
+				sub_v3_v3v3(dir, vpair_best[1]->co, vpair_best[0]->co);
+				cross_v3_v3v3(v_best_plane, f->no, dir);
+				v_best_plane[3] = -dot_v3v3(vpair_best[0]->co, v_best_plane);
+			}
+
 			/* find closest pair */
 			{
 				BMVert *v_a = vpair_best[0];
@@ -322,21 +331,31 @@ static bool  bm_face_split_edgenet_prepare_holes(
 				float vpair_other_best_length = -1.0f;
 				do {
 					if (BM_elem_flag_test(e_a, EDGE_IS_NET)) {
+						BMVert *v_a_other = BM_edge_other_vert(e_a, v_a);
+						const float v_a_other_plane_side =
+						        dist_signed_squared_to_plane_v3(v_a_other->co, v_best_plane);
+
+
 						BMVert *v_b = vpair_best[1];
 						BMEdge *e_b = v_b->e;
 						do {
 							if (BM_elem_flag_test(e_b, EDGE_IS_NET)) {
-								BMVert *v_a_other = BM_edge_other_vert(e_a, v_a);
 								BMVert *v_b_other = BM_edge_other_vert(e_b, v_b);
+								const float v_b_other_plane_side =
+								        dist_signed_squared_to_plane_v3(v_b_other->co, v_best_plane);
 
-								const float vpair_other_test_length = len_squared_v3v3(v_a_other->co, v_b_other->co);
+								/* avoid bow-tie */
+								if ((v_a_other_plane_side < 0.0f) == (v_b_other_plane_side < 0.0f)) {
+									const float vpair_other_test_length =
+									        len_squared_v3v3(v_a_other->co, v_b_other->co);
 
-								if ((vpair_other_best_length == -1.0f) ||
-								    (vpair_other_test_length < vpair_other_best_length))
-								{
-									vpair_other[0] = v_a_other;
-									vpair_other[1] = v_b_other;
-									vpair_other_best_length = vpair_other_test_length;
+									if ((vpair_other_best_length == -1.0f) ||
+									    (vpair_other_test_length < vpair_other_best_length))
+									{
+										vpair_other[0] = v_a_other;
+										vpair_other[1] = v_b_other;
+										vpair_other_best_length = vpair_other_test_length;
+									}
 								}
 							}
 						} while ((e_b = BM_DISK_EDGE_NEXT(e_b, v_b)) != v_b->e);
