@@ -240,16 +240,21 @@ static bool  bm_face_split_edgenet_prepare_holes(
 		LinkNode node;
 		unsigned int edge_len, vert_len;
 	} *group_base, **groups_arr = BLI_array_alloca(groups_arr, groups_len);
-	KDTree *tree = BLI_kdtree_new(edge_arr_len * 2);
+	/* we don't know how many unique verts there are connecting the edges, so over-alloc */
 	BMVert **verts_arr = BLI_array_alloca(verts_arr, edge_arr_len * 2);
+	float (*verts_center)[3] = BLI_array_alloca(verts_center, edge_arr_len * 2);
 	unsigned int verts_len = 0;
+
+	KDTree *tree = BLI_kdtree_new(edge_arr_len * 2);
 
 	{
 		group_base = (void *)groups;
 		for (unsigned int i = 0; i < groups_len; i++, group_base = (void *)group_base->node.next) {
+
+			/* unrelated to the kdtree, but find the center at the same time */
+			zero_v3(verts_center[i]);
+
 			/* fill the kdtree */
-
-
 			LinkNode *g = group_base->node.link;
 			do {
 				BMEdge *e = g->link;
@@ -263,11 +268,15 @@ static bool  bm_face_split_edgenet_prepare_holes(
 						BLI_kdtree_insert(tree, (int)verts_len, v_iter->co);
 						verts_arr[verts_len] = v_iter;
 
+						add_v3_v3(verts_center[i], v_iter->co);
+
 						verts_len++;
 						group_base->vert_len++;
 					}
 				}
 			} while ((g = g->next));
+
+			mul_v3_fl(verts_center[i], 1.0f / (float)group_base->vert_len);
 
 			groups_arr[i] = group_base;
 		}
@@ -287,17 +296,22 @@ static bool  bm_face_split_edgenet_prepare_holes(
 		/* start-end of the verts in the current group */
 		unsigned int group_vert_range[2] = {0, groups_arr[0]->vert_len};
 		for (unsigned int group_index = 1; group_index < groups_len; group_index++) {
-			BMVert *v_start;
-			/* left most vert of left most edge */
-			{
-				BMEdge *e = groups_arr[group_index]->node.link;
-				v_start = (dot_v3v3(f_ortho_dir, e->v1->co) <
-				           dot_v3v3(f_ortho_dir, e->v2->co)) ? e->v1 : e->v2;
-			}
 
 			/* the range of verts this group uses in 'verts_arr' (not uncluding the last index) */
 			group_vert_range[0]  = group_vert_range[1];
 			group_vert_range[1] += groups_arr[group_index]->vert_len;
+
+			/* find the closest point all all previous to this edge-groups center,
+			 * gives a 'reasonably' good starting point from which to refine a close pair */
+			BMVert *v_start;
+			{
+				const int index = BLI_kdtree_find_nearest_cb(
+				        tree, verts_center[group_index],
+				        kdtree_find_v_prev_range_cb, group_vert_range,
+				        NULL);
+				BLI_assert(index >= 0 && index < (int)verts_len);
+				v_start = verts_arr[index];
+			}
 
 			BMVert *vpair_best[2] = {v_start, NULL};
 			for (unsigned int i = 0; i < refine; i++) {
@@ -317,8 +331,7 @@ static bool  bm_face_split_edgenet_prepare_holes(
 				        src_side ? kdtree_find_v_prev_range_cb : kdtree_find_v_in_range_cb, group_vert_range,
 				        NULL);
 
-				BLI_assert(index >= 0);
-				BLI_assert(index < (int)verts_len);
+				BLI_assert(index >= 0 && index < (int)verts_len);
 				vpair_best[dst_side] = verts_arr[index];
 			}
 
