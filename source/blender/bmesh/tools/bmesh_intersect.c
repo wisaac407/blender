@@ -170,16 +170,17 @@ static bool  bm_face_split_edgenet_prepare_holes(
 		BM_elem_flag_enable(edge_arr[i]->v2, VERT_NOT_IN_KDTREE);
 	}
 
-	LinkNode *groups = NULL;
+	LinkNode *groups;
 	unsigned int groups_len = 0;
 	{
+		LinkNodePair groups_np = {NULL, NULL};
 		unsigned int edge_index = 0;
 		unsigned int edge_in_group_tot = 0;
 
 		BLI_SMALLSTACK_DECLARE(estack, BMEdge *);
 
 		while (true) {
-			LinkNode *g = NULL;
+			LinkNodePair g_np = {NULL, NULL};
 			unsigned int g_len = 0;
 
 			/* list of groups */
@@ -188,7 +189,7 @@ static bool  bm_face_split_edgenet_prepare_holes(
 
 			BMEdge *e;
 			while ((e = BLI_SMALLSTACK_POP(estack))) {
-				BLI_linklist_prepend_alloca(&g, e);
+				BLI_linklist_append_alloca(&g_np, e);
 				g_len++;
 
 				edge_in_group_tot++;
@@ -213,7 +214,7 @@ static bool  bm_face_split_edgenet_prepare_holes(
 			} *group_base = alloca(sizeof(*group_base));
 			group_base->edge_len = g_len;
 			group_base->vert_len = 0;
-			BLI_linklist_prepend_nlink(&groups, g, (LinkNode *)group_base);
+			BLI_linklist_append_nlink(&groups_np, g_np.list, (LinkNode *)group_base);
 
 			groups_len++;
 
@@ -226,6 +227,8 @@ static bool  bm_face_split_edgenet_prepare_holes(
 				edge_index++;
 			}
 		}
+
+		groups = groups_np.list;
 	}
 
 	/* single group - no holes */
