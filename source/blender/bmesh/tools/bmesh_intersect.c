@@ -123,7 +123,7 @@ static int kdtree_find_exclude_range_prev_cb(void *user_data, int index, const f
 	UNUSED_VARS(co, dist_sq);
 	struct EdgeGroup_KDTreeTest *group_test = user_data;
 	return ((index < (int)group_test->vert_range[0] || index >= (int)group_test->vert_range[1]) &&
-	        /* allow equality to support degenerate cases */
+	        /* allow equality to support degenerate cases (when they're equal) */
 	        (VERT_VALUE(group_test->verts_arr[index]) <= group_test->value));
 }
 
@@ -132,7 +132,7 @@ static int kdtree_find_exclude_range_next_cb(void *user_data, int index, const f
 	UNUSED_VARS(co, dist_sq);
 	struct EdgeGroup_KDTreeTest *group_test = user_data;
 	return ((index < (int)group_test->vert_range[0] || index >= (int)group_test->vert_range[1]) &&
-	        /* allow equality to support degenerate cases */
+	        /* allow equality to support degenerate cases (when they're equal) */
 	        (VERT_VALUE(group_test->verts_arr[index]) >= group_test->value));
 }
 
@@ -147,6 +147,15 @@ static bool  bm_face_split_edgenet_prepare_holes(
         BMFace *f, BMEdge **edge_net_init, const unsigned int edge_net_init_len,
         BMEdge ***r_edge_net_new, unsigned int *r_edge_net_new_len)
 {
+	/* -------------------------------------------------------------------- */
+	/* This function has 2 main parts.
+	 *
+	 * - Check if there are any holes.
+	 * - Connect the holes with edges (if any are found).
+	 *
+	 * Keep the first part fast since it will run very often for edge-nets that have no holes.
+	 */
+
 	const unsigned int edge_arr_len = (unsigned int)edge_net_init_len + (unsigned int)f->len;
 	BMEdge **edge_arr = BLI_array_alloca(edge_arr, edge_arr_len);
 	bool ok = false;
@@ -186,6 +195,22 @@ static bool  bm_face_split_edgenet_prepare_holes(
 
 	BLI_qsort_r(edge_arr, edge_arr_len, sizeof(BMEdge *), edge_xmin_cmp_fn, f_ortho_dir);
 
+	struct GroupNode {
+		LinkNode node;  /* keep first */
+		unsigned int edge_len, vert_len;
+
+
+		/* Set the following vars once we have >1 groups */
+
+		/* vertex in the group which has the highest value,
+		 * the lower vertex is connected to the first edge */
+		unsigned int vert_index_max;
+
+		/* when when an edge in a previous group connects to this one,
+		 * so theres no need to create one pointing back. */
+		unsigned int has_prev_edge : 1;
+	};
+
 	LinkNode *groups;
 	unsigned int groups_len = 0;
 	{
@@ -224,12 +249,12 @@ static bool  bm_face_split_edgenet_prepare_holes(
 				}
 			}
 
-			struct {
-				LinkNode node;
-				unsigned int edge_len, vert_len;
-			} *group_base = alloca(sizeof(*group_base));
+			struct GroupNode *group_base = alloca(sizeof(*group_base));
 			group_base->edge_len = g_len;
 			group_base->vert_len = 0;
+
+			group_base->has_prev_edge = false;
+
 			BLI_linklist_append_nlink(&groups_np, g_np.list, (LinkNode *)group_base);
 
 			groups_len++;
@@ -252,20 +277,19 @@ static bool  bm_face_split_edgenet_prepare_holes(
 		goto finally;
 	}
 
-	struct {
-		LinkNode node;
-		unsigned int edge_len, vert_len;
-	} *group_base, **groups_arr = BLI_array_alloca(groups_arr, groups_len);
+
+	/* -------------------------------------------------------------------- */
+	/* Previous checks need to be kept fast, since they will run very often,
+	 * now we know there are holes, so calculate a spatial lookup info and
+	 * other per-group data.
+	 */
+
+	struct GroupNode *group_base, **groups_arr = BLI_array_alloca(groups_arr, groups_len);
 	/* we don't know how many unique verts there are connecting the edges, so over-alloc */
 	BMVert **verts_arr = BLI_array_alloca(verts_arr, edge_arr_len * 2);
 	unsigned int verts_len = 0;
-
+	/* map vertex -> group index */
 	unsigned int *verts_group_table = BLI_array_alloca(verts_group_table, edge_arr_len * 2);
-	unsigned int *group_rightmost_vert = BLI_array_alloca(group_rightmost_vert, groups_len);
-
-	/* group flags */
-	unsigned char *group_flag = BLI_array_alloca(group_flag, groups_len);
-#define GROUP_HAS_PREV (1 << 0)
 
 	KDTree *tree = BLI_kdtree_new(edge_arr_len * 2);
 
@@ -294,15 +318,13 @@ static bool  bm_face_split_edgenet_prepare_holes(
 							v_index_max = verts_len;
 						}
 
-						verts_len++;
 						group_base->vert_len++;
+						verts_len++;
 					}
 				}
 			} while ((g = g->next));
 
-			group_rightmost_vert[i] = v_index_max;
-
-			group_flag[i] = 0;
+			group_base->vert_index_max = v_index_max;
 
 			groups_arr[i] = group_base;
 		}
@@ -310,11 +332,12 @@ static bool  bm_face_split_edgenet_prepare_holes(
 
 	BLI_kdtree_balance(tree);
 
+
+	/* Create connections between groups */
+
 	/* may be an over-alloc, but not by much */
 	unsigned int edge_net_new_len = (unsigned int)edge_net_init_len + ((groups_len - 1) * 2);
-
 	BMEdge **edge_net_new = MEM_mallocN(sizeof(*edge_net_new) * edge_net_new_len, __func__);
-
 	memcpy(edge_net_new, edge_net_init, sizeof(*edge_net_new) * (size_t)edge_net_init_len);
 
 	{
@@ -332,7 +355,7 @@ static bool  bm_face_split_edgenet_prepare_holes(
 			group_test.vert_range[0]  = group_test.vert_range[1];
 			group_test.vert_range[1] += groups_arr[group_index]->vert_len;
 
-			if ((group_flag[group_index] & GROUP_HAS_PREV) == 0) {
+			if (groups_arr[group_index]->has_prev_edge == false) {
 				BMVert *v_start;
 				{
 					BMEdge *e = ((LinkNode *)groups_arr[group_index]->node.link)->link;
@@ -356,7 +379,7 @@ static bool  bm_face_split_edgenet_prepare_holes(
 			}
 
 			{
-				BMVert *v_start = verts_arr[group_rightmost_vert[group_index]];
+				BMVert *v_start = verts_arr[groups_arr[group_index]->vert_index_max];
 
 				group_test.value = VERT_VALUE(v_start);
 				const int index_other = BLI_kdtree_find_nearest_cb(
@@ -370,8 +393,9 @@ static bool  bm_face_split_edgenet_prepare_holes(
 				BM_elem_flag_enable(edge_net_new[edge_net_new_index], BM_ELEM_TAG);
 				edge_net_new_index++;
 
+				/* tell the 'next' group it doesn't need to create its own back-link */
 				unsigned int group_index_other = verts_group_table[index_other];
-				group_flag[group_index_other] |= GROUP_HAS_PREV;
+				groups_arr[group_index_other]->has_prev_edge = true;
 			}
 
 		}
@@ -398,7 +422,6 @@ finally:
 #undef VERT_NOT_IN_KDTREE
 #undef EDGE_NOT_IN_STACK
 #undef EDGE_IS_NET
-#undef GROUP_HAS_PREV
 
 	return ok;
 }
