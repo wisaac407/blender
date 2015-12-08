@@ -97,31 +97,43 @@ extern void bl_debug_color_set(const unsigned int col);
 
 #ifdef USE_HOLE_FILL
 
-static int edge_xmin_cmp_fn(const void *p1, const void *p2, void *pdir)
+/* abuse vertex normals, these will be recalculated anyway */
+#define VERT_VALUE(v)  ((v)->no[0])
+
+static int edge_xmin_cmp_fn(const void *p1, const void *p2, void *UNUSED(user_data))
 {
-	const float *f_dir = pdir;
 	const BMEdge *e1 = *(BMEdge **)p1;
 	const BMEdge *e2 = *(BMEdge **)p2;
-	const float f1 = min_ff(dot_v3v3(f_dir, e1->v1->co), dot_v3v3(f_dir, e1->v2->co));
-	const float f2 = min_ff(dot_v3v3(f_dir, e2->v1->co), dot_v3v3(f_dir, e2->v2->co));
+	const float f1 = min_ff(VERT_VALUE(e1->v1), VERT_VALUE(e1->v2));
+	const float f2 = min_ff(VERT_VALUE(e2->v1), VERT_VALUE(e2->v2));
 
 	if (f1 < f2) return -1;
 	if (f1 > f2) return  1;
 	else         return  0;
 }
 
-static int kdtree_find_v_in_range_cb(void *user_data, int index, const float co[3], float dist_sq)
+struct EdgeGroup_KDTreeTest {
+	unsigned int vert_range[2];
+	BMVert **verts_arr;
+	float value;
+};
+
+static int kdtree_find_exclude_range_prev_cb(void *user_data, int index, const float co[3], float dist_sq)
 {
 	UNUSED_VARS(co, dist_sq);
-	const int *group_vert_range = user_data;
-	return (index >= group_vert_range[0] && index < group_vert_range[1]);
+	struct EdgeGroup_KDTreeTest *group_test = user_data;
+	return ((index < (int)group_test->vert_range[0] || index >= (int)group_test->vert_range[1]) &&
+	        /* allow equality to support degenerate cases */
+	        (VERT_VALUE(group_test->verts_arr[index]) <= group_test->value));
 }
 
-static int kdtree_find_v_prev_range_cb(void *user_data, int index, const float co[3], float dist_sq)
+static int kdtree_find_exclude_range_next_cb(void *user_data, int index, const float co[3], float dist_sq)
 {
 	UNUSED_VARS(co, dist_sq);
-	const int *group_vert_range = user_data;
-	return (index < group_vert_range[0]);
+	struct EdgeGroup_KDTreeTest *group_test = user_data;
+	return ((index < (int)group_test->vert_range[0] || index >= (int)group_test->vert_range[1]) &&
+	        /* allow equality to support degenerate cases */
+	        (VERT_VALUE(group_test->verts_arr[index]) >= group_test->value));
 }
 
 /**
@@ -161,14 +173,18 @@ static bool  bm_face_split_edgenet_prepare_holes(
 	 * so the first group is always the outer-most */
 	float f_ortho_dir[3];
 	ortho_v3_v3(f_ortho_dir, f->no);
-	BLI_qsort_r(edge_arr, edge_arr_len, sizeof(BMEdge *), edge_xmin_cmp_fn, f_ortho_dir);
 
 	for (unsigned int i = 0; i < edge_arr_len; i++) {
 		BM_elem_flag_enable(edge_arr[i], EDGE_IS_NET);
 		BM_elem_flag_enable(edge_arr[i], EDGE_NOT_IN_STACK);
 		BM_elem_flag_enable(edge_arr[i]->v1, VERT_NOT_IN_KDTREE);
 		BM_elem_flag_enable(edge_arr[i]->v2, VERT_NOT_IN_KDTREE);
+
+		VERT_VALUE(edge_arr[i]->v1) = dot_v3v3(f_ortho_dir, edge_arr[i]->v1->co);
+		VERT_VALUE(edge_arr[i]->v2) = dot_v3v3(f_ortho_dir, edge_arr[i]->v2->co);
 	}
+
+	BLI_qsort_r(edge_arr, edge_arr_len, sizeof(BMEdge *), edge_xmin_cmp_fn, f_ortho_dir);
 
 	LinkNode *groups;
 	unsigned int groups_len = 0;
@@ -242,8 +258,14 @@ static bool  bm_face_split_edgenet_prepare_holes(
 	} *group_base, **groups_arr = BLI_array_alloca(groups_arr, groups_len);
 	/* we don't know how many unique verts there are connecting the edges, so over-alloc */
 	BMVert **verts_arr = BLI_array_alloca(verts_arr, edge_arr_len * 2);
-	float (*verts_center)[3] = BLI_array_alloca(verts_center, edge_arr_len * 2);
 	unsigned int verts_len = 0;
+
+	unsigned int *verts_group_table = BLI_array_alloca(verts_group_table, edge_arr_len * 2);
+	unsigned int *group_rightmost_vert = BLI_array_alloca(group_rightmost_vert, groups_len);
+
+	/* group flags */
+	unsigned char *group_flag = BLI_array_alloca(group_flag, groups_len);
+#define GROUP_HAS_PREV (1 << 0)
 
 	KDTree *tree = BLI_kdtree_new(edge_arr_len * 2);
 
@@ -251,8 +273,7 @@ static bool  bm_face_split_edgenet_prepare_holes(
 		group_base = (void *)groups;
 		for (unsigned int i = 0; i < groups_len; i++, group_base = (void *)group_base->node.next) {
 
-			/* unrelated to the kdtree, but find the center at the same time */
-			zero_v3(verts_center[i]);
+			unsigned int v_index_max = verts_len;
 
 			/* fill the kdtree */
 			LinkNode *g = group_base->node.link;
@@ -267,8 +288,11 @@ static bool  bm_face_split_edgenet_prepare_holes(
 						BM_elem_flag_disable(v_iter, VERT_NOT_IN_KDTREE);
 						BLI_kdtree_insert(tree, (int)verts_len, v_iter->co);
 						verts_arr[verts_len] = v_iter;
+						verts_group_table[verts_len] = i;
 
-						add_v3_v3(verts_center[i], v_iter->co);
+						if (VERT_VALUE(v_iter) > VERT_VALUE(verts_arr[v_index_max])) {
+							v_index_max = verts_len;
+						}
 
 						verts_len++;
 						group_base->vert_len++;
@@ -276,7 +300,9 @@ static bool  bm_face_split_edgenet_prepare_holes(
 				}
 			} while ((g = g->next));
 
-			mul_v3_fl(verts_center[i], 1.0f / (float)group_base->vert_len);
+			group_rightmost_vert[i] = v_index_max;
+
+			group_flag[i] = 0;
 
 			groups_arr[i] = group_base;
 		}
@@ -284,116 +310,73 @@ static bool  bm_face_split_edgenet_prepare_holes(
 
 	BLI_kdtree_balance(tree);
 
-	const unsigned int edge_net_new_len = (unsigned int)edge_net_init_len + ((groups_len - 1) * 2);
+	/* may be an over-alloc, but not by much */
+	unsigned int edge_net_new_len = (unsigned int)edge_net_init_len + ((groups_len - 1) * 2);
 
 	BMEdge **edge_net_new = MEM_mallocN(sizeof(*edge_net_new) * edge_net_new_len, __func__);
 
 	memcpy(edge_net_new, edge_net_init, sizeof(*edge_net_new) * (size_t)edge_net_init_len);
 
 	{
-		const unsigned int refine = 4;
 		unsigned int edge_net_new_index = edge_net_init_len;
 		/* start-end of the verts in the current group */
-		unsigned int group_vert_range[2] = {0, groups_arr[0]->vert_len};
+		struct EdgeGroup_KDTreeTest group_test;
+
+		group_test.vert_range[0] = 0;
+		group_test.vert_range[1] = groups_arr[0]->vert_len;
+		group_test.verts_arr = verts_arr;
+
 		for (unsigned int group_index = 1; group_index < groups_len; group_index++) {
 
 			/* the range of verts this group uses in 'verts_arr' (not uncluding the last index) */
-			group_vert_range[0]  = group_vert_range[1];
-			group_vert_range[1] += groups_arr[group_index]->vert_len;
+			group_test.vert_range[0]  = group_test.vert_range[1];
+			group_test.vert_range[1] += groups_arr[group_index]->vert_len;
 
-			/* find the closest point all all previous to this edge-groups center,
-			 * gives a 'reasonably' good starting point from which to refine a close pair */
-			BMVert *v_start;
-			{
-				const int index = BLI_kdtree_find_nearest_cb(
-				        tree, verts_center[group_index],
-				        kdtree_find_v_prev_range_cb, group_vert_range,
-				        NULL);
-				BLI_assert(index >= 0 && index < (int)verts_len);
-				v_start = verts_arr[index];
-			}
-
-			BMVert *vpair_best[2] = {v_start, NULL};
-			for (unsigned int i = 0; i < refine; i++) {
-				unsigned int src_side, dst_side;
-
-				if (i % 2) {
-					src_side = 1;
-					dst_side = 0;
-				}
-				else {
-					src_side = 0;
-					dst_side = 1;
+			if ((group_flag[group_index] & GROUP_HAS_PREV) == 0) {
+				BMVert *v_start;
+				{
+					BMEdge *e = ((LinkNode *)groups_arr[group_index]->node.link)->link;
+					BLI_assert(e->head.htype == BM_EDGE);
+					v_start = (VERT_VALUE(e->v1) < VERT_VALUE(e->v2)) ? e->v1 : e->v2;
 				}
 
-				const int index = BLI_kdtree_find_nearest_cb(
-				        tree, vpair_best[src_side]->co,
-				        src_side ? kdtree_find_v_prev_range_cb : kdtree_find_v_in_range_cb, group_vert_range,
+				group_test.value = VERT_VALUE(v_start);
+				const int index_other = BLI_kdtree_find_nearest_cb(
+				        tree, v_start->co,
+				        kdtree_find_exclude_range_prev_cb, &group_test,
 				        NULL);
 
-				BLI_assert(index >= 0 && index < (int)verts_len);
-				vpair_best[dst_side] = verts_arr[index];
+				BLI_assert(index_other >= 0 && index_other < (int)verts_len);
+
+				BMVert *v_end = verts_arr[index_other];
+
+				edge_net_new[edge_net_new_index] = BM_edge_create(bm, v_start, v_end, NULL, 0);
+				BM_elem_flag_enable(edge_net_new[edge_net_new_index], BM_ELEM_TAG);
+				edge_net_new_index++;
 			}
 
-			BMVert *vpair_other[2] = {NULL, NULL};
-
-			/* define a plane to make sure we don't create bow-tie */
-			float v_best_plane[4];
 			{
-				float dir[3];
-				sub_v3_v3v3(dir, vpair_best[1]->co, vpair_best[0]->co);
-				cross_v3_v3v3(v_best_plane, f->no, dir);
-				v_best_plane[3] = -dot_v3v3(vpair_best[0]->co, v_best_plane);
+				BMVert *v_start = verts_arr[group_rightmost_vert[group_index]];
+
+				group_test.value = VERT_VALUE(v_start);
+				const int index_other = BLI_kdtree_find_nearest_cb(
+				        tree, v_start->co,
+				        kdtree_find_exclude_range_next_cb, &group_test,
+				        NULL);
+
+				BMVert *v_end = verts_arr[index_other];
+
+				edge_net_new[edge_net_new_index] = BM_edge_create(bm, v_start, v_end, NULL, 0);
+				BM_elem_flag_enable(edge_net_new[edge_net_new_index], BM_ELEM_TAG);
+				edge_net_new_index++;
+
+				unsigned int group_index_other = verts_group_table[index_other];
+				group_flag[group_index_other] |= GROUP_HAS_PREV;
 			}
 
-			/* find closest pair */
-			{
-				BMVert *v_a = vpair_best[0];
-				BMEdge *e_a = v_a->e;
-				float vpair_other_best_length = -1.0f;
-				do {
-					if (BM_elem_flag_test(e_a, EDGE_IS_NET)) {
-						BMVert *v_a_other = BM_edge_other_vert(e_a, v_a);
-						const float v_a_other_plane_side =
-						        dist_signed_squared_to_plane_v3(v_a_other->co, v_best_plane);
-
-
-						BMVert *v_b = vpair_best[1];
-						BMEdge *e_b = v_b->e;
-						do {
-							if (BM_elem_flag_test(e_b, EDGE_IS_NET)) {
-								BMVert *v_b_other = BM_edge_other_vert(e_b, v_b);
-								const float v_b_other_plane_side =
-								        dist_signed_squared_to_plane_v3(v_b_other->co, v_best_plane);
-
-								/* avoid bow-tie */
-								if ((v_a_other_plane_side < 0.0f) == (v_b_other_plane_side < 0.0f)) {
-									const float vpair_other_test_length =
-									        len_squared_v3v3(v_a_other->co, v_b_other->co);
-
-									if ((vpair_other_best_length == -1.0f) ||
-									    (vpair_other_test_length < vpair_other_best_length))
-									{
-										vpair_other[0] = v_a_other;
-										vpair_other[1] = v_b_other;
-										vpair_other_best_length = vpair_other_test_length;
-									}
-								}
-							}
-						} while ((e_b = BM_DISK_EDGE_NEXT(e_b, v_b)) != v_b->e);
-					}
-				} while ((e_a = BM_DISK_EDGE_NEXT(e_a, v_a)) != v_a->e);
-			}
-
-			edge_net_new[edge_net_new_index] = BM_edge_create(bm, UNPACK2(vpair_best), NULL, 0);
-			BM_elem_flag_enable(edge_net_new[edge_net_new_index], BM_ELEM_TAG);
-			edge_net_new_index++;
-
-			edge_net_new[edge_net_new_index] = BM_edge_create(bm, UNPACK2(vpair_other), NULL, 0);
-			BM_elem_flag_enable(edge_net_new[edge_net_new_index], BM_ELEM_TAG);
-			edge_net_new_index++;
 		}
-		BLI_assert(edge_net_new_len == edge_net_new_index);
+		BLI_assert(edge_net_new_len >= edge_net_new_index);
+		edge_net_new_len = edge_net_new_index;
 	}
 
 
@@ -411,9 +394,11 @@ finally:
 		BM_elem_flag_disable(edge_arr[i]->v2, VERT_NOT_IN_KDTREE);
 	}
 
+#undef VERT_VALUE
 #undef VERT_NOT_IN_KDTREE
 #undef EDGE_NOT_IN_STACK
 #undef EDGE_IS_NET
+#undef GROUP_HAS_PREV
 
 	return ok;
 }
