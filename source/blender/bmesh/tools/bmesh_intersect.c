@@ -100,12 +100,29 @@ extern void bl_debug_color_set(const unsigned int col);
 /* abuse vertex normals, these will be recalculated anyway */
 #define VERT_VALUE(v)  ((v)->no[0])
 
-static int edge_xmin_cmp_fn(const void *p1, const void *p2, void *UNUSED(user_data))
+struct GroupNode {
+	LinkNode node;  /* keep first */
+	unsigned int edge_len, vert_len;
+
+	/* Set the following vars once we have >1 groups */
+
+	/* when when an edge in a previous group connects to this one,
+	 * so theres no need to create one pointing back. */
+	unsigned int has_prev_edge : 1;
+
+	/* verts in the group which has the lowest & highest values,
+	 * the lower vertex is connected to the first edge */
+	struct {
+		BMVert *min, *max;
+	} vert_span;
+};
+
+static int group_min_cmp_fn(const void *p1, const void *p2)
 {
-	const BMEdge *e1 = *(BMEdge **)p1;
-	const BMEdge *e2 = *(BMEdge **)p2;
-	const float f1 = min_ff(VERT_VALUE(e1->v1), VERT_VALUE(e1->v2));
-	const float f2 = min_ff(VERT_VALUE(e2->v1), VERT_VALUE(e2->v2));
+	const struct GroupNode *g1 = *(struct GroupNode **)p1;
+	const struct GroupNode *g2 = *(struct GroupNode **)p2;
+	const float f1 = VERT_VALUE(g1->vert_span.min);
+	const float f2 = VERT_VALUE(g2->vert_span.min);
 
 	if (f1 < f2) return -1;
 	if (f1 > f2) return  1;
@@ -178,38 +195,12 @@ static bool  bm_face_split_edgenet_prepare_holes(
 		BLI_assert(i == edge_arr_len);
 	}
 
-	/* we don't care what axis we sort along, just that its from one side to another (across the face)
-	 * so the first group is always the outer-most */
-	float f_ortho_dir[3];
-	ortho_v3_v3(f_ortho_dir, f->no);
-
 	for (unsigned int i = 0; i < edge_arr_len; i++) {
 		BM_elem_flag_enable(edge_arr[i], EDGE_IS_NET);
 		BM_elem_flag_enable(edge_arr[i], EDGE_NOT_IN_STACK);
 		BM_elem_flag_enable(edge_arr[i]->v1, VERT_NOT_IN_KDTREE);
 		BM_elem_flag_enable(edge_arr[i]->v2, VERT_NOT_IN_KDTREE);
-
-		VERT_VALUE(edge_arr[i]->v1) = dot_v3v3(f_ortho_dir, edge_arr[i]->v1->co);
-		VERT_VALUE(edge_arr[i]->v2) = dot_v3v3(f_ortho_dir, edge_arr[i]->v2->co);
 	}
-
-	BLI_qsort_r(edge_arr, edge_arr_len, sizeof(BMEdge *), edge_xmin_cmp_fn, f_ortho_dir);
-
-	struct GroupNode {
-		LinkNode node;  /* keep first */
-		unsigned int edge_len, vert_len;
-
-
-		/* Set the following vars once we have >1 groups */
-
-		/* vertex in the group which has the highest value,
-		 * the lower vertex is connected to the first edge */
-		unsigned int vert_index_max;
-
-		/* when when an edge in a previous group connects to this one,
-		 * so theres no need to create one pointing back. */
-		unsigned int has_prev_edge : 1;
-	};
 
 	LinkNode *groups;
 	unsigned int groups_len = 0;
@@ -251,7 +242,6 @@ static bool  bm_face_split_edgenet_prepare_holes(
 
 			struct GroupNode *group_base = alloca(sizeof(*group_base));
 			group_base->edge_len = g_len;
-			group_base->vert_len = 0;
 
 			group_base->has_prev_edge = false;
 
@@ -277,6 +267,52 @@ static bool  bm_face_split_edgenet_prepare_holes(
 		goto finally;
 	}
 
+	/* its not important which axis we sort along (though it does define the path direction along the face),
+	 * just that its from one side to another (across the face)
+	 * so the first group is always the outer-most */
+	float f_ortho_dir[3];
+	ortho_v3_v3(f_ortho_dir, f->no);
+
+	struct GroupNode **groups_arr = BLI_array_alloca(groups_arr, groups_len);
+
+	/* sort groups by lowest value vertex */
+	{
+		struct GroupNode *group_base = (void *)groups;
+		for (unsigned int group_index = 0; group_index < groups_len; group_index++, group_base = (void *)group_base->node.next) {
+			LinkNode *g = group_base->node.link;
+
+			{
+				BMEdge *e = g->link;
+				group_base->vert_span.min = e->v1;
+				group_base->vert_span.max = e->v2;
+			}
+
+			do {
+				BMEdge *e = g->link;
+				BLI_assert(e->head.htype == BM_EDGE);
+				for (int j = 0; j < 2; j++) {
+					BMVert *v_iter = (&e->v1)[j];
+					BLI_assert(v_iter->head.htype == BM_VERT);
+					const float value = dot_v3v3(f_ortho_dir, v_iter->co);
+					VERT_VALUE(v_iter) = value;
+
+					if (value < VERT_VALUE(group_base->vert_span.min)) {
+						group_base->vert_span.min = v_iter;
+					}
+					if (value > VERT_VALUE(group_base->vert_span.max)) {
+						group_base->vert_span.max = v_iter;
+					}
+				}
+			} while ((g = g->next));
+
+			group_base->has_prev_edge = false;
+
+			groups_arr[group_index] = group_base;
+		}
+	}
+
+	qsort(groups_arr, groups_len, sizeof(*groups_arr), group_min_cmp_fn);
+
 
 	/* -------------------------------------------------------------------- */
 	/* Previous checks need to be kept fast, since they will run very often,
@@ -284,7 +320,6 @@ static bool  bm_face_split_edgenet_prepare_holes(
 	 * other per-group data.
 	 */
 
-	struct GroupNode *group_base, **groups_arr = BLI_array_alloca(groups_arr, groups_len);
 	/* we don't know how many unique verts there are connecting the edges, so over-alloc */
 	BMVert **verts_arr = BLI_array_alloca(verts_arr, edge_arr_len * 2);
 	unsigned int verts_len = 0;
@@ -293,41 +328,24 @@ static bool  bm_face_split_edgenet_prepare_holes(
 
 	KDTree *tree = BLI_kdtree_new(edge_arr_len * 2);
 
-	{
-		group_base = (void *)groups;
-		for (unsigned int i = 0; i < groups_len; i++, group_base = (void *)group_base->node.next) {
-
-			unsigned int v_index_max = verts_len;
-
-			/* fill the kdtree */
-			LinkNode *g = group_base->node.link;
-			do {
-				BMEdge *e = g->link;
-				BLI_assert(e->head.htype == BM_EDGE);
-
-				for (int j = 0; j < 2; j++) {
-					BMVert *v_iter = (&e->v1)[j];
-					BLI_assert(v_iter->head.htype == BM_VERT);
-					if (BM_elem_flag_test(v_iter, VERT_NOT_IN_KDTREE)) {
-						BM_elem_flag_disable(v_iter, VERT_NOT_IN_KDTREE);
-						BLI_kdtree_insert(tree, (int)verts_len, v_iter->co);
-						verts_arr[verts_len] = v_iter;
-						verts_group_table[verts_len] = i;
-
-						if (VERT_VALUE(v_iter) > VERT_VALUE(verts_arr[v_index_max])) {
-							v_index_max = verts_len;
-						}
-
-						group_base->vert_len++;
-						verts_len++;
-					}
+	for (unsigned int group_index = 0; group_index < groups_len; group_index++) {
+		/* fill the kdtree */
+		LinkNode *g = groups_arr[group_index]->node.link;
+		groups_arr[group_index]->vert_len = 0;
+		do {
+			BMEdge *e = g->link;
+			for (int j = 0; j < 2; j++) {
+				BMVert *v_iter = (&e->v1)[j];
+				if (BM_elem_flag_test(v_iter, VERT_NOT_IN_KDTREE)) {
+					BM_elem_flag_disable(v_iter, VERT_NOT_IN_KDTREE);
+					BLI_kdtree_insert(tree, (int)verts_len, v_iter->co);
+					verts_arr[verts_len] = v_iter;
+					verts_group_table[verts_len] = group_index;
+					groups_arr[group_index]->vert_len++;
+					verts_len++;
 				}
-			} while ((g = g->next));
-
-			group_base->vert_index_max = v_index_max;
-
-			groups_arr[i] = group_base;
-		}
+			}
+		} while ((g = g->next));
 	}
 
 	BLI_kdtree_balance(tree);
@@ -356,12 +374,7 @@ static bool  bm_face_split_edgenet_prepare_holes(
 			group_test.vert_range[1] += groups_arr[group_index]->vert_len;
 
 			if (groups_arr[group_index]->has_prev_edge == false) {
-				BMVert *v_start;
-				{
-					BMEdge *e = ((LinkNode *)groups_arr[group_index]->node.link)->link;
-					BLI_assert(e->head.htype == BM_EDGE);
-					v_start = (VERT_VALUE(e->v1) < VERT_VALUE(e->v2)) ? e->v1 : e->v2;
-				}
+				BMVert *v_start = groups_arr[group_index]->vert_span.min;
 
 				group_test.value = VERT_VALUE(v_start);
 				const int index_other = BLI_kdtree_find_nearest_cb(
@@ -379,7 +392,7 @@ static bool  bm_face_split_edgenet_prepare_holes(
 			}
 
 			{
-				BMVert *v_start = verts_arr[groups_arr[group_index]->vert_index_max];
+				BMVert *v_start = groups_arr[group_index]->vert_span.max;
 
 				group_test.value = VERT_VALUE(v_start);
 				const int index_other = BLI_kdtree_find_nearest_cb(
