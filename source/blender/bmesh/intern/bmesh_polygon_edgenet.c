@@ -593,10 +593,21 @@ bool BM_face_split_edgenet(
  *
  * Intended to be used as a pre-processing step for #BM_face_split_edgenet.
  *
+ * \warning Currently this risks running out of stack memory (#alloca),
+ * likely we'll pass in a memory arena (cleared each use) eventually.
+ *
  * \{ */
 
+/* Check new links intersect any existing edges
+ * in fact for *many* cases this isn't needed at all, however its needed to guarantee non overlapping output. */
+#define USE_ISECT_TEST
+
+#ifdef USE_ISECT_TEST
+#define VERT_IS_VALID BM_ELEM_INTERNAL_TAG
+#endif
+
 /* can be X or Y */
-#define SORT_AXIS 0
+#define SORT_AXIS 1
 
 /* Represents isolated edge-links,
  * each island owns contiguous slices of a vert & edge array. */
@@ -643,7 +654,12 @@ static int kdtree_find_exclude_range_prev_cb(void *user_data, int index, const f
 	struct GeomIsland_KDTreeTest *group_test = user_data;
 	return ((index < (int)group_test->vert_range[0] || index >= (int)group_test->vert_range[1]) &&
 	        /* allow equality to support degenerate cases (when they're equal) */
-	        (group_test->vert_arr[index]->co[SORT_AXIS] <= group_test->value));
+	        (group_test->vert_arr[index]->co[SORT_AXIS] <= group_test->value)
+#ifdef USE_ISECT_TEST
+	        &&
+	        (BM_elem_flag_test(group_test->vert_arr[index], VERT_IS_VALID))
+#endif
+	        );
 }
 
 static int kdtree_find_exclude_range_next_cb(void *user_data, int index, const float co[3], float dist_sq)
@@ -652,8 +668,99 @@ static int kdtree_find_exclude_range_next_cb(void *user_data, int index, const f
 	struct GeomIsland_KDTreeTest *group_test = user_data;
 	return ((index < (int)group_test->vert_range[0] || index >= (int)group_test->vert_range[1]) &&
 	        /* allow equality to support degenerate cases (when they're equal) */
-	        (group_test->vert_arr[index]->co[SORT_AXIS] >= group_test->value));
+	        (group_test->vert_arr[index]->co[SORT_AXIS] >= group_test->value)
+#ifdef USE_ISECT_TEST
+	        &&
+	        (BM_elem_flag_test(group_test->vert_arr[index], VERT_IS_VALID))
+#endif
+	        );
 }
+
+#ifdef USE_ISECT_TEST
+
+static int test_edges_isect_2d(
+        BMEdge **edge_arr, const unsigned int edge_arr_len,
+        BMVert *v0, BMVert *v1)
+{
+	for (unsigned int i = 0; i < edge_arr_len; i++) {
+		if (isect_seg_seg_v2_simple(
+		        v0->co, v1->co,
+		        edge_arr[i]->v1->co, edge_arr[i]->v2->co))
+		{
+			if ((edge_arr[i]->v1 != v0) && (edge_arr[i]->v2 != v0) &&
+			    (edge_arr[i]->v1 != v1) && (edge_arr[i]->v2 != v1))
+			{
+				return i;
+			}
+		}
+	}
+	return -1;
+}
+
+static int bm_face_split_edgenet_find_connection(
+        const KDTree *tree, struct GeomIsland_KDTreeTest *group_test,
+        BMEdge **edge_arr, const unsigned int edge_arr_len,
+        BMVert *v_start,
+        int (*filter_cb)(void *user_data, int index, const float co[3], float dist_sq))
+{
+	group_test->value = v_start->co[SORT_AXIS];
+	const int index_other_first = BLI_kdtree_find_nearest_cb(tree, v_start->co, filter_cb, group_test, NULL);
+	/* we must _always_ find one vert at the beginning,
+	 * if not there is some very bad internal error
+	 * since all islands are setup so that the first check will succeed */
+	BLI_assert(index_other_first != -1);
+
+	int index_other = index_other_first;
+	int edge_isect;
+
+	/* blacklist */
+	BLI_SMALLSTACK_DECLARE(vert_blacklist, BMVert *);
+
+	while ((edge_isect = test_edges_isect_2d(
+	            edge_arr, edge_arr_len,
+	            v_start, group_test->vert_arr[index_other])) != -1)
+	{
+		BLI_SMALLSTACK_PUSH(vert_blacklist, group_test->vert_arr[index_other]);
+		BM_elem_flag_disable(group_test->vert_arr[index_other], VERT_IS_VALID);
+		index_other = BLI_kdtree_find_nearest_cb(tree, v_start->co, filter_cb, group_test, NULL);
+		if (index_other == -1) {
+			/* exhausted all possible vertices, return the first one as a fallback */
+#ifdef DEBUG
+			printf("%s: could not find connecting vertex (likely shape is self-intersecting)\n", __func__);
+#endif
+			index_other = index_other_first;
+			break;
+		}
+		else {
+#ifdef DEBUG
+			printf("%s: retrying\n", __func__);
+#endif
+		}
+	}
+
+	/* reset the blacklist flag, for future use */
+	while ((v_start = BLI_SMALLSTACK_POP(vert_blacklist))) {
+		BM_elem_flag_enable(v_start, VERT_IS_VALID);
+	}
+	return index_other;
+}
+
+#else
+
+/* simplistic non-intersect checking version */
+
+static int bm_face_split_edgenet_find_connection(
+        const KDTree *tree, struct GeomIsland_KDTreeTest *group_test,
+        BMEdge **UNUSED(edge_arr), const unsigned int UNUSED(edge_arr_len),
+        BMVert *v_start,
+        int (*filter_cb)(void *user_data, int index, const float co[3], float dist_sq))
+{
+	group_test->value = v_start->co[SORT_AXIS];
+	const int index_other = BLI_kdtree_find_nearest_cb(tree, v_start->co, filter_cb, group_test, NULL);
+	return index_other;
+}
+
+#endif  /* USE_ISECT_TEST */
 
 /**
  * For when the edge-net has holes in it-this connects them.
@@ -894,12 +1001,8 @@ bool BM_face_split_edgenet_connect_islands(
 			if (g->has_prev_edge == false) {
 				BMVert *v_start = g->vert_span.min;
 
-				group_test.value = v_start->co[SORT_AXIS];
-				const int index_other = BLI_kdtree_find_nearest_cb(
-				        tree, v_start->co,
-				        kdtree_find_exclude_range_prev_cb, &group_test,
-				        NULL);
-
+				const int index_other = bm_face_split_edgenet_find_connection(
+				        tree, &group_test, edge_arr, edge_arr_len, v_start, kdtree_find_exclude_range_prev_cb);
 				BLI_assert(index_other >= 0 && index_other < (int)vert_arr_len);
 
 				BMVert *v_end = vert_arr[index_other];
@@ -912,12 +1015,9 @@ bool BM_face_split_edgenet_connect_islands(
 			{
 				BMVert *v_start = g->vert_span.max;
 
-				group_test.value = v_start->co[SORT_AXIS];
-				const int index_other = BLI_kdtree_find_nearest_cb(
-				        tree, v_start->co,
-				        kdtree_find_exclude_range_next_cb, &group_test,
-				        NULL);
-
+				const int index_other = bm_face_split_edgenet_find_connection(
+				        tree, &group_test, edge_arr, edge_arr_len, v_start, kdtree_find_exclude_range_next_cb);
+				BLI_assert(index_other >= 0 && index_other < (int)vert_arr_len);
 				BMVert *v_end = vert_arr[index_other];
 
 				edge_net_new[edge_net_new_index] = BM_edge_create(bm, v_start, v_end, NULL, 0);
