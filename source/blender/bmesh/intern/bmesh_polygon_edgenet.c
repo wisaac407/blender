@@ -595,6 +595,9 @@ bool BM_face_split_edgenet(
  *
  * \{ */
 
+/* can be X or Y */
+#define SORT_AXIS 0
+
 /* Represents isolated edge-links,
  * each island owns contiguous slices of a vert & edge array. */
 struct GeomIsland {
@@ -614,13 +617,12 @@ struct GeomIsland {
 	} vert_span;
 };
 
-static int group_min_cmp_fn(const void *p1, const void *p2, void *user_data)
+static int group_min_cmp_fn(const void *p1, const void *p2)
 {
-	struct { unsigned int axis; } *data = user_data;
 	const struct GeomIsland *g1 = *(struct GeomIsland **)p1;
 	const struct GeomIsland *g2 = *(struct GeomIsland **)p2;
-	const float f1 = g1->vert_span.min->co[data->axis];
-	const float f2 = g2->vert_span.min->co[data->axis];
+	const float f1 = g1->vert_span.min->co[SORT_AXIS];
+	const float f2 = g2->vert_span.min->co[SORT_AXIS];
 
 	if (f1 < f2) return -1;
 	if (f1 > f2) return  1;
@@ -630,10 +632,9 @@ static int group_min_cmp_fn(const void *p1, const void *p2, void *user_data)
 struct GeomIsland_KDTreeTest {
 	unsigned int vert_range[2];
 	BMVert **vert_arr;
-	unsigned int axis;
 
 	/* for each search */
-	float axis_value;
+	float value;
 };
 
 static int kdtree_find_exclude_range_prev_cb(void *user_data, int index, const float co[3], float dist_sq)
@@ -642,7 +643,7 @@ static int kdtree_find_exclude_range_prev_cb(void *user_data, int index, const f
 	struct GeomIsland_KDTreeTest *group_test = user_data;
 	return ((index < (int)group_test->vert_range[0] || index >= (int)group_test->vert_range[1]) &&
 	        /* allow equality to support degenerate cases (when they're equal) */
-	        (group_test->vert_arr[index]->co[group_test->axis] <= group_test->axis_value));
+	        (group_test->vert_arr[index]->co[SORT_AXIS] <= group_test->value));
 }
 
 static int kdtree_find_exclude_range_next_cb(void *user_data, int index, const float co[3], float dist_sq)
@@ -651,7 +652,7 @@ static int kdtree_find_exclude_range_next_cb(void *user_data, int index, const f
 	struct GeomIsland_KDTreeTest *group_test = user_data;
 	return ((index < (int)group_test->vert_range[0] || index >= (int)group_test->vert_range[1]) &&
 	        /* allow equality to support degenerate cases (when they're equal) */
-	        (group_test->vert_arr[index]->co[group_test->axis] >= group_test->axis_value));
+	        (group_test->vert_arr[index]->co[SORT_AXIS] >= group_test->value));
 }
 
 /**
@@ -773,7 +774,6 @@ bool BM_face_split_edgenet_connect_islands(
 #define VERT_IN_KDTREE BM_ELEM_INTERNAL_TAG
 
 	struct GeomIsland **group_arr = BLI_array_alloca(group_arr, group_arr_len);
-	const unsigned int axis = (unsigned int)axis_dominant_v3_ortho_single(f->no);
 	unsigned int vert_arr_len = 0;
 	/* sort groups by lowest value vertex */
 	{
@@ -794,12 +794,12 @@ bool BM_face_split_edgenet_connect_islands(
 				for (int j = 0; j < 2; j++) {
 					BMVert *v_iter = (&e->v1)[j];
 					BLI_assert(v_iter->head.htype == BM_VERT);
-					const float axis_value = v_iter->co[axis];
+					const float axis_value = v_iter->co[SORT_AXIS];
 
-					if (axis_value < g->vert_span.min->co[axis]) {
+					if (axis_value < g->vert_span.min->co[SORT_AXIS]) {
 						g->vert_span.min = v_iter;
 					}
-					if (axis_value > g->vert_span.max->co[axis]) {
+					if (axis_value > g->vert_span.max->co[SORT_AXIS]) {
 						g->vert_span.max = v_iter;
 					}
 				}
@@ -813,19 +813,23 @@ bool BM_face_split_edgenet_connect_islands(
 		}
 	}
 
-	{
-		struct { unsigned int axis; } data = {axis};
-		BLI_qsort_r(group_arr, group_arr_len, sizeof(*group_arr), group_min_cmp_fn, &data);
-	}
+	qsort(group_arr, group_arr_len, sizeof(*group_arr), group_min_cmp_fn);
 
 	/* we don't know how many unique verts there are connecting the edges, so over-alloc */
 	BMVert **vert_arr = BLI_array_alloca(vert_arr, vert_arr_len);
 	/* map vertex -> group index */
 	unsigned int *verts_group_table = BLI_array_alloca(verts_group_table, vert_arr_len);
 
+	float (*vert_coords_backup)[3] = BLI_array_alloca(vert_coords_backup, vert_arr_len);
+
 	KDTree *tree = BLI_kdtree_new(vert_arr_len);
 
 	{
+		float axis_mat[3][3];
+		axis_dominant_v3_to_m3(axis_mat, f->no);
+		/* relative location, for higher precision calculations */
+		const float f_co_ref[3] = {UNPACK3(BM_FACE_FIRST_LOOP(f)->v->co)};
+
 		int v_index = 0;  /* global vert index */
 		for (unsigned int g_index = 0; g_index < group_arr_len; g_index++) {
 			/* fill the kdtree */
@@ -836,6 +840,21 @@ bool BM_face_split_edgenet_connect_islands(
 					BMVert *v_iter = (&e->v1)[j];
 					if (!BM_elem_flag_test(v_iter, VERT_IN_KDTREE)) {
 						BM_elem_flag_enable(v_iter, VERT_IN_KDTREE);
+
+						/* not nice, but alternatives arent much better :S */
+						{
+							copy_v3_v3(vert_coords_backup[v_index], v_iter->co);
+
+							/* for higher precision */
+							sub_v3_v3(v_iter->co, f_co_ref);
+
+							float co_2d[2];
+							mul_v2_m3v3(co_2d, axis_mat, v_iter->co);
+							v_iter->co[0] = co_2d[0];
+							v_iter->co[1] = co_2d[1];
+							v_iter->co[2] = 0.0f;
+						}
+
 						BLI_kdtree_insert(tree, v_index, v_iter->co);
 						vert_arr[v_index] = v_iter;
 						verts_group_table[v_index] = g_index;
@@ -864,7 +883,6 @@ bool BM_face_split_edgenet_connect_islands(
 		group_test.vert_range[0] = 0;
 		group_test.vert_range[1] = group_arr[0]->vert_len;
 		group_test.vert_arr = vert_arr;
-		group_test.axis = axis;
 
 		for (unsigned int g_index = 1; g_index < group_arr_len; g_index++) {
 			struct GeomIsland *g = group_arr[g_index];
@@ -876,7 +894,7 @@ bool BM_face_split_edgenet_connect_islands(
 			if (g->has_prev_edge == false) {
 				BMVert *v_start = g->vert_span.min;
 
-				group_test.axis_value = v_start->co[axis];
+				group_test.value = v_start->co[SORT_AXIS];
 				const int index_other = BLI_kdtree_find_nearest_cb(
 				        tree, v_start->co,
 				        kdtree_find_exclude_range_prev_cb, &group_test,
@@ -894,7 +912,7 @@ bool BM_face_split_edgenet_connect_islands(
 			{
 				BMVert *v_start = g->vert_span.max;
 
-				group_test.axis_value = v_start->co[axis];
+				group_test.value = v_start->co[SORT_AXIS];
 				const int index_other = BLI_kdtree_find_nearest_cb(
 				        tree, v_start->co,
 				        kdtree_find_exclude_range_next_cb, &group_test,
@@ -923,6 +941,10 @@ bool BM_face_split_edgenet_connect_islands(
 	*r_edge_net_new_len = edge_net_new_len;
 	ok = true;
 
+	for (unsigned int i = 0; i < vert_arr_len; i++) {
+		copy_v3_v3(vert_arr[i]->co, vert_coords_backup[i]);
+	}
+
 finally:
 	for (unsigned int i = 0; i < edge_arr_len; i++) {
 		BM_elem_flag_disable(edge_arr[i], EDGE_NOT_IN_STACK);
@@ -936,5 +958,7 @@ finally:
 
 	return ok;
 }
+
+#undef SORT_AXIS
 
 /** \} */
