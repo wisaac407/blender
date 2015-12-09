@@ -30,5 +30,9 @@ bool BM_face_split_edgenet(
         BMEdge **edge_net, const int edge_net_len,
         BMFace ***r_face_arr, int *r_face_arr_len);
 
+bool BM_face_split_edgenet_connect_islands(
+        BMesh *bm,
+        BMFace *f, BMEdge **edge_net_init, const unsigned int edge_net_init_len,
+        BMEdge ***r_edge_net_new, unsigned int *r_edge_net_new_len);
 
 #endif  /* __BMESH_POLYGON_EDGENET_H__ */
