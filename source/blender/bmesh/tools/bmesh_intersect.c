@@ -912,60 +912,16 @@ static int isect_bvhtree_point_v3(
 
 struct RaycastData {
 	const float **looptris;
-	BLI_Buffer z_buffer;
-	float z_buffer_storage[64];
-	int num_isect;
+	BLI_Buffer *z_buffer;
 };
 
-#define BLI_buffer_init_static(type_, flag_, static_storage_, static_count_) \
-	{ \
-	/* clear the static memory if this is a calloc'd array */ \
-	((void)((flag_ & BLI_BUFFER_USE_CALLOC) ? \
-	          memset(static_storage_, 0, sizeof(static_storage_)) : NULL \
-	), /* memset-end */ \
-	                    static_storage_), \
-	                    sizeof(type_), \
-	                    0, \
-	                    static_count_, \
-	                    BLI_BUFFER_USE_STATIC | flag_}
-
-/* TODO(sergey): Make inline? */
-BLI_INLINE bool raycast_has_depth(const struct RaycastData *raycast_data, float depth)
-{
-	size_t i;
-#ifdef USE_DUMP
-	printf("%s: Searching for depth %f\n", __func__, (double)depth);
-#endif
-	/* TODO(sergey): Replace with bisect. */
-	for (i = 0; i < raycast_data->z_buffer.count; ++i) {
-		float current_depth = BLI_buffer_at(&raycast_data->z_buffer,
-		                                    float,
-		                                    i);
-#ifdef USE_DUMP
-		printf("  Current depth %f\n", (double)depth);
-#endif
-		/* TODO(sergey): Perhaps after making BVH watertight we can get rid of
-		 * the fabsf() alculation?  Or maybe at least it'll allow getting rid of
-		 * such an obscure epsilon here.
-		 */
-		if (fabsf(current_depth - depth) < FLT_EPSILON * 10) {
-#ifdef USE_DUMP
-			printf("  Found depth %f\n", (double)depth);
-#endif
-			return true;
-		}
-	}
-	return false;
-}
-
-/* TODO(sergey): Make inline? */
 BLI_INLINE void raycast_append_depth(struct RaycastData *raycast_data, float depth)
 {
 #ifdef USE_DUMP
 	printf("%s: Adding depth %f\n", __func__, (double)depth);
 #endif
 	/* TODO(sergey): Preserve z-buffer sorted state. */
-	BLI_buffer_append(&raycast_data->z_buffer, float, depth);
+	BLI_buffer_append(raycast_data->z_buffer, float, depth);
 }
 
 #ifdef USE_KDOPBVH_WATERTIGHT
@@ -992,7 +948,7 @@ static void raycast_callback(void *userdata,
 	    isect_ray_tri_epsilon_v3(ray->origin, ray->direction, v0, v1, v2, &dist, uv, FLT_EPSILON))
 #endif
 	{
-		if (dist >= 0.0f && !raycast_has_depth(raycast_data, dist)) {
+		if (dist >= 0.0f) {
 #ifdef USE_DUMP
 			printf("%s:\n", __func__);
 			print_v3("  origin", ray->origin);
@@ -1003,7 +959,6 @@ static void raycast_callback(void *userdata,
 			print_v3("  v1", v1);
 			print_v3("  v2", v2);
 #endif
-			raycast_data->num_isect++;
 			raycast_append_depth(raycast_data, dist);
 		}
 	}
@@ -1014,14 +969,11 @@ static int isect_bvhtree_point_v3(
         const float **looptris,
         const float co[3])
 {
+	BLI_buffer_declare_static(float, z_buffer, BLI_BUFFER_NOP, 64);
+
 	struct RaycastData raycast_data = {
 		looptris,
-		BLI_buffer_init_static(float,
-		                       0,
-		                       raycast_data.z_buffer_storage,
-		                       ARRAY_SIZE(raycast_data.z_buffer_storage)),
-		{0},
-		0
+		&z_buffer,
 	};
 	BVHTreeRayHit hit = {0};
 	float dir[3] = {1.0f, 0.0f, 0.0f};
@@ -1046,8 +998,37 @@ static int isect_bvhtree_point_v3(
 	printf("%s: Total intersections: %d\n", __func__, raycast_data.num_isect);
 #endif
 
-//	return (raycast_data.num_isect & 1) == 1;
-	return raycast_data.num_isect;
+	int num_isect;
+
+	if (z_buffer.count == 0) {
+		num_isect = 0;
+	}
+	else if (z_buffer.count == 1) {
+		num_isect = 1;
+	}
+	else {
+		/* 2 or more */
+		const float eps = FLT_EPSILON * 10;
+		num_isect = 1;  /* always count first */
+
+		qsort(z_buffer.data, z_buffer.count, sizeof(float), BLI_sortutil_cmp_float);
+
+		const float *depth_arr = z_buffer.data;
+		float        depth_last = depth_arr[0];
+
+		for (unsigned int i = 1; i < z_buffer.count; i++) {
+			if (depth_arr[i] - depth_last > eps) {
+				depth_last = depth_arr[i];
+				num_isect++;
+			}
+		}
+
+		BLI_buffer_free(&z_buffer);
+	}
+
+
+	//	return (num_isect & 1) == 1;
+	return num_isect;
 }
 #endif  // USE_BOOLEAN_RAYCAST_OVERLAP
 
