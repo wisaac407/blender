@@ -1207,7 +1207,6 @@ bool BM_face_split_edgenet_connect_islands(
 				BMVert *v_end = vert_arr[index_other];
 
 				edge_net_new[edge_net_new_index] = BM_edge_create(bm, v_origin, v_end, NULL, 0);
-				BM_elem_flag_enable(edge_net_new[edge_net_new_index], BM_ELEM_TAG);
 				edge_net_new_index++;
 				args.edge_arr_new_len++;
 			}
@@ -1220,7 +1219,6 @@ bool BM_face_split_edgenet_connect_islands(
 				BMVert *v_end = vert_arr[index_other];
 
 				edge_net_new[edge_net_new_index] = BM_edge_create(bm, v_origin, v_end, NULL, 0);
-				BM_elem_flag_enable(edge_net_new[edge_net_new_index], BM_ELEM_TAG);
 				edge_net_new_index++;
 				args.edge_arr_new_len++;
 
