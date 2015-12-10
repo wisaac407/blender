@@ -876,67 +876,60 @@ static int bm_face_split_edgenet_find_connection(
 	 */
 
 	const float dir[3] = {[SORT_AXIS] = direction_sign ? 1.0 : -1.0f};
-
 	BMEdge *e_hit = test_edges_isect_2d_ray(args, v_origin, dir);
+	BMVert *v_other = NULL;
 
-	BLI_SMALLSTACK_DECLARE(vert_search, BMVert *);
+	if (e_hit) {
+		BMVert *v_other_fallback = NULL;
 
-	/* ensure we never add verts multiple times (not all that likely - but possible) */
-	BLI_SMALLSTACK_DECLARE(vert_blacklist, BMVert *);
+		BLI_SMALLSTACK_DECLARE(vert_search, BMVert *);
 
-#define EDGE_VERTS_ADD_SEARCH_STACK(e) \
-	{ \
-		BMVert *v_pair[2]; \
-		/* ensure the closest vertex is popped back off the stack first */ \
-		if (len_squared_v2v2(v_origin->co, (e)->v1->co) > \
-		    len_squared_v2v2(v_origin->co, (e)->v2->co)) \
-		{ \
-			ARRAY_SET_ITEMS(v_pair, (e)->v1, (e)->v2); \
-		} \
-		else { \
-			ARRAY_SET_ITEMS(v_pair, (e)->v2, (e)->v1); \
-		} \
-		for (int j = 0; j < 2; j++) { \
-			BMVert *v_iter = v_pair[j]; \
-			if (BM_elem_flag_test(v_iter, VERT_IS_VALID)) { \
-				if (direction_sign ? (v_iter->co[SORT_AXIS] >= v_origin->co[SORT_AXIS]) : \
-				                     (v_iter->co[SORT_AXIS] <= v_origin->co[SORT_AXIS])) \
-				{ \
-					BLI_SMALLSTACK_PUSH(vert_search, v_iter); \
-					BLI_SMALLSTACK_PUSH(vert_blacklist, v_iter); \
-					BM_elem_flag_disable(v_iter, VERT_IS_VALID); \
-				} \
-			} \
-		} \
-	} ((void)0)
+		/* ensure we never add verts multiple times (not all that likely - but possible) */
+		BLI_SMALLSTACK_DECLARE(vert_blacklist, BMVert *);
 
-	EDGE_VERTS_ADD_SEARCH_STACK(e_hit);
+		do {
+			BMVert *v_pair[2];
+			/* ensure the closest vertex is popped back off the stack first */
+			if (len_squared_v2v2(v_origin->co, e_hit->v1->co) >
+			    len_squared_v2v2(v_origin->co, e_hit->v2->co))
+			{
+				ARRAY_SET_ITEMS(v_pair, e_hit->v1, e_hit->v2);
+			}
+			else {
+				ARRAY_SET_ITEMS(v_pair, e_hit->v2, e_hit->v1);
+			}
 
-	BMVert *v_other_fallback = BLI_SMALLSTACK_LAST(vert_search);
+			for (int j = 0; j < 2; j++) {
+				BMVert *v_iter = v_pair[j];
+				if (BM_elem_flag_test(v_iter, VERT_IS_VALID)) {
+					if (direction_sign ? (v_iter->co[SORT_AXIS] >= v_origin->co[SORT_AXIS]) :
+					                     (v_iter->co[SORT_AXIS] <= v_origin->co[SORT_AXIS]))
+					{
+						BLI_SMALLSTACK_PUSH(vert_search, v_iter);
+						BLI_SMALLSTACK_PUSH(vert_blacklist, v_iter);
+						BM_elem_flag_disable(v_iter, VERT_IS_VALID);
+					}
+				}
+			}
+			v_other_fallback = v_other;
 
-	BMVert *v_other;
-	while ((v_other = BLI_SMALLSTACK_POP(vert_search)) &&
-	       (e_hit   = test_edges_isect_2d_vert(args, v_origin, v_other)))
-	{
-		EDGE_VERTS_ADD_SEARCH_STACK(e_hit);
-	}
+		} while ((v_other = BLI_SMALLSTACK_POP(vert_search)) &&
+		         (e_hit   = test_edges_isect_2d_vert(args, v_origin, v_other)));
 
-#undef EDGE_VERTS_ADD_SEARCH_STACK
+		if (v_other == NULL) {
+			printf("Using fallback\n");
+			v_other = v_other_fallback;
+		}
 
-	if (v_other == NULL) {
-		printf("Using fallback\n");
-		v_other = v_other_fallback;
+		/* reset the blacklist flag, for future use */
+		BMVert *v;
+		while ((v = BLI_SMALLSTACK_POP(vert_blacklist))) {
+			BM_elem_flag_enable(v, VERT_IS_VALID);
+		}
 	}
 
 	/* if we reach this line, v_other is either the best vertex or its NULL */
-	const int index = v_other ? BM_elem_index_get(v_other) : -1;
-
-	/* reset the blacklist flag, for future use */
-	while ((v_origin = BLI_SMALLSTACK_POP(vert_blacklist))) {
-		BM_elem_flag_enable(v_origin, VERT_IS_VALID);
-	}
-
-	return index;
+	return v_other ? BM_elem_index_get(v_other) : -1;
 }
 
 /**
