@@ -24,17 +24,11 @@
  * ***** END GPL LICENSE BLOCK *****
  */
 
-#ifndef __EIGEN3_EIGENVALUES_C_API_H__
-#define __EIGEN3_EIGENVALUES_C_API_H__
+#ifndef __EIGEN_C_API_H__
+#define __EIGEN_C_API_H__
 
-#ifdef __cplusplus
-extern "C" {
-#endif
+#include "intern/eigenvalues.h"
+#include "intern/linear_solver.h"
+#include "intern/svd.h"
 
-bool EG3_self_adjoint_eigen_solve(const int size, const float *matrix, float *r_eigen_values, float *r_eigen_vectors);
-
-#ifdef __cplusplus
-}
-#endif
-
-#endif  /* __EIGEN3_EIGENVALUES_C_API_H__ */
+#endif  /* __EIGEN_C_API_H__ */
