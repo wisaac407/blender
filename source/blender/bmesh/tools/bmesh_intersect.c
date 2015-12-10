@@ -255,14 +255,12 @@ static void face_edges_add(
 static void face_edges_split(
         BMesh *bm,
         BMFace *f,
-        struct LinkBase *e_ls_base)
+        struct LinkBase *e_ls_base,
+        MemArena *mem_arena_edgenet)
 {
 	unsigned int i;
 	unsigned int edge_arr_len = e_ls_base->list_len;
 	BMEdge **edge_arr = BLI_array_alloca(edge_arr, edge_arr_len);
-#ifdef USE_HOLE_FILL
-	bool edge_arr_free = false;
-#endif
 	LinkNode *node;
 	BLI_assert(f->head.htype == BM_FACE);
 
@@ -282,22 +280,16 @@ static void face_edges_split(
 		if (BM_face_split_edgenet_connect_islands(
 		        bm, f,
 		        edge_arr, edge_arr_len,
+		        mem_arena_edgenet,
 		        &edge_arr_holes, &edge_arr_holes_len))
 		{
 			edge_arr_len = edge_arr_holes_len;
-			edge_arr = edge_arr_holes;
-			edge_arr_free = true;
+			edge_arr = edge_arr_holes;  /* owned by the arena */
 		}
 	}
 #endif
 
 	BM_face_split_edgenet(bm, f, edge_arr, (int)edge_arr_len, NULL, NULL);
-
-#ifdef USE_HOLE_FILL
-	if (edge_arr_free) {
-		MEM_freeN(edge_arr);
-	}
-#endif
 }
 #endif
 
@@ -1563,6 +1555,8 @@ bool BM_mesh_intersect(
 		GHashIterator gh_iter;
 		BMFace **faces;
 
+		MemArena *mem_arena_edgenet = BLI_memarena_new(BLI_MEMARENA_STD_BUFSIZE, __func__);
+
 		faces = bm->ftable;
 
 		GHASH_ITER (gh_iter, s.face_edges) {
@@ -1579,8 +1573,12 @@ bool BM_mesh_intersect(
 
 			BLI_assert(BM_elem_index_get(f) == f_index);
 
-			face_edges_split(bm, f, e_ls_base);
+			face_edges_split(bm, f, e_ls_base, mem_arena_edgenet);
+
+			BLI_memarena_clear(mem_arena_edgenet);
 		}
+
+		BLI_memarena_free(mem_arena_edgenet);
 	}
 #endif  /* USE_NET */
 	(void)totface_orig;

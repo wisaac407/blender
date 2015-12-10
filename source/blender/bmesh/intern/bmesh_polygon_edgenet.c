@@ -29,6 +29,7 @@
 #include "MEM_guardedalloc.h"
 
 #include "BLI_math.h"
+#include "BLI_memarena.h"
 #include "BLI_array.h"
 #include "BLI_alloca.h"
 #include "BLI_stackdefines.h"
@@ -934,10 +935,14 @@ static int bm_face_split_edgenet_find_connection(
 
 /**
  * For when the edge-net has holes in it-this connects them.
+ *
+ * \param mem_arena: Avoids many small allocs & should be cleared after each use.
+ * take care since \a r_edge_net_new is stored in \a r_edge_net_new.
  */
 bool BM_face_split_edgenet_connect_islands(
         BMesh *bm,
         BMFace *f, BMEdge **edge_net_init, const unsigned int edge_net_init_len,
+        MemArena *mem_arena,
         BMEdge ***r_edge_net_new, unsigned int *r_edge_net_new_len)
 {
 	/* -------------------------------------------------------------------- */
@@ -947,6 +952,9 @@ bool BM_face_split_edgenet_connect_islands(
 	 * - Connect the holes with edges (if any are found).
 	 *
 	 * Keep the first part fast since it will run very often for edge-nets that have no holes.
+	 *
+	 * \note Don't use the mem_arena unless he have holes to fill.
+	 * (avoid thrashing the area when the initial check isn't so intensive on the stack).
 	 */
 
 	const unsigned int edge_arr_len = (unsigned int)edge_net_init_len + (unsigned int)f->len;
@@ -1050,7 +1058,7 @@ bool BM_face_split_edgenet_connect_islands(
 
 #define VERT_IN_ARRAY BM_ELEM_INTERNAL_TAG
 
-	struct EdgeGroupIsland **group_arr = BLI_array_alloca(group_arr, group_arr_len);
+	struct EdgeGroupIsland **group_arr = BLI_memarena_alloc(mem_arena, sizeof(*group_arr) * group_arr_len);
 	unsigned int vert_arr_len = 0;
 	/* sort groups by lowest value vertex */
 	{
@@ -1093,11 +1101,11 @@ bool BM_face_split_edgenet_connect_islands(
 	qsort(group_arr, group_arr_len, sizeof(*group_arr), group_min_cmp_fn);
 
 	/* we don't know how many unique verts there are connecting the edges, so over-alloc */
-	BMVert **vert_arr = BLI_array_alloca(vert_arr, vert_arr_len);
+	BMVert **vert_arr = BLI_memarena_alloc(mem_arena, sizeof(*vert_arr) * vert_arr_len);
 	/* map vertex -> group index */
-	unsigned int *verts_group_table = BLI_array_alloca(verts_group_table, vert_arr_len);
+	unsigned int *verts_group_table = BLI_memarena_alloc(mem_arena, sizeof(*verts_group_table) * vert_arr_len);
 
-	float (*vert_coords_backup)[3] = BLI_array_alloca(vert_coords_backup, vert_arr_len);
+	float (*vert_coords_backup)[3] = BLI_memarena_alloc(mem_arena, sizeof(*vert_coords_backup) * vert_arr_len);
 
 	{
 		float axis_mat[3][3];
@@ -1157,7 +1165,7 @@ bool BM_face_split_edgenet_connect_islands(
 
 	/* may be an over-alloc, but not by much */
 	unsigned int edge_net_new_len = (unsigned int)edge_net_init_len + ((group_arr_len - 1) * 2);
-	BMEdge **edge_net_new = MEM_mallocN(sizeof(*edge_net_new) * edge_net_new_len, __func__);
+	BMEdge **edge_net_new = BLI_memarena_alloc(mem_arena, sizeof(*edge_net_new) * edge_net_new_len);
 	memcpy(edge_net_new, edge_net_init, sizeof(*edge_net_new) * (size_t)edge_net_init_len);
 
 	{
