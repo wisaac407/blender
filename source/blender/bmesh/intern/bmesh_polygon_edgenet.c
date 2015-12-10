@@ -609,10 +609,13 @@ bool BM_face_split_edgenet(
 /* can be X or Y */
 #define SORT_AXIS 1
 
-/* Represents isolated edge-links,
- * each island owns contiguous slices of a vert & edge array. */
+/**
+ * Represents isolated edge-links,
+ * each island owns contiguous slices of the vert array.
+ * (edges remain in `edge_links`).
+ */
 struct GeomIsland {
-	LinkNode node;  /* keep first */
+	LinkNode edge_links;  /* keep first */
 	unsigned int vert_len, edge_len;
 
 	/* Set the following vars once we have >1 groups */
@@ -887,8 +890,8 @@ bool BM_face_split_edgenet_connect_islands(
 		/* fill 'groups_arr' in reverse order so the boundary face is first */
 		struct GeomIsland **group_arr_p = &group_arr[group_arr_len];
 
-		for (struct GeomIsland *g = (void *)group_head; g; g = (struct GeomIsland *)g->node.next) {
-			LinkNode *edge_links = g->node.link;
+		for (struct GeomIsland *g = (void *)group_head; g; g = (struct GeomIsland *)g->edge_links.next) {
+			LinkNode *edge_links = g->edge_links.link;
 
 			/* init with *any* different verts */
 			g->vert_span.min = ((BMEdge *)edge_links->link)->v1;
@@ -929,7 +932,7 @@ bool BM_face_split_edgenet_connect_islands(
 
 	float (*vert_coords_backup)[3] = BLI_array_alloca(vert_coords_backup, vert_arr_len);
 
-	KDTree *tree = BLI_kdtree_new(vert_arr_len);
+	KDTree *kdtree = BLI_kdtree_new(vert_arr_len);
 
 	{
 		float axis_mat[3][3];
@@ -940,7 +943,7 @@ bool BM_face_split_edgenet_connect_islands(
 		int v_index = 0;  /* global vert index */
 		for (unsigned int g_index = 0; g_index < group_arr_len; g_index++) {
 			/* fill the kdtree */
-			LinkNode *edge_links = group_arr[g_index]->node.link;
+			LinkNode *edge_links = group_arr[g_index]->edge_links.link;
 			do {
 				BMEdge *e = edge_links->link;
 				for (int j = 0; j < 2; j++) {
@@ -962,7 +965,7 @@ bool BM_face_split_edgenet_connect_islands(
 							v_iter->co[2] = 0.0f;
 						}
 
-						BLI_kdtree_insert(tree, v_index, v_iter->co);
+						BLI_kdtree_insert(kdtree, v_index, v_iter->co);
 						vert_arr[v_index] = v_iter;
 						verts_group_table[v_index] = g_index;
 						v_index++;
@@ -972,7 +975,7 @@ bool BM_face_split_edgenet_connect_islands(
 		}
 	}
 
-	BLI_kdtree_balance(tree);
+	BLI_kdtree_balance(kdtree);
 
 
 	/* Create connections between groups */
@@ -1002,7 +1005,7 @@ bool BM_face_split_edgenet_connect_islands(
 				BMVert *v_start = g->vert_span.min;
 
 				const int index_other = bm_face_split_edgenet_find_connection(
-				        tree, &group_test, edge_arr, edge_arr_len, v_start, kdtree_find_exclude_range_prev_cb);
+				        kdtree, &group_test, edge_arr, edge_arr_len, v_start, kdtree_find_exclude_range_prev_cb);
 				BLI_assert(index_other >= 0 && index_other < (int)vert_arr_len);
 
 				BMVert *v_end = vert_arr[index_other];
@@ -1016,7 +1019,7 @@ bool BM_face_split_edgenet_connect_islands(
 				BMVert *v_start = g->vert_span.max;
 
 				const int index_other = bm_face_split_edgenet_find_connection(
-				        tree, &group_test, edge_arr, edge_arr_len, v_start, kdtree_find_exclude_range_next_cb);
+				        kdtree, &group_test, edge_arr, edge_arr_len, v_start, kdtree_find_exclude_range_next_cb);
 				BLI_assert(index_other >= 0 && index_other < (int)vert_arr_len);
 				BMVert *v_end = vert_arr[index_other];
 
@@ -1035,7 +1038,7 @@ bool BM_face_split_edgenet_connect_islands(
 	}
 
 
-	BLI_kdtree_free(tree);
+	BLI_kdtree_free(kdtree);
 
 	*r_edge_net_new = edge_net_new;
 	*r_edge_net_new_len = edge_net_new_len;
