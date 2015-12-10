@@ -96,6 +96,7 @@ struct BVHTree {
 	axis_t start_axis, stop_axis;  /* KDOP_AXES array indices according to axis */
 	axis_t axis;                   /* kdop type (6 => OBB, 7 => AABB, ...) */
 	char tree_type;                /* type of tree (4 => quadtree) */
+
 };
 
 /* optimization, ensure we stay small */
