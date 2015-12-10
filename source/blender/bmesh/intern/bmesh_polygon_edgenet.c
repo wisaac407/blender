@@ -1202,29 +1202,36 @@ bool BM_face_split_edgenet_connect_islands(
 				BMVert *v_origin = g->vert_span.min;
 
 				const int index_other = bm_face_split_edgenet_find_connection(&args, v_origin, false);
-				BLI_assert(index_other >= 0 && index_other < (int)vert_arr_len);
+				// BLI_assert(index_other >= 0 && index_other < (int)vert_arr_len);
 
-				BMVert *v_end = vert_arr[index_other];
+				/* only for degenerate geometry */
+				if (index_other != -1) {
+					BMVert *v_end = vert_arr[index_other];
 
-				edge_net_new[edge_net_new_index] = BM_edge_create(bm, v_origin, v_end, NULL, 0);
-				edge_net_new_index++;
-				args.edge_arr_new_len++;
+					edge_net_new[edge_net_new_index] = BM_edge_create(bm, v_origin, v_end, NULL, 0);
+					edge_net_new_index++;
+					args.edge_arr_new_len++;
+				}
 			}
 
 			{
 				BMVert *v_origin = g->vert_span.max;
 
 				const int index_other = bm_face_split_edgenet_find_connection(&args, v_origin, true);
-				BLI_assert(index_other >= 0 && index_other < (int)vert_arr_len);
-				BMVert *v_end = vert_arr[index_other];
+				// BLI_assert(index_other >= 0 && index_other < (int)vert_arr_len);
 
-				edge_net_new[edge_net_new_index] = BM_edge_create(bm, v_origin, v_end, NULL, 0);
-				edge_net_new_index++;
-				args.edge_arr_new_len++;
+				/* only for degenerate geometry */
+				if (index_other != -1) {
+					BMVert *v_end = vert_arr[index_other];
 
-				/* tell the 'next' group it doesn't need to create its own back-link */
-				unsigned int g_index_other = verts_group_table[index_other];
-				group_arr[g_index_other]->has_prev_edge = true;
+					edge_net_new[edge_net_new_index] = BM_edge_create(bm, v_origin, v_end, NULL, 0);
+					edge_net_new_index++;
+					args.edge_arr_new_len++;
+
+					/* tell the 'next' group it doesn't need to create its own back-link */
+					unsigned int g_index_other = verts_group_table[index_other];
+					group_arr[g_index_other]->has_prev_edge = true;
+				}
 			}
 
 		}
