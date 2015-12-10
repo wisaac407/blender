@@ -726,7 +726,8 @@ struct Edges_BVHTreeTest {
 	BMVert *v_origin, *v_other;
 };
 
-static void foo_cb(void *user_data, int index, const BVHTreeRay *UNUSED(ray), BVHTreeRayHit *hit)
+static void bvhtree_test_edges_isect_2d_cb(
+        void *user_data, int index, const BVHTreeRay *UNUSED(ray), BVHTreeRayHit *hit)
 {
 	struct Edges_BVHTreeTest *data = user_data;
 	float isect[2];
@@ -758,12 +759,19 @@ struct FindConnectionArgs {
 	struct EdgeGroupIsland_KDTreeTest *island_test;
 	BMEdge **edge_arr;
 	unsigned int edge_arr_len;
+
+#ifdef USE_ISECT_TEST
+	BMEdge **edge_arr_new;
+	unsigned int edge_arr_new_len;
+#endif
 };
 
 static int test_edges_isect_2d(
         const struct FindConnectionArgs *args,
-        BMVert *v_origin, BMVert *v_other)
+        BMVert *v_origin, BMVert *v_other,
+        bool *r_is_connection)
 {
+	int index;
 #ifdef USE_ISECT_BVH
 	BVHTreeRayHit hit = {0};
 	float dir[3];
@@ -779,15 +787,33 @@ static int test_edges_isect_2d(
 	user_data.v_origin = v_origin;
 	user_data.v_other = v_other;
 
-	return BLI_bvhtree_ray_cast(args->bvhtree, v_origin->co, dir, 0.0f, &hit, foo_cb, &user_data);
+	index = BLI_bvhtree_ray_cast(
+	        args->bvhtree, v_origin->co, dir, 0.0f, &hit,
+	        bvhtree_test_edges_isect_2d_cb, &user_data);
 #else
+	index = -1;
 	for (unsigned int i = 0; i < args->edge_arr_len; i++) {
-		if (edge_isect_verts_check_2d(args->edge_arr[i], v_origin, v_other)) {
-			return i;
+		if (UNLIKELY(edge_isect_verts_check_2d(args->edge_arr[i], v_origin, v_other))) {
+			index = (int)i;
+			break;
 		}
 	}
-	return -1;
 #endif
+
+	*r_is_connection = false;
+
+	/* first check existing connections (no spatial optimization here since we're continually adding). */
+	if (index == -1) {
+		for (unsigned int i = 0; i < args->edge_arr_new_len; i++) {
+			if (UNLIKELY(edge_isect_verts_check_2d(args->edge_arr_new[i], v_origin, v_other))) {
+				index = (int)i;
+				*r_is_connection = true;
+				break;
+			}
+		}
+	}
+
+	return index;
 }
 
 static int bm_face_split_edgenet_find_connection(
@@ -811,10 +837,14 @@ static int bm_face_split_edgenet_find_connection(
 	int index_other = index_other_first;
 	int edge_isect;
 
+	bool is_connection;
+
 	/* blacklist */
 	BLI_SMALLSTACK_DECLARE(vert_blacklist, BMVert *);
 
-	while ((edge_isect = test_edges_isect_2d(args, v_origin, args->island_test->vert_arr[index_other])) != -1) {
+	while ((edge_isect = test_edges_isect_2d(
+	            args, v_origin, args->island_test->vert_arr[index_other], &is_connection)) != -1)
+	{
 		BLI_SMALLSTACK_PUSH(vert_blacklist, args->island_test->vert_arr[index_other]);
 		BM_elem_flag_disable(args->island_test->vert_arr[index_other], VERT_IS_VALID);
 		index_other = BLI_kdtree_find_nearest_cb(args->kdtree, v_origin->co, filter_cb, args->island_test, NULL);
@@ -830,7 +860,7 @@ static int bm_face_split_edgenet_find_connection(
 #ifdef DEBUG
 			printf("%s: retrying\n", __func__);
 #endif
-			args->island_test->search.e_lasthit = args->edge_arr[index_other];
+			args->island_test->search.e_lasthit = (is_connection ? args->edge_arr_new : args->edge_arr)[edge_isect];
 		}
 	}
 
@@ -1099,14 +1129,21 @@ bool BM_face_split_edgenet_connect_islands(
 		island_test.vert_range[1] = group_arr[0]->vert_len;
 		island_test.vert_arr = vert_arr;
 
-		const struct FindConnectionArgs args = {
+		struct FindConnectionArgs args = {
 			.kdtree = kdtree,
 #ifdef USE_ISECT_BVH
 			.bvhtree = bvhtree,
 #endif
 			.island_test = &island_test,
+
+			/* use the new edge array so we can scan edges which have been added */
 			.edge_arr = edge_arr,
 			.edge_arr_len = edge_arr_len,
+#ifdef USE_ISECT_TEST
+			/* we only want to check newly created edges */
+			.edge_arr_new = edge_net_new + edge_net_init_len,
+			.edge_arr_new_len = 0,
+#endif
 		};
 
 		for (unsigned int g_index = 1; g_index < group_arr_len; g_index++) {
@@ -1128,6 +1165,7 @@ bool BM_face_split_edgenet_connect_islands(
 				edge_net_new[edge_net_new_index] = BM_edge_create(bm, v_origin, v_end, NULL, 0);
 				BM_elem_flag_enable(edge_net_new[edge_net_new_index], BM_ELEM_TAG);
 				edge_net_new_index++;
+				args.edge_arr_new_len++;
 			}
 
 			{
@@ -1141,6 +1179,7 @@ bool BM_face_split_edgenet_connect_islands(
 				edge_net_new[edge_net_new_index] = BM_edge_create(bm, v_origin, v_end, NULL, 0);
 				BM_elem_flag_enable(edge_net_new[edge_net_new_index], BM_ELEM_TAG);
 				edge_net_new_index++;
+				args.edge_arr_new_len++;
 
 				/* tell the 'next' group it doesn't need to create its own back-link */
 				unsigned int g_index_other = verts_group_table[index_other];
