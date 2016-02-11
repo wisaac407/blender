@@ -38,6 +38,7 @@
  */
 
 #include "DNA_listBase.h"
+#include "DNA_curve_types.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -90,6 +91,10 @@ typedef struct Global {
 
 	/* message to use when autoexec fails */
 	char autoexec_fail[200];
+
+	/* font objects copy/paste texts */
+	wchar_t copybuf[32766 + 4]; /* 32766 + 4 = MAXTEXT + 4 */
+	struct CharInfo copybufinfo[32766 + 4]; /* 32766 + 4 = MAXTEXT + 4 */
 } Global;
 
 /* **************** GLOBAL ********************* */

@@ -51,6 +51,7 @@
 #include "BKE_curve.h"
 #include "BKE_depsgraph.h"
 #include "BKE_font.h"
+#include "BKE_global.h"
 #include "BKE_library.h"
 #include "BKE_main.h"
 #include "BKE_object.h"
@@ -414,65 +415,6 @@ void FONT_OT_text_paste_from_file(wmOperatorType *ot)
 	        WM_FILESEL_FILEPATH, FILE_DEFAULTDISPLAY, FILE_SORT_ALPHA);
 }
 
-
-/* -------------------------------------------------------------------- */
-/* Paste From Clipboard */
-
-static int paste_from_clipboard(bContext *C, ReportList *reports)
-{
-	Object *obedit = CTX_data_edit_object(C);
-	char *strp;
-	int filelen;
-	int retval;
-
-	strp = WM_clipboard_text_get(false, &filelen);
-	if (strp == NULL) {
-		BKE_report(reports, RPT_ERROR, "Clipboard empty");
-		return OPERATOR_CANCELLED;
-	}
-
-	if ((filelen <= MAXTEXT) && font_paste_utf8(C, strp, filelen)) {
-		text_update_edited(C, obedit, FO_EDIT);
-		retval = OPERATOR_FINISHED;
-	}
-	else {
-		BKE_report(reports, RPT_ERROR, "Clipboard too long");
-		retval = OPERATOR_CANCELLED;
-	}
-	MEM_freeN(strp);
-
-	return retval;
-}
-
-static int paste_from_clipboard_exec(bContext *C, wmOperator *op)
-{
-	int retval;
-
-	retval = paste_from_clipboard(C, op->reports);
-
-	return retval;
-}
-
-void FONT_OT_text_paste_from_clipboard(wmOperatorType *ot)
-{
-	/* identifiers */
-	ot->name = "Paste Clipboard";
-	ot->description = "Paste contents from system clipboard";
-	ot->idname = "FONT_OT_text_paste_from_clipboard";
-
-	/* api callbacks */
-	ot->exec = paste_from_clipboard_exec;
-	ot->poll = ED_operator_editfont;
-
-	/* flags */
-	ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
-
-	/* properties */
-	WM_operator_properties_filesel(
-	        ot, FILE_TYPE_FOLDER | FILE_TYPE_TEXT, FILE_SPECIAL, FILE_OPENFILE,
-	        WM_FILESEL_FILEPATH, FILE_DEFAULTDISPLAY, FILE_SORT_ALPHA);
-}
-
 /******************* text to object operator ********************/
 
 static void txt_add_object(bContext *C, TextLine *firstline, int totline, const float offset[3])
@@ -757,14 +699,28 @@ void FONT_OT_select_all(wmOperatorType *ot)
 static void copy_selection(Object *obedit)
 {
 	int selstart, selend;
+	size_t len;
+	char *buf = NULL;
 	
 	if (BKE_vfont_select_get(obedit, &selstart, &selend)) {
 		Curve *cu = obedit->data;
 		EditFont *ef = cu->editfont;
-		
-		memcpy(ef->copybuf, ef->textbuf + selstart, ((selend - selstart) + 1) * sizeof(wchar_t));
-		ef->copybuf[(selend - selstart) + 1] = 0;
-		memcpy(ef->copybufinfo, ef->textbufinfo + selstart, ((selend - selstart) + 1) * sizeof(CharInfo));
+
+		len = selend - selstart + 1;
+
+		/* internal clipboard (for style) */
+		memcpy(&G.copybuf[0], ef->textbuf + selstart, len * sizeof(wchar_t));
+		G.copybuf[(selend - selstart) + 1] = 0;
+		memcpy(&G.copybufinfo[0], ef->textbufinfo + selstart, ((selend - selstart) + 1) * sizeof(CharInfo));
+
+		/* system clipboard */
+		buf = MEM_mallocN(len * sizeof(char), __func__);
+		BLI_strncpy_wchar_as_utf8(buf, ef->textbuf + selstart, len - 1);
+		WM_clipboard_text_set(buf, false);
+	}
+
+	if (buf) {
+		MEM_freeN(buf);
 	}
 }
 
@@ -786,49 +742,6 @@ void FONT_OT_text_copy(wmOperatorType *ot)
 	
 	/* api callbacks */
 	ot->exec = copy_text_exec;
-	ot->poll = ED_operator_editfont;
-}
-
-/* Copy To Clipboard */
-
-static void copy_selection_to_clipboard(Object *obedit)
-{
-	int selstart, selend;
-	size_t len;
-	char *buf = NULL;
-
-	if (BKE_vfont_select_get(obedit, &selstart, &selend)) {
-		Curve *cu = obedit->data;
-		EditFont *ef = cu->editfont;
-
-		len = selend - selstart + 1;
-		buf = MEM_mallocN(len * sizeof(char), __func__);
-		BLI_strncpy_wchar_as_utf8(buf, ef->textbuf + selstart, len - 1);
-		WM_clipboard_text_set(buf, false);
-	}
-
-	if (buf)
-		MEM_freeN(buf);
-}
-
-static int copy_to_clipboard_exec(bContext *C, wmOperator *UNUSED(op))
-{
-	Object *obedit = CTX_data_edit_object(C);
-
-	copy_selection_to_clipboard(obedit);
-
-	return OPERATOR_FINISHED;
-}
-
-void FONT_OT_text_copy_to_clipboard(wmOperatorType *ot)
-{
-	/* identifiers */
-	ot->name = "Copy Text";
-	ot->description = "Copy selected text to system clipboard";
-	ot->idname = "FONT_OT_text_copy_to_clipboard";
-
-	/* api callbacks */
-	ot->exec = copy_to_clipboard_exec;
 	ot->poll = ED_operator_editfont;
 }
 
@@ -865,39 +778,6 @@ void FONT_OT_text_cut(wmOperatorType *ot)
 	ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 }
 
-/* Cut To Clipboard */
-
-static int cut_to_clipboard_exec(bContext *C, wmOperator *UNUSED(op))
-{
-	Object *obedit = CTX_data_edit_object(C);
-	int selstart, selend;
-
-	if (!BKE_vfont_select_get(obedit, &selstart, &selend))
-		return OPERATOR_CANCELLED;
-
-	copy_selection_to_clipboard(obedit);
-	kill_selection(obedit, 0);
-
-	text_update_edited(C, obedit, FO_EDIT);
-
-	return OPERATOR_FINISHED;
-}
-
-void FONT_OT_text_cut_to_clipboard(wmOperatorType *ot)
-{
-	/* identifiers */
-	ot->name = "Cut Text";
-	ot->description = "Cut selected text to system clipboard";
-	ot->idname = "FONT_OT_text_cut_to_clipboard";
-
-	/* api callbacks */
-	ot->exec = cut_to_clipboard_exec;
-	ot->poll = ED_operator_editfont;
-
-	/* flags */
-	ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
-}
-
 /******************* paste text operator ********************/
 
 static bool paste_selection(Object *obedit, ReportList *reports)
@@ -906,7 +786,7 @@ static bool paste_selection(Object *obedit, ReportList *reports)
 	EditFont *ef = cu->editfont;
 	int len = wcslen(ef->copybuf);
 
-	if (font_paste_wchar(obedit, ef->copybuf, len, ef->copybufinfo)) {
+	if (font_paste_wchar(obedit, &G.copybuf[0], len, &G.copybufinfo[0])) {
 		return true;
 	}
 	else {
@@ -918,13 +798,50 @@ static bool paste_selection(Object *obedit, ReportList *reports)
 static int paste_text_exec(bContext *C, wmOperator *op)
 {
 	Object *obedit = CTX_data_edit_object(C);
+	char *strp, *buf = NULL;
+	int len, retval;
 
-	if (!paste_selection(obedit, op->reports))
+	/* get text from system */
+	strp = WM_clipboard_text_get(false, &len);
+
+	if (strp == NULL) {
+		BKE_report(op->reports, RPT_ERROR, "Clipboard empty");
 		return OPERATOR_CANCELLED;
+	}
 
-	text_update_edited(C, obedit, FO_EDIT);
+	/* get text from internal buffer */
+	buf = MEM_mallocN(len * sizeof(char), __func__);
+	BLI_strncpy_wchar_as_utf8(buf, &G.copybuf[0], len - 1);
 
-	return OPERATOR_FINISHED;
+	/* if they match, get textinfo from internall buffer */
+	if (STREQLEN(strp, buf, len)) {
+		retval = paste_selection(obedit, op->reports) ? OPERATOR_FINISHED : OPERATOR_CANCELLED;
+	}
+	else {
+		if ((len <= MAXTEXT) && font_paste_utf8(C, strp, len)) {
+			text_update_edited(C, obedit, FO_EDIT);
+			retval = OPERATOR_FINISHED;
+		}
+		else {
+			BKE_report(op->reports, RPT_ERROR, "Clipboard too long");
+			retval = OPERATOR_CANCELLED;
+		}
+	}
+
+	if (retval != OPERATOR_CANCELLED) {
+		text_update_edited(C, obedit, FO_EDIT);
+	}
+
+	/* cleanup */
+	if (strp) {
+		MEM_freeN(strp);
+	}
+
+	if (buf) {
+		MEM_freeN(buf);
+	}
+
+	return retval;
 }
 
 void FONT_OT_text_paste(wmOperatorType *ot)
@@ -1558,8 +1475,6 @@ void ED_curve_editfont_make(Object *obedit)
 	
 		ef->textbuf = MEM_callocN((MAXTEXT + 4) * sizeof(wchar_t), "texteditbuf");
 		ef->textbufinfo = MEM_callocN((MAXTEXT + 4) * sizeof(CharInfo), "texteditbufinfo");
-		ef->copybuf = MEM_callocN((MAXTEXT + 4) * sizeof(wchar_t), "texteditcopybuf");
-		ef->copybufinfo = MEM_callocN((MAXTEXT + 4) * sizeof(CharInfo), "texteditcopybufinfo");
 	}
 	
 	/* Convert the original text to wchar_t */
