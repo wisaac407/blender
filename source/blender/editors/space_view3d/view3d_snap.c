@@ -420,6 +420,180 @@ void VIEW3D_OT_snap_selected_to_cursor(wmOperatorType *ot)
 }
 
 /* *************************************************** */
+static int snap_sel_to_active_exec(bContext *C, wmOperator *UNUSED(op))
+{
+	Scene *scene = CTX_data_scene(C);
+	Object *obedit = CTX_data_edit_object(C);
+	Object *obact = CTX_data_active_object(C);
+	TransVertStore tvs = {NULL};
+	TransVert *tv;
+	float imat[3][3], bmat[3][3];
+	float active_global[3];
+	int a;
+
+
+
+	if (!snap_calc_active_center(C, false, active_global)) {
+		return OPERATOR_CANCELLED;
+	}
+
+	if (obedit) {
+		float active_local[3];
+
+		if (ED_transverts_check_obedit(obedit))
+			ED_transverts_create_from_obedit(&tvs, obedit, 0);
+		if (tvs.transverts_tot == 0)
+			return OPERATOR_CANCELLED;
+
+		copy_m3_m4(bmat, obedit->obmat);
+		invert_m3_m3(imat, bmat);
+
+		/* get the active in object space */
+		sub_v3_v3v3(active_local, active_global, obedit->obmat[3]);
+		mul_m3_v3(imat, active_local);
+
+		tv = tvs.transverts;
+		for (a = 0; a < tvs.transverts_tot; a++, tv++) {
+			copy_v3_v3(tv->loc, active_local);
+		}
+
+		ED_transverts_update_obedit(&tvs, obedit);
+		ED_transverts_free(&tvs);
+	}
+	else if (obact && (obact->mode & OB_MODE_POSE)) {
+		struct KeyingSet *ks = ANIM_get_keyingset_for_autokeying(scene, ANIM_KS_LOCATION_ID);
+
+		bPoseChannel *pchan;
+		bArmature *arm = obact->data;
+		float active_local[3];
+
+		invert_m4_m4(obact->imat, obact->obmat);
+		mul_v3_m4v3(active_local, obact->imat, active_global);
+
+		for (pchan = obact->pose->chanbase.first; pchan; pchan = pchan->next) {
+			if ((pchan->bone->flag & BONE_SELECTED) &&
+			    (PBONE_VISIBLE(arm, pchan->bone)) &&
+			    /* if the bone has a parent and is connected to the parent,
+			     * don't do anything - will break chain unless we do auto-ik.
+			     */
+			    (pchan->bone->flag & BONE_CONNECTED) == 0)
+			{
+				pchan->bone->flag |= BONE_TRANSFORM;
+			}
+			else {
+				pchan->bone->flag &= ~BONE_TRANSFORM;
+			}
+		}
+
+		for (pchan = obact->pose->chanbase.first; pchan; pchan = pchan->next) {
+			if ((pchan->bone->flag & BONE_TRANSFORM) &&
+			    /* check that our parents not transformed (if we have one) */
+			    ((pchan->bone->parent &&
+			      BKE_armature_bone_flag_test_recursive(pchan->bone->parent, BONE_TRANSFORM)) == 0))
+			{
+				/* Get position in pchan (pose) space. */
+				float active_pose[3];
+
+				BKE_armature_loc_pose_to_bone(pchan, active_local, active_pose);
+
+				/* copy new position */
+				if ((pchan->protectflag & OB_LOCK_LOCX) == 0)
+					pchan->loc[0] = active_pose[0];
+				if ((pchan->protectflag & OB_LOCK_LOCY) == 0)
+					pchan->loc[1] = active_pose[1];
+				if ((pchan->protectflag & OB_LOCK_LOCZ) == 0)
+					pchan->loc[2] = active_pose[2];
+
+				/* auto-keyframing */
+				ED_autokeyframe_pchan(C, scene, obact, pchan, ks);
+			}
+		}
+
+		for (pchan = obact->pose->chanbase.first; pchan; pchan = pchan->next) {
+			pchan->bone->flag &= ~BONE_TRANSFORM;
+		}
+
+		obact->pose->flag |= (POSE_LOCKED | POSE_DO_UNLOCK);
+
+		DAG_id_tag_update(&obact->id, OB_RECALC_DATA);
+	}
+	else {
+		struct KeyingSet *ks = ANIM_get_keyingset_for_autokeying(scene, ANIM_KS_LOCATION_ID);
+		Main *bmain = CTX_data_main(C);
+
+		ListBase ctx_data_list;
+		CollectionPointerLink *ctx_ob;
+		Object *ob;
+
+		CTX_data_selected_editable_objects(C, &ctx_data_list);
+
+		/* reset flags */
+		for (ob = bmain->object.first; ob; ob = ob->id.next) {
+			ob->flag &= ~OB_DONE;
+		}
+
+		/* tag objects we're transforming */
+		for (ctx_ob = ctx_data_list.first; ctx_ob; ctx_ob = ctx_ob->next) {
+			ob = ctx_ob->ptr.data;
+			ob->flag |= OB_DONE;
+		}
+
+		for (ctx_ob = ctx_data_list.first; ctx_ob; ctx_ob = ctx_ob->next) {
+			ob = ctx_ob->ptr.data;
+
+			if ((ob->parent && BKE_object_flag_test_recursive(ob->parent, OB_DONE)) == 0) {
+
+				float active_parent[3];  /* parent-relative */
+
+				copy_v3_v3(active_parent, active_global);
+
+				sub_v3_v3(active_parent, ob->obmat[3]);
+
+				if (ob->parent) {
+					float originmat[3][3];
+					BKE_object_where_is_calc_ex(scene, NULL, ob, originmat);
+
+					invert_m3_m3(imat, originmat);
+					mul_m3_v3(imat, active_parent);
+				}
+				if ((ob->protectflag & OB_LOCK_LOCX) == 0)
+					ob->loc[0] += active_parent[0];
+				if ((ob->protectflag & OB_LOCK_LOCY) == 0)
+					ob->loc[1] += active_parent[1];
+				if ((ob->protectflag & OB_LOCK_LOCZ) == 0)
+					ob->loc[2] += active_parent[2];
+
+				/* auto-keyframing */
+				ED_autokeyframe_object(C, scene, ob, ks);
+
+				DAG_id_tag_update(&ob->id, OB_RECALC_OB);
+			}
+		}
+
+		BLI_freelistN(&ctx_data_list);
+	}
+
+	WM_event_add_notifier(C, NC_OBJECT | ND_TRANSFORM, NULL);
+
+	return OPERATOR_FINISHED;
+}
+
+void VIEW3D_OT_snap_selected_to_active(wmOperatorType *ot)
+{
+	/* identifiers */
+	ot->name = "Snap Selection to Active";
+	ot->description = "Snap selected item(s) to active item";
+	ot->idname = "VIEW3D_OT_snap_selected_to_active";
+
+	/* api callbacks */
+	ot->exec = snap_sel_to_active_exec;
+	ot->poll = ED_operator_view3d_active;
+
+	/* flags */
+	ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
+}
+
+/* *************************************************** */
 
 static int snap_curs_to_grid_exec(bContext *C, wmOperator *UNUSED(op))
 {
