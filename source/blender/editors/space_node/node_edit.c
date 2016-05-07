@@ -892,7 +892,11 @@ static int node_resize_modal(bContext *C, wmOperator *op, const wmEvent *event)
 				float oldwidth, widthmin, widthmax;
 				/* ignore hidden flag for frame nodes */
 				bool use_hidden = (node->type != NODE_FRAME);
+#ifdef VERTICAL_NODES
+				if (use_hidden) {
+#else
 				if (use_hidden && node->flag & NODE_HIDDEN) {
+#endif
 					pwidth = &node->miniwidth;
 					oldwidth = nsw->oldminiwidth;
 					widthmin = 0.0f;
