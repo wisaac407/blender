@@ -236,6 +236,8 @@ extern const char *node_context_dir[];
 #define NODE_SOCKSIZE   (0.25f * U.widget_unit)
 #define NODE_LINK_RESOL 12
 
+#define VERTICAL_NODES
+
 // XXX button events (butspace)
 enum eNodeSpace_ButEvents {
 	B_NOP = 0,

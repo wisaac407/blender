@@ -329,7 +329,58 @@ void node_from_view(struct bNode *node, float x, float y, float *rx, float *ry)
 	nodeFromView(node, x, y, rx, ry);
 }
 
+#ifdef VERTICAL_NODES
+/* based on settings in node, sets drawing rect info. each redraw! */
+static void node_update_vertical(bNode *node)
+{
+	bNodeSocket *nsock;
+	float locx, locy;
+	float n, hiddenrad = HIDDEN_RAD;
 
+	/* get "global" coords */
+	node_to_view(node, 0.0f, 0.0f, &locx, &locy);
+
+	node->totr.xmin = locx;
+	node->totr.xmax = locx + 3 * hiddenrad + node->miniwidth;
+	node->totr.ymax = locy + (hiddenrad - 0.5f * NODE_DY);
+	node->totr.ymin = node->totr.ymax - 2 * hiddenrad;
+
+	/* output sockets */
+	n = 0;
+
+	for (nsock = node->outputs.first; nsock; nsock = nsock->next) {
+		if (!nodeSocketIsHidden(nsock)) {
+			nsock->locx = node->totr.xmin + hiddenrad + n++ * 20;
+			nsock->locy = node->totr.ymin;
+		}
+	}
+
+	/* input sockets */
+	n = 0;
+
+	for (nsock = node->inputs.first; nsock; nsock = nsock->next) {
+		if (!nodeSocketIsHidden(nsock)) {
+			nsock->locx = node->totr.xmin + hiddenrad + n++ * 20;
+			nsock->locy = node->totr.ymax;
+		}
+	}
+
+	/* Set the block bounds to clip mouse events from underlying nodes.
+	 * Add a margin for sockets on each side.
+	 */
+	UI_block_bounds_set_explicit(
+	        node->block,
+	        node->totr.xmin,
+	        node->totr.ymin - NODE_SOCKSIZE,
+	        node->totr.xmax,
+	        node->totr.ymax + NODE_SOCKSIZE);
+}
+
+void node_update_default(const bContext *UNUSED(C), bNodeTree *UNUSED(ntree), bNode *node)
+{
+	node_update_vertical(node);
+}
+#else // VERTICAL_NODES
 /* based on settings in node, sets drawing rect info. each redraw! */
 static void node_update_basis(const bContext *C, bNodeTree *ntree, bNode *node)
 {
@@ -567,6 +618,7 @@ void node_update_default(const bContext *C, bNodeTree *ntree, bNode *node)
 	else
 		node_update_basis(C, ntree, node);
 }
+#endif // VERTICAL_NODES
 
 int node_select_area_default(bNode *node, int x, int y)
 {
@@ -675,6 +727,7 @@ void node_socket_circle_draw(const bContext *C, bNodeTree *ntree, bNode *node, b
 
 /* **************  Socket callbacks *********** */
 
+#ifndef VERTICAL_NODES
 static void node_draw_preview_background(float tile, rctf *rect)
 {
 	float x, y;
@@ -762,6 +815,7 @@ static void node_toggle_button_cb(struct bContext *C, void *node_argv, void *op_
 	
 	WM_operator_name_call(C, opname, WM_OP_INVOKE_DEFAULT, NULL);
 }
+#endif // VERTICAL_NODES
 
 void node_draw_shadow(SpaceNode *snode, bNode *node, float radius, float alpha)
 {
@@ -781,6 +835,7 @@ void node_draw_shadow(SpaceNode *snode, bNode *node, float radius, float alpha)
 	}
 }
 
+#ifndef VERTICAL_NODES
 static void node_draw_basis(const bContext *C, ARegion *ar, SpaceNode *snode, bNodeTree *ntree, bNode *node, bNodeInstanceKey key)
 {
 	bNodeInstanceHash *previews = CTX_data_pointer_get(C, "node_previews").data;
@@ -970,6 +1025,7 @@ static void node_draw_basis(const bContext *C, ARegion *ar, SpaceNode *snode, bN
 	UI_block_draw(C, node->block);
 	node->block = NULL;
 }
+#endif // VERTICAL_NODES
 
 static void node_draw_hidden(const bContext *C, ARegion *ar, SpaceNode *snode, bNodeTree *ntree, bNode *node, bNodeInstanceKey UNUSED(key))
 {
@@ -1035,6 +1091,7 @@ static void node_draw_hidden(const bContext *C, ARegion *ar, SpaceNode *snode, b
 		UI_ThemeColorBlendShade(TH_TEXT, color_id, 0.4f, 10);
 	
 	/* open entirely icon */
+#ifndef VERTICAL_NODES
 	{
 		uiBut *but;
 		int but_size = UI_UNIT_X * 0.6f;
@@ -1049,6 +1106,7 @@ static void node_draw_hidden(const bContext *C, ARegion *ar, SpaceNode *snode, b
 		/* custom draw function for this button */
 		UI_draw_icon_tri(rct->xmin + 10.0f, centy, 'h');
 	}
+#endif
 	
 	/* disable lines */
 	if (node->flag & NODE_MUTED)
@@ -1139,10 +1197,14 @@ void node_set_cursor(wmWindow *win, SpaceNode *snode, float cursor[2])
 
 void node_draw_default(const bContext *C, ARegion *ar, SpaceNode *snode, bNodeTree *ntree, bNode *node, bNodeInstanceKey key)
 {
+#ifdef VERTICAL_NODES
+	node_draw_hidden(C, ar, snode, ntree, node, key);
+#else
 	if (node->flag & NODE_HIDDEN)
 		node_draw_hidden(C, ar, snode, ntree, node, key);
 	else
 		node_draw_basis(C, ar, snode, ntree, node, key);
+#endif
 }
 
 static void node_update(const bContext *C, bNodeTree *ntree, bNode *node)
