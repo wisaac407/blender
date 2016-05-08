@@ -329,7 +329,6 @@ void node_from_view(struct bNode *node, float x, float y, float *rx, float *ry)
 	nodeFromView(node, x, y, rx, ry);
 }
 
-#ifdef VERTICAL_NODES
 /* based on settings in node, sets drawing rect info. each redraw! */
 static void node_update_vertical(bNode *node)
 {
@@ -376,11 +375,6 @@ static void node_update_vertical(bNode *node)
 	        node->totr.ymax + NODE_SOCKSIZE);
 }
 
-void node_update_default(const bContext *UNUSED(C), bNodeTree *UNUSED(ntree), bNode *node)
-{
-	node_update_vertical(node);
-}
-#else // VERTICAL_NODES
 /* based on settings in node, sets drawing rect info. each redraw! */
 static void node_update_basis(const bContext *C, bNodeTree *ntree, bNode *node)
 {
@@ -613,12 +607,13 @@ static void node_update_hidden(bNode *node)
 
 void node_update_default(const bContext *C, bNodeTree *ntree, bNode *node)
 {
-	if (node->flag & NODE_HIDDEN)
+	if (node->flag & NODE_VERTICAL)
+		node_update_vertical(node);
+	else if (node->flag & NODE_HIDDEN)
 		node_update_hidden(node);
 	else
 		node_update_basis(C, ntree, node);
 }
-#endif // VERTICAL_NODES
 
 int node_select_area_default(bNode *node, int x, int y)
 {
@@ -727,7 +722,6 @@ void node_socket_circle_draw(const bContext *C, bNodeTree *ntree, bNode *node, b
 
 /* **************  Socket callbacks *********** */
 
-#ifndef VERTICAL_NODES
 static void node_draw_preview_background(float tile, rctf *rect)
 {
 	float x, y;
@@ -815,7 +809,6 @@ static void node_toggle_button_cb(struct bContext *C, void *node_argv, void *op_
 	
 	WM_operator_name_call(C, opname, WM_OP_INVOKE_DEFAULT, NULL);
 }
-#endif // VERTICAL_NODES
 
 void node_draw_shadow(SpaceNode *snode, bNode *node, float radius, float alpha)
 {
@@ -835,7 +828,6 @@ void node_draw_shadow(SpaceNode *snode, bNode *node, float radius, float alpha)
 	}
 }
 
-#ifndef VERTICAL_NODES
 static void node_draw_basis(const bContext *C, ARegion *ar, SpaceNode *snode, bNodeTree *ntree, bNode *node, bNodeInstanceKey key)
 {
 	bNodeInstanceHash *previews = CTX_data_pointer_get(C, "node_previews").data;
@@ -1025,7 +1017,6 @@ static void node_draw_basis(const bContext *C, ARegion *ar, SpaceNode *snode, bN
 	UI_block_draw(C, node->block);
 	node->block = NULL;
 }
-#endif // VERTICAL_NODES
 
 static void node_draw_hidden(const bContext *C, ARegion *ar, SpaceNode *snode, bNodeTree *ntree, bNode *node, bNodeInstanceKey UNUSED(key))
 {
@@ -1091,7 +1082,6 @@ static void node_draw_hidden(const bContext *C, ARegion *ar, SpaceNode *snode, b
 		UI_ThemeColorBlendShade(TH_TEXT, color_id, 0.4f, 10);
 	
 	/* open entirely icon */
-#ifndef VERTICAL_NODES
 	{
 		uiBut *but;
 		int but_size = UI_UNIT_X * 0.6f;
@@ -1106,7 +1096,6 @@ static void node_draw_hidden(const bContext *C, ARegion *ar, SpaceNode *snode, b
 		/* custom draw function for this button */
 		UI_draw_icon_tri(rct->xmin + 10.0f, centy, 'h');
 	}
-#endif
 	
 	/* disable lines */
 	if (node->flag & NODE_MUTED)
@@ -1156,6 +1145,120 @@ static void node_draw_hidden(const bContext *C, ARegion *ar, SpaceNode *snode, b
 	node->block = NULL;
 }
 
+/* XXX: Basically the same as node_draw_hidden except without the arrow icon.
+ *		Duplicated to make it eaiser to maintain drawing logic of vertical nodes.
+ */
+static void node_draw_vertical(const bContext *C, ARegion *ar, SpaceNode *snode, bNodeTree *ntree, bNode *node, bNodeInstanceKey UNUSED(key))
+{
+	bNodeSocket *sock;
+	rctf *rct = &node->totr;
+	float dx, centy = BLI_rctf_cent_y(rct);
+	float hiddenrad = BLI_rctf_size_y(rct) / 2.0f;
+	float socket_size = NODE_SOCKSIZE;
+	int color_id = node_get_colorid(node);
+	char showname[128]; /* 128 is used below */
+
+	/* shadow */
+	node_draw_shadow(snode, node, hiddenrad, 1.0f);
+
+	/* body */
+	UI_ThemeColor(color_id);
+	if (node->flag & NODE_MUTED)
+		UI_ThemeColorBlend(color_id, TH_REDALERT, 0.5f);
+
+#ifdef WITH_COMPOSITOR
+	if (ntree->type == NTREE_COMPOSIT && (snode->flag & SNODE_SHOW_HIGHLIGHT)) {
+		if (COM_isHighlightedbNode(node)) {
+			UI_ThemeColorBlend(color_id, TH_ACTIVE, 0.5f);
+		}
+	}
+#else
+	(void)ntree;
+#endif
+
+	UI_draw_roundbox(rct->xmin, rct->ymin, rct->xmax, rct->ymax, hiddenrad);
+
+	/* outline active and selected emphasis */
+	if (node->flag & SELECT) {
+		glEnable(GL_BLEND);
+		glEnable(GL_LINE_SMOOTH);
+
+		if (node->flag & NODE_ACTIVE)
+			UI_ThemeColorShadeAlpha(TH_ACTIVE, 0, -40);
+		else
+			UI_ThemeColorShadeAlpha(TH_SELECT, 0, -40);
+		UI_draw_roundbox_gl_mode(GL_LINE_LOOP, rct->xmin, rct->ymin, rct->xmax, rct->ymax, hiddenrad);
+
+		glDisable(GL_LINE_SMOOTH);
+		glDisable(GL_BLEND);
+	}
+
+	/* custom color inline */
+	if (node->flag & NODE_CUSTOM_COLOR) {
+		glEnable(GL_BLEND);
+		glEnable(GL_LINE_SMOOTH);
+
+		glColor3fv(node->color);
+		UI_draw_roundbox_gl_mode(GL_LINE_LOOP, rct->xmin + 1, rct->ymin + 1, rct->xmax -1, rct->ymax - 1, hiddenrad);
+
+		glDisable(GL_LINE_SMOOTH);
+		glDisable(GL_BLEND);
+	}
+
+	/* title */
+	if (node->flag & SELECT)
+		UI_ThemeColor(TH_SELECT);
+	else
+		UI_ThemeColorBlendShade(TH_TEXT, color_id, 0.4f, 10);
+
+	/* disable lines */
+	if (node->flag & NODE_MUTED)
+		node_draw_mute_line(&ar->v2d, snode, node);
+
+	if (node->flag & SELECT)
+		UI_ThemeColor(TH_SELECT);
+	else
+		UI_ThemeColor(TH_TEXT);
+
+	if (node->miniwidth > 0.0f) {
+		nodeLabel(ntree, node, showname, sizeof(showname));
+
+		//if (node->flag & NODE_MUTED)
+		//	BLI_snprintf(showname, sizeof(showname), "[%s]", showname); /* XXX - don't print into self! */
+
+		uiDefBut(node->block, UI_BTYPE_LABEL, 0, showname,
+		         iroundf(rct->xmin + NODE_MARGIN_X), iroundf(centy - NODE_DY * 0.5f),
+		         (short)(BLI_rctf_size_x(rct) - 18.0f - 12.0f), (short)NODE_DY,
+		         NULL, 0, 0, 0, 0, "");
+	}
+
+	/* scale widget thing */
+	UI_ThemeColorShade(color_id, -10);
+	dx = 10.0f;
+	fdrawline(rct->xmax - dx, centy - 4.0f, rct->xmax - dx, centy + 4.0f);
+	fdrawline(rct->xmax - dx - 3.0f * snode->aspect, centy - 4.0f, rct->xmax - dx - 3.0f * snode->aspect, centy + 4.0f);
+
+	UI_ThemeColorShade(color_id, +30);
+	dx -= snode->aspect;
+	fdrawline(rct->xmax - dx, centy - 4.0f, rct->xmax - dx, centy + 4.0f);
+	fdrawline(rct->xmax - dx - 3.0f * snode->aspect, centy - 4.0f, rct->xmax - dx - 3.0f * snode->aspect, centy + 4.0f);
+
+	/* sockets */
+	for (sock = node->inputs.first; sock; sock = sock->next) {
+		if (!nodeSocketIsHidden(sock))
+			node_socket_circle_draw(C, ntree, node, sock, socket_size, sock->flag & SELECT);
+	}
+
+	for (sock = node->outputs.first; sock; sock = sock->next) {
+		if (!nodeSocketIsHidden(sock))
+			node_socket_circle_draw(C, ntree, node, sock, socket_size, sock->flag & SELECT);
+	}
+
+	UI_block_end(C, node->block);
+	UI_block_draw(C, node->block);
+	node->block = NULL;
+}
+
 int node_get_resize_cursor(int directions)
 {
 	if (directions == 0)
@@ -1197,14 +1300,12 @@ void node_set_cursor(wmWindow *win, SpaceNode *snode, float cursor[2])
 
 void node_draw_default(const bContext *C, ARegion *ar, SpaceNode *snode, bNodeTree *ntree, bNode *node, bNodeInstanceKey key)
 {
-#ifdef VERTICAL_NODES
-	node_draw_hidden(C, ar, snode, ntree, node, key);
-#else
-	if (node->flag & NODE_HIDDEN)
+	if (node->flag & NODE_VERTICAL)
+		node_draw_vertical(C, ar, snode, ntree, node, key);
+	else if (node->flag & NODE_HIDDEN)
 		node_draw_hidden(C, ar, snode, ntree, node, key);
 	else
 		node_draw_basis(C, ar, snode, ntree, node, key);
-#endif
 }
 
 static void node_update(const bContext *C, bNodeTree *ntree, bNode *node)

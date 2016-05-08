@@ -3399,13 +3399,14 @@ bool node_link_bezier_points(View2D *v2d, SpaceNode *snode, bNodeLink *link, flo
 		}
 	}
 	else {
-#ifdef VERTICAL_NODES
-		vec[1][0] = vec[0][0];
-		vec[1][1] = vec[0][1] - dist;
-#else
-		vec[1][0] = vec[0][0] + dist;
-		vec[1][1] = vec[0][1];
-#endif
+		if (link->fromnode && link->fromnode->flag & NODE_VERTICAL) {
+			vec[1][0] = vec[0][0];
+			vec[1][1] = vec[0][1] - dist;
+		}
+		else {
+			vec[1][0] = vec[0][0] + dist;
+			vec[1][1] = vec[0][1];
+		}
 	}
 	if (toreroute) {
 		if (ABS(deltax) > ABS(deltay)) {
@@ -3419,13 +3420,14 @@ bool node_link_bezier_points(View2D *v2d, SpaceNode *snode, bNodeLink *link, flo
 
 	}
 	else {
-#ifdef VERTICAL_NODES
-		vec[2][0] = vec[3][0];
-		vec[2][1] = vec[3][1] + dist;
-#else
-		vec[2][0] = vec[3][0] - dist;
-		vec[2][1] = vec[3][1];
-#endif
+		if (link->tonode && link->tonode->flag & NODE_VERTICAL) {
+			vec[2][0] = vec[3][0];
+			vec[2][1] = vec[3][1] + dist;
+		}
+		else {
+			vec[2][0] = vec[3][0] - dist;
+			vec[2][1] = vec[3][1];
+		}
 	}
 	if (v2d && min_ffff(vec[0][0], vec[1][0], vec[2][0], vec[3][0]) > v2d->cur.xmax) {
 		/* clipped */

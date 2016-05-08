@@ -258,6 +258,8 @@ typedef struct bNode {
 	 * composite out nodes when editing tree
 	 */
 #define NODE_DO_OUTPUT_RECALC	(1<<17)
+	/* the node is vertical */
+#define NODE_VERTICAL (1<<18)
 
 /* node->update */
 /* XXX NODE_UPDATE is a generic update flag. More fine-grained updates

@@ -892,11 +892,7 @@ static int node_resize_modal(bContext *C, wmOperator *op, const wmEvent *event)
 				float oldwidth, widthmin, widthmax;
 				/* ignore hidden flag for frame nodes */
 				bool use_hidden = (node->type != NODE_FRAME);
-#ifdef VERTICAL_NODES
-				if (use_hidden) {
-#else
-				if (use_hidden && node->flag & NODE_HIDDEN) {
-#endif
+				if (use_hidden && (node->flag & NODE_HIDDEN || node->flag & NODE_VERTICAL)) {
 					pwidth = &node->miniwidth;
 					oldwidth = nsw->oldminiwidth;
 					widthmin = 0.0f;
@@ -1478,6 +1474,36 @@ void NODE_OT_hide_toggle(wmOperatorType *ot)
 	
 	/* callbacks */
 	ot->exec = node_hide_toggle_exec;
+	ot->poll = ED_operator_node_active;
+
+	/* flags */
+	ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
+}
+
+static int node_vertical_toggle_exec(bContext *C, wmOperator *UNUSED(op))
+{
+	SpaceNode *snode = CTX_wm_space_node(C);
+
+	/* sanity checking (poll callback checks this already) */
+	if ((snode == NULL) || (snode->edittree == NULL))
+		return OPERATOR_CANCELLED;
+
+	node_flag_toggle_exec(snode, NODE_VERTICAL);
+
+	WM_event_add_notifier(C, NC_NODE | ND_DISPLAY, NULL);
+
+	return OPERATOR_FINISHED;
+}
+
+void NODE_OT_vertical_toggle(wmOperatorType *ot)
+{
+	/* identifiers */
+	ot->name = "Toggle Vertical";
+	ot->description = "Toggle node sockets orientation (vertical or horizontal)";
+	ot->idname = "NODE_OT_vertical_toggle";
+
+	/* callbacks */
+	ot->exec = node_vertical_toggle_exec;
 	ot->poll = ED_operator_node_active;
 
 	/* flags */
