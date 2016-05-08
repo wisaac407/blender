@@ -192,6 +192,7 @@ void NODE_OT_resize(struct wmOperatorType *ot);
 
 void NODE_OT_mute_toggle(struct wmOperatorType *ot);
 void NODE_OT_hide_toggle(struct wmOperatorType *ot);
+void NODE_OT_vertical_toggle(struct wmOperatorType *ot);
 void NODE_OT_hide_socket_toggle(struct wmOperatorType *ot);
 void NODE_OT_preview_toggle(struct wmOperatorType *ot);
 void NODE_OT_options_toggle(struct wmOperatorType *ot);
@@ -235,8 +236,6 @@ extern const char *node_context_dir[];
 #define NODE_MARGIN_X   (0.75f * U.widget_unit)
 #define NODE_SOCKSIZE   (0.25f * U.widget_unit)
 #define NODE_LINK_RESOL 12
-
-#define VERTICAL_NODES
 
 // XXX button events (butspace)
 enum eNodeSpace_ButEvents {
