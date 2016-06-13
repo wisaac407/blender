@@ -1644,7 +1644,12 @@ static int arg_handle_python_console_run(int UNUSED(argc), const char **argv, vo
 #ifdef WITH_PYTHON
 	bContext *C = data;
 
+#ifdef WITH_PYTHON_IPYTHON
+	BPY_CTX_SETUP(BPY_execute_string(C, "__import__('IPython').start_ipython("
+	                                    "__import__('sys').argv[(__import__('sys').argv + ['--']).index('--'):])"));
+#else
 	BPY_CTX_SETUP(BPY_execute_string(C, "__import__('code').interact()"));
+#endif /* WITH_PYTHON_IPYTHON */
 
 	return 0;
 #else

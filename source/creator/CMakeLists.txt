@@ -69,6 +69,10 @@ if(WITH_PYTHON)
 	if(WITH_PYTHON_SECURITY)
 		add_definitions(-DWITH_PYTHON_SECURITY)
 	endif()
+
+	if(WITH_PYTHON_IPYTHON)
+		add_definitions(-DWITH_PYTHON_IPYTHON)
+	endif()
 endif()
 
 if(WITH_HEADLESS)
@@ -589,6 +593,59 @@ if(UNIX AND NOT APPLE)
 					PATTERN "*.h" EXCLUDE                   # some includes are not in include dirs
 					PATTERN "*.a" EXCLUDE                   # ./core/lib/libnpymath.a - for linking, we dont need.
 				)
+				unset(_suffix)
+			endif()
+
+			# Copy IPython and all of it's dependancies
+			if(WITH_PYTHON_IPYTHON)
+				set(_suffix "site-packages")
+				if(${PYTHON_IPYTHON_PATH} MATCHES "dist-packages")
+					set(_suffix "dist-packages")
+				endif()
+
+				# IPython has two main modules: IPython and ipython_genutils
+				install(
+					DIRECTORY ${PYTHON_IPYTHON_PATH}/IPython
+					DESTINATION ${TARGETDIR_VER}/python/${_target_LIB}/python${PYTHON_VERSION}/${_suffix}
+					PATTERN ".svn" EXCLUDE
+					PATTERN "__pycache__" EXCLUDE           # * any cache *
+					PATTERN "*.pyc" EXCLUDE                 # * any cache *
+					PATTERN "*.pyo" EXCLUDE                 # * any cache *
+				)
+
+				install(
+					DIRECTORY ${PYTHON_IPYTHON_PATH}/ipython_genutils
+					DESTINATION ${TARGETDIR_VER}/python/${_target_LIB}/python${PYTHON_VERSION}/${_suffix}
+					PATTERN ".svn" EXCLUDE
+					PATTERN "__pycache__" EXCLUDE           # * any cache *
+					PATTERN "*.pyc" EXCLUDE                 # * any cache *
+					PATTERN "*.pyo" EXCLUDE                 # * any cache *
+				)
+
+				# Copy all of IPython's dependancies: pexpect, appnope and colorama are platform specific,
+				# ptyprocess is a dependancy of pexpect and backports is for older versions of ipython.
+				set(_ipython_deps "decorator" "pickleshare" "simplegeneric" "traitlets" "prompt_toolkit"
+					"pygments" "pexpect" "appnope" "colorama" "ptyprocess" "backports")
+				foreach(_ipython_dep ${_ipython_deps})
+					if(EXISTS ${PYTHON_IPYTHON_PATH}/${_ipython_dep})
+						install(
+							DIRECTORY ${PYTHON_IPYTHON_PATH}/${_ipython_dep}
+							DESTINATION ${TARGETDIR_VER}/python/${_target_LIB}/python${PYTHON_VERSION}/${_suffix}
+							PATTERN ".svn" EXCLUDE
+							PATTERN "__pycache__" EXCLUDE           # * any cache *
+							PATTERN "*.pyc" EXCLUDE                 # * any cache *
+							PATTERN "*.pyo" EXCLUDE                 # * any cache *
+						)
+					elseif(EXISTS ${PYTHON_IPYTHON_PATH}/${_ipython_dep}.py)
+						install(
+							FILES ${PYTHON_IPYTHON_PATH}/${_ipython_dep}.py
+							DESTINATION ${TARGETDIR_VER}/python/${_target_LIB}/python${PYTHON_VERSION}/${_suffix}
+						)
+					endif()
+				endforeach()
+
+				unset(_ipython_dep)
+				unset(_ipython_deps)
 				unset(_suffix)
 			endif()
 

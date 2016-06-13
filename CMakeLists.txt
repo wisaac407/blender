@@ -208,6 +208,9 @@ option(WITH_PYTHON_SECURITY "Disables execution of scripts within blend files by
 mark_as_advanced(WITH_PYTHON)  # dont want people disabling this unless they really know what they are doing.
 mark_as_advanced(WITH_PYTHON_SECURITY)  # some distributions see this as a security issue, rather than have them patch it, make a build option.
 
+option(WITH_PYTHON_IPYTHON "Use IPython terminal when blender is launched with the --python-console command" OFF)
+mark_as_advanced(WITH_IPYTHON)
+
 option(WITH_PYTHON_SAFETY "Enable internal API error checking to track invalid data to prevent crash on access (at the expense of some effeciency, only enable for development)." OFF)
 mark_as_advanced(WITH_PYTHON_SAFETY)
 option(WITH_PYTHON_MODULE "Enable building as a python module which runs without a user interface, like running regular blender in background mode (experimental, only enable for development), installs to PYTHON_SITE_PACKAGES (or CMAKE_INSTALL_PREFIX if WITH_INSTALL_PORTABLE is enabled)." OFF)
@@ -392,6 +395,11 @@ if(WITH_PYTHON_INSTALL)
 	option(WITH_PYTHON_INSTALL_NUMPY "Copy system numpy into the blender install folder"  ON)
 	set(PYTHON_NUMPY_PATH            "" CACHE PATH "Path to python site-packages or dist-packages containing 'numpy' module")
 	mark_as_advanced(PYTHON_NUMPY_PATH)
+
+	if(WITH_PYTHON_IPYTHON)
+		set(PYTHON_IPYTHON_PATH               "" CACHE PATH "Path to python site-packages or dist-packages containing 'IPython' module")
+		mark_as_advanced(PYTHON_IPYTHON_PATH)
+	endif()
 
 	if(UNIX AND NOT APPLE)
 		option(WITH_PYTHON_INSTALL_REQUESTS "Copy system requests into the blender install folder" ON)
@@ -1504,6 +1512,10 @@ if(WITH_PYTHON)
 		# pass, we have this in an archive to extract
 	elseif(WITH_PYTHON_INSTALL AND WITH_PYTHON_INSTALL_NUMPY)
 		find_python_package(numpy)
+	endif()
+
+	if(WITH_PYTHON_INSTALL AND WITH_PYTHON_IPYTHON)
+		find_python_package(IPython)
 	endif()
 
 	if(WIN32 OR APPLE)
