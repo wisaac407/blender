@@ -625,7 +625,7 @@ if(UNIX AND NOT APPLE)
 				# Copy all of IPython's dependancies: pexpect, appnope and colorama are platform specific,
 				# ptyprocess is a dependancy of pexpect and backports is for older versions of ipython.
 				set(_ipython_deps "decorator" "pickleshare" "simplegeneric" "traitlets" "prompt_toolkit"
-					"pygments" "pexpect" "appnope" "colorama" "ptyprocess" "backports")
+					"pygments" "pexpect" "appnope" "colorama" "ptyprocess" "backports" "six" "wcwidth")
 				foreach(_ipython_dep ${_ipython_deps})
 					if(EXISTS ${PYTHON_IPYTHON_PATH}/${_ipython_dep})
 						install(
